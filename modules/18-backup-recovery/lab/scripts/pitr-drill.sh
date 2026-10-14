@@ -33,7 +33,14 @@ RESTORE_COMMAND="${RESTORE_COMMAND:-cp /archive/wal/%f %p}"
 ARCHIVED_SEGMENT_PATH="${ARCHIVED_SEGMENT_PATH:-/archive/wal/%s}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+cleanup() {
+    rm -rf "$WORK"
+    if [[ -z "${KEEP_DRILL:-}" ]]; then
+        docker rm -f "$DRILL" >/dev/null 2>&1 || true
+        docker volume rm "$DRILL_VOLUME" >/dev/null 2>&1 || true
+    fi
+}
+trap cleanup EXIT
 
 log() { echo "$(date -u +%T) pitr-drill: $*"; }
 psql_primary() { docker exec -i "$PRIMARY" psql -X -U postgres -d bazaar -v ON_ERROR_STOP=1 -qAt "$@"; }
@@ -113,13 +120,13 @@ log "drill server $DRILL started, replaying WAL"
 for _ in $(seq 300); do
     if [[ "$(docker inspect -f '{{.State.Running}}' "$DRILL")" != "true" ]]; then
         docker logs "$DRILL" 2>&1 | tail -n 20
-        echo "drill server died during recovery" >&2; exit 1
+        log "FAIL: drill server died during recovery"; exit 1
     fi
     state=$(docker exec "$DRILL" psql -X -U postgres -qAt -c "SELECT pg_is_in_recovery()" 2>/dev/null || true)
     [[ "$state" == "f" ]] && break
     sleep 1
 done
-[[ "$state" == "f" ]] || { echo "recovery did not finish in 300s" >&2; exit 1; }
+[[ "$state" == "f" ]] || { log "FAIL: recovery did not finish in 300s"; exit 1; }
 rto=$(( $(date +%s) - t0 ))
 docker logs "$DRILL" 2>&1 | grep -E "recovery stopping|selected new timeline|archive recovery complete" | sed 's/^/    /'
 
@@ -137,9 +144,5 @@ else
     log "FAIL: restored counts differ from the snapshot at '$point'"
     rc=1
 fi
-if [[ -z "${KEEP_DRILL:-}" ]]; then
-    docker rm -f "$DRILL" >/dev/null
-    docker volume rm "$DRILL_VOLUME" >/dev/null
-    log "drill container and volume removed"
-fi
+[[ -z "${KEEP_DRILL:-}" ]] && log "removing drill container and volume"
 exit "$rc"

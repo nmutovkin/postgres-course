@@ -16,15 +16,23 @@ It is 14:07 on a Tuesday. A support engineer, trying to clean up a few test orde
 
 ## Before you start
 
-You need the module's lab, which runs a separate PostgreSQL 17 server (`m18-primary`) with WAL archiving switched on and pgBackRest installed, next to the course database. From the repository root:
+The module uses two servers.
+
+**1. The course database (`course-pg`) with the large dataset**, for the logical-backup sections (2 and 3), where realistic sizes and timings matter. If it is not already at the Module 16 state (it is, if you followed Modules 16 and 17), reset it; this takes a few minutes:
+
+```bash
+./project/bin/reset.sh 16
+```
+
+**2. The module's lab server (`m18-primary`)**, for everything physical: WAL archiving is switched on and pgBackRest is installed. It uses the small dataset, which keeps base backups and the WAL archive small (the large dataset would put several gigabytes of WAL into the archive just by loading it). From the repository root:
 
 ```bash
 cd modules/18-backup-recovery/lab
 docker compose up -d --build                     # builds postgres:17 + pgBackRest, starts m18-primary
-COURSE_PG_CONTAINER=m18-primary ../../../project/bin/reset.sh 16
+COURSE_PG_CONTAINER=m18-primary ../../../project/bin/reset.sh 11
 ```
 
-`reset.sh 16` loads Bazaar as it is at the start of Module 16, including the large generated dataset (about 1.5 GB), so that the dump timings in sections 2 and 3 are realistic. It takes a few minutes. From section 4 on, the module switches to the small dataset (`reset.sh 11`) to keep the lab's disk usage low; section 4 tells you when. Plan for about 10 GB of free disk space while the large dataset is loaded. Open a psql session on the lab server with:
+Open a psql session on the lab server with:
 
 ```bash
 docker exec -it m18-primary psql -U postgres -d bazaar
@@ -110,7 +118,7 @@ The rest of the module walks through them in that order, then puts them together
 
 **Consistency.** A dump of a live, busy database must not mix "before" and "after" states (an order without its items, say). `pg_dump` therefore runs inside a single `REPEATABLE READ` transaction (Module 10): every table is read through the **same MVCC snapshot**, taken when the dump starts. Writes continue normally while the dump runs and are simply invisible to it. The result is exactly the database as it was at the moment the dump began, even if the dump takes an hour.
 
-To stop someone from dropping or altering a table halfway through, `pg_dump` also takes an `ACCESS SHARE` lock on every table it dumps, at the start. Those locks do not block reads or writes, but they do block DDL that needs an `ACCESS EXCLUSIVE` lock. Watch it on the lab server while a dump runs:
+To stop someone from dropping or altering a table halfway through, `pg_dump` also takes an `ACCESS SHARE` lock on every table it dumps, at the start. Those locks do not block reads or writes, but they do block DDL that needs an `ACCESS EXCLUSIVE` lock. Watch it on the course database while a dump runs (start `docker exec -u postgres course-pg pg_dump -d bazaar -Fc -f /tmp/during.dump` in one terminal, and query from another):
 
 ```sql
 SELECT pid, application_name, backend_xmin, state, left(query, 60) AS query
@@ -128,9 +136,9 @@ ALTER TABLE orders ADD COLUMN gift_note text;
 ```
 
 ```text
- pid  | application_name | backend_xmin | state  |                            query
-------+------------------+--------------+--------+--------------------------------------------------------------
- 5111 | pg_dump          |         2815 | active | COPY bazaar.events_y2025m04 (id, occurred_at, user_id, sessi
+ pid | application_name | backend_xmin | state  |                            query
+-----+------------------+--------------+--------+--------------------------------------------------------------
+ 536 | pg_dump          |         2261 | active | COPY bazaar.events_y2025m02 (id, occurred_at, user_id, sessi
 
       mode       | count
 -----------------+-------
@@ -154,26 +162,26 @@ Two consequences matter in production. The `ALTER TABLE` waits for the whole dum
 | **directory** | `-Fd` | A directory: one file per table plus a table of contents | Yes (gzip) | `pg_restore` | **Yes** (`-j`) | **Yes** | **Yes** |
 | **tar** | `-Ft` | A tar archive of the directory format | No | `pg_restore` | No | No | Yes |
 
-All four contain the same information; they differ in packaging. Measured on the lab server with the large Bazaar dataset (1.5 GB database, of which roughly half is indexes), inside the container:
+All four contain the same information; they differ in packaging. Measured on the course database with the large Bazaar dataset (1.5 GB database, of which roughly half is indexes), writing inside the container:
 
 ```bash
-docker exec -u postgres m18-primary bash -c 'mkdir -p /backups/dumps && cd /backups/dumps &&
+docker exec -u postgres course-pg bash -c 'mkdir -p /tmp/dumps && cd /tmp/dumps &&
     time pg_dump -d bazaar -Fc -f bazaar.dump'      # and so on for each format
 ```
 
 | Command | Time | Size |
 |---|---:|---:|
-| `pg_dump -Fp -f bazaar.sql` | 9.2 s | 779 MB |
-| `pg_dump -Fc -f bazaar.dump` | 27.9 s | 144 MB |
-| `pg_dump -Fc -Z zstd -f bazaar-zstd.dump` | 8.9 s | 152 MB |
-| `pg_dump -Ft -f bazaar.tar` | 11.3 s | 780 MB |
-| `pg_dump -Fd -f bazaar.dir` | 24.2 s | 144 MB |
-| `pg_dump -Fd -j 4 -f bazaar-j4.dir` | 12.4 s | 144 MB |
+| `pg_dump -Fp -f bazaar.sql` | 8.5 s | 779 MB |
+| `pg_dump -Fc -f bazaar.dump` | 24.6 s | 144 MB |
+| `pg_dump -Fc -Z zstd -f bazaar-zstd.dump` | 8.6 s | 152 MB |
+| `pg_dump -Ft -f bazaar.tar` | 9.6 s | 780 MB |
+| `pg_dump -Fd -f bazaar.dir` | 23.0 s | 144 MB |
+| `pg_dump -Fd -j 4 -f bazaar-j4.dir` | 10.9 s | 144 MB |
 
 What the numbers teach:
 
 - **A dump contains no indexes**, only `CREATE INDEX` statements. The 1.5 GB database dumps to 779 MB of plain SQL, and to 144 MB once compressed: text data compresses very well.
-- **Compression dominates the cost.** The custom format spends most of its 28 seconds in single-threaded gzip. `-Z zstd` (PostgreSQL 16+; also `lz4`, and levels like `-Z zstd:9`) is three times faster here for a similar size.
+- **Compression dominates the cost.** The custom format spends most of its 25 seconds in single-threaded gzip. `-Z zstd` (PostgreSQL 16+; also `lz4`, and levels like `-Z zstd:9`) is almost three times faster here for a similar size.
 - **`-j 4` parallelizes across tables**, and only works with the directory format (each worker writes its own file). It halved the time; it cannot split one huge table, so the largest table bounds the total time. Each worker is a separate connection, and they all share the leader's snapshot (`pg_dump` *exports* its snapshot with `pg_export_snapshot()` and the workers import it), so the dump stays consistent.
 
 Which to use? **Custom (`-Fc`) is the right default**: one file, compressed, restorable selectively and in parallel. Use **directory (`-Fd -j N`)** for large databases where dump time matters. Use **plain** for small schemas you want to read, diff or edit, and when the target is not PostgreSQL. Tar has no real advantage over the others.
@@ -204,7 +212,7 @@ A dump of one database does **not** contain:
 `pg_dumpall` dumps the whole cluster as one plain SQL script (every database plus the globals). It is rarely used for complete backups because it only produces plain format, but **`pg_dumpall --globals-only`** is the standard companion to per-database `pg_dump`s:
 
 ```bash
-docker exec -u postgres m18-primary pg_dumpall --globals-only > globals.sql
+docker exec -u postgres course-pg pg_dumpall --globals-only > globals.sql
 ```
 
 ```text
@@ -250,15 +258,17 @@ psql -d bazaar_copy -v ON_ERROR_STOP=1 --single-transaction -f bazaar.sql
 createdb bazaar_r1
 pg_restore -d bazaar_r1 bazaar.dump                 # serial
 createdb bazaar_r4
-pg_restore -d bazaar_r4 -j 4 bazaar.dir             # 4 parallel jobs
+pg_restore -d bazaar_r4 -j 4 bazaar-j4.dir          # 4 parallel jobs
 ```
 
-On the large dataset:
+(run inside the container, in `/tmp/dumps`, as in 2.2). On the large dataset:
 
 ```text
-pg_restore -d bazaar_r1 bazaar.dump                                      51.5 s
-pg_restore -d bazaar_r4 -j 4 bazaar.dir                                  31.9 s
+pg_restore -d bazaar_r1 bazaar.dump                       52.5 s
+pg_restore -d bazaar_r4 -j 4 bazaar-j4.dir                30.8 s
 ```
+
+Drop the two copies afterwards (`dropdb bazaar_r1; dropdb bazaar_r4`): each is a full 1.5 GB database.
 
 Restoring takes longer than dumping, because the server must rebuild every index and validate every foreign key. Parallel restore (`-j`, custom or directory format) runs table loads, index builds and constraint validation concurrently. The usual starting point for `-j` is the number of CPU cores of the server.
 
@@ -288,11 +298,19 @@ Loading rows *before* creating indexes and constraints is much faster than maint
 
 ### 3.4 Restoring into a different database or a different server
 
-Restoring the dump into a brand new server (a fresh `postgres:17` container with no Bazaar roles) shows the most common restore failure:
+Restoring the dump into a brand new server shows the most common restore failure. Start an empty PostgreSQL 17 container and copy the dump and the globals file into it:
+
+```bash
+docker run -d --rm --name m18-other -e POSTGRES_PASSWORD=postgres postgres:17
+docker exec course-pg cat /tmp/dumps/bazaar-zstd.dump | docker exec -i m18-other bash -c 'cat > /tmp/bazaar-zstd.dump'
+docker exec course-pg cat /tmp/dumps/globals.sql     | docker exec -i m18-other bash -c 'cat > /tmp/globals.sql'
+```
+
+(`/tmp/dumps/globals.sql` is the globals file from section 2.3, written inside the container with `pg_dumpall --globals-only -f /tmp/dumps/globals.sql`.) Then, as `postgres` inside `m18-other`:
 
 ```bash
 createdb bazaar
-pg_restore -d bazaar -j 4 bazaar-zstd.dump
+pg_restore -d bazaar -j 4 /tmp/bazaar-zstd.dump
 ```
 
 ```text
@@ -324,8 +342,9 @@ ERROR:  relation "orders" does not exist
 The data is in `bazaar.orders`, but the database-level `search_path` setting was not part of the dump. The complete, correct procedure for a new server is: restore the globals first, then restore the database **with `--create`**:
 
 ```bash
-psql -d postgres -f globals.sql          # "role "postgres" already exists" is the one expected error
-pg_restore -d postgres --create -j 4 bazaar-zstd.dump
+dropdb bazaar
+psql -d postgres -f /tmp/globals.sql     # "role "postgres" already exists" is the one expected error
+pg_restore -d postgres --create -j 4 /tmp/bazaar-zstd.dump
 psql -d bazaar -c "SELECT count(*) FROM orders"
 ```
 
@@ -335,7 +354,7 @@ psql -d bazaar -c "SELECT count(*) FROM orders"
  500000
 ```
 
-with every table owned by `bazaar_owner`, all grants, all policies, and the `search_path` in place.
+with every table owned by `bazaar_owner`, all grants, all policies, and the `search_path` in place. Remove the container with `docker rm -f m18-other`.
 
 ### 3.5 Selective restores: getting one table back
 
@@ -363,7 +382,7 @@ pg_restore -l bazaar.dump | head -20
 
 ```text
 ;
-; Archive created at 2026-10-14 07:55:30 UTC
+; Archive created at 2026-10-14 08:19:10 UTC
 ;     dbname: bazaar
 ;     TOC Entries: 494
 ;     Compression: gzip
@@ -420,7 +439,7 @@ Precise, but you must know every dependency. Here the identity default was lost 
 ```bash
 dropdb scratch && createdb scratch
 pg_restore -d scratch --section=pre-data bazaar.dump                     # 0.3 s: all definitions, no rows
-pg_restore -d scratch --data-only -t orders -t order_items bazaar.dump   # 2.4 s: just these rows
+pg_restore -d scratch --data-only -t orders -t order_items bazaar.dump   # 3.0 s: just these rows
 ```
 
 ```text
@@ -435,12 +454,7 @@ From the scratch database you then copy the rows back to production with `INSERT
 
 ## 4. Physical backups with `pg_basebackup`
 
-> **Lab note:** the large dataset makes every physical backup about 1.7 GB and fills the WAL archive with gigabytes of WAL from the initial load. To keep the lab's disk usage small, the rest of the module uses the small dataset. Rebuild the lab now:
->
-> ```bash
-> docker compose down -v && docker compose up -d
-> COURSE_PG_CONTAINER=m18-primary ../../../project/bin/reset.sh 11
-> ```
+From here on, everything runs on the lab server `m18-primary` (small dataset), from the `modules/18-backup-recovery/lab` directory.
 
 ### 4.1 The idea: copy the files, then replay WAL
 
@@ -1243,10 +1257,11 @@ P00   INFO: verify command end: completed successfully (367ms)
 
 ### 8.7 Point-in-time restore with `--delta`
 
-Another accident: someone drops the `reviews` table.
+Another accident: someone drops the `reviews` table. (The output below comes from a fresh run of the lab: a new full backup `20261014-082853F`, one burst of activity, then the drop.)
 
 ```sql
-SELECT now() AS before_drop;      -- 2026-10-14 08:07:02.288087+00
+SELECT count(*) AS reviews FROM reviews;   -- 78
+SELECT now() AS before_drop;               -- 2026-10-14 08:28:55.612545+00
 DROP TABLE reviews;
 ```
 
@@ -1256,19 +1271,19 @@ pgBackRest restores into a **stopped** cluster. In the lab, stopping PostgreSQL 
 docker exec m18-primary psql -U postgres -c "SELECT pg_switch_wal()"   # archive the DROP's segment
 docker stop m18-primary
 docker compose run --rm --no-deps -u postgres --entrypoint pgbackrest primary \
-    --stanza=bazaar --delta --type=time "--target=2026-10-14 08:07:02.288087+00" \
+    --stanza=bazaar --delta --type=time "--target=2026-10-14 08:28:55.612545+00" \
     --target-action=promote restore
 docker start m18-primary
 ```
 
 ```text
-P00   INFO: restore command begin 2.54.2: --delta ... --target="2026-10-14 08:07:02.288087+00" --target-action=promote --type=time
-P00   INFO: repo1: restore backup set 20261014-080652F, recovery will start at 2026-10-14 08:06:52
+P00   INFO: restore command begin 2.54.2: --delta ... --target="2026-10-14 08:28:55.612545+00" --target-action=promote --type=time
+P00   INFO: repo1: restore backup set 20261014-082853F, recovery will start at 2026-10-14 08:28:53
 P00   INFO: remove invalid files/links/paths from '/var/lib/postgresql/data'
 P00   INFO: write updated /var/lib/postgresql/data/postgresql.auto.conf
 P00   INFO: restore global/pg_control (performed last to ensure aborted restores cannot be started)
-P00   INFO: restore size = 33.2MB, file total = 1360
-P00   INFO: restore command end: completed successfully (487ms)
+P00   INFO: restore size = 31.5MB, file total = 1353
+P00   INFO: restore command end: completed successfully (319ms)
 ```
 
 pgBackRest picked the newest backup that ends **before** the target time on its own, wrote the recovery settings, and created `recovery.signal`. **`--delta`** means "the data directory already exists; compare each file's checksum with the backup and only copy files that differ". On a large database where the damage is one table, a delta restore copies a tiny fraction of the data, which can turn a one-hour restore into a few minutes. (Without `--delta`, pgBackRest requires an empty data directory.)
@@ -1276,22 +1291,22 @@ pgBackRest picked the newest backup that ends **before** the target time on its 
 After the start:
 
 ```text
-LOG:  recovery stopping before commit of transaction 1702, time 2026-10-14 08:07:02.290095+00
+LOG:  recovery stopping before commit of transaction 1290, time 2026-10-14 08:28:55.614566+00
 LOG:  selected new timeline ID: 2
 LOG:  archive recovery complete
 ```
 
 ```sql
 SELECT pg_is_in_recovery();              -- f
-SELECT count(*) AS reviews FROM reviews; -- 77
+SELECT count(*) AS reviews FROM reviews; -- 78
 ```
 
 The `reviews` table is back. `postgresql.auto.conf` now ends with:
 
 ```text
-# Recovery settings generated by pgBackRest restore on 2026-10-14 08:07:05
+# Recovery settings generated by pgBackRest restore on 2026-10-14 08:28:58
 restore_command = 'pgbackrest --stanza=bazaar archive-get %f "%p"'
-recovery_target_time = '2026-10-14 08:07:02.288087+00'
+recovery_target_time = '2026-10-14 08:28:55.612545+00'
 recovery_target_action = 'promote'
 ```
 
@@ -1355,7 +1370,7 @@ of which INCREMENTAL.*:     273
 -rw------- 1 postgres postgres  73728 Oct 14 08:07 incr2/base/16384/INCREMENTAL.16637
 ```
 
-The `backup_label` of an incremental records what it is relative to:
+The `backup_label` of an incremental records what it is relative to (timeline 2, because this lab server had just been through the pgBackRest restore of section 8.7):
 
 ```text
 INCREMENTAL FROM LSN: 0/16000028
@@ -1400,33 +1415,33 @@ The lab's `scripts/pitr-drill.sh` automates a complete point-in-time recovery dr
 ```
 
 ```text
-08:06:17 pitr-drill: using base backup /backups/base/base-20261014T080401Z
-08:06:17 pitr-drill: restore point 'drill-20261014T080617Z' created; 15 tables snapshotted
-NOTICE:  placed 162 orders
-08:06:17 pitr-drill: post-snapshot activity generated
-08:06:18 pitr-drill: WAL archived up to 000000010000000000000006
-08:06:20 pitr-drill: drill server m18-drill started, replaying WAL
-    2026-10-14 08:06:21.050 UTC [29] LOG:  recovery stopping at restore point "drill-20261014T080617Z", time 2026-10-14 08:06:17.46819+00
-    2026-10-14 08:06:21.055 UTC [29] LOG:  selected new timeline ID: 2
-    2026-10-14 08:06:21.088 UTC [29] LOG:  archive recovery complete
+08:36:55 pitr-drill: using base backup /backups/base/base-20261014T083654Z
+08:36:56 pitr-drill: restore point 'drill-20261014T083656Z' created; 15 tables snapshotted
+NOTICE:  placed 175 orders
+08:36:56 pitr-drill: post-snapshot activity generated
+08:36:56 pitr-drill: WAL archived up to 000000010000000000000003
+08:36:58 pitr-drill: drill server m18-drill started, replaying WAL
+    2026-10-14 08:36:58.380 UTC [29] LOG:  recovery stopping at restore point "drill-20261014T083656Z", time 2026-10-14 08:36:56.126368+00
+    2026-10-14 08:36:58.386 UTC [29] LOG:  selected new timeline ID: 2
+    2026-10-14 08:36:58.430 UTC [29] LOG:  archive recovery complete
 table                      expected    current   restored
 addresses                        32         32         32
-audit_log                      2194       2607       2194
+audit_log                       441        889        441
 cart_items                       14         14         14
 categories                       23         23         23
 inventory                        62         62         62
 jobs                              0          0          0
-order_items                     536        698        536
-orders                          471        633        471
-payments                        139        139        139
+order_items                     406        581        406
+orders                          291        466        291
+payments                        140        140        140
 product_price_history            71         71         71
 products                         62         62         62
 promotions                        9          9          9
-reviews                          77         77         77
+reviews                          78         78         78
 sellers                           6          6          6
 users                            30         30         30
-08:06:22 pitr-drill: PASS: restored counts match the snapshot at 'drill-20261014T080617Z' (restore took 4s)
-08:06:22 pitr-drill: drill container and volume removed
+08:36:59 pitr-drill: PASS: restored counts match the snapshot at 'drill-20261014T083656Z' (restore took 3s)
+08:36:59 pitr-drill: removing drill container and volume
 ```
 
 What it does, step by step:

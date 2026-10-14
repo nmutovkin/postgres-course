@@ -55,11 +55,12 @@ WITH RECURSIVE ancestors AS (
     SELECT c.id, c.parent_id, c.name, a.up + 1
     FROM categories AS c
     JOIN ancestors AS a ON c.id = a.parent_id
-    WHERE a.up < 50                      -- safety net against a corrupted tree
-)
+) CYCLE id SET is_cycle USING cycle_path  -- safety net against a corrupted tree
 SELECT p.id    AS product_id,
        p.title,
-       (SELECT string_agg(a.name, ' › ' ORDER BY a.up DESC) FROM ancestors AS a) AS breadcrumb
+       (SELECT string_agg(a.name, ' › ' ORDER BY a.up DESC)
+        FROM ancestors AS a
+        WHERE NOT a.is_cycle)                                  AS breadcrumb
 FROM products AS p
 WHERE p.id = :product_id;
 

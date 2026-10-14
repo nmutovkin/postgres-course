@@ -19,14 +19,15 @@ High availability (HA) is the engineering that turns those forty minutes into ab
 ## Before you start
 
 - You have finished [Module 19](../19-replication/): streaming replication, replication slots, synchronous replication (`synchronous_standby_names`, `synchronous_commit`), `pg_promote()`, timelines, and `pg_rewind`. This module builds on all of them and does not re-teach them.
-- This module does not use the single `course-pg` container. Its lab in [`lab/`](lab/) starts **eight containers**: three etcd members, three Patroni + PostgreSQL 17 nodes, HAProxy, and a client box. Plan for about 2 GB of free RAM and 3 GB of disk (more once the large Bazaar dataset is loaded).
+- This module does not use the single `course-pg` container. Its lab in [`lab/`](lab/) starts **eight containers**: three etcd members, three Patroni + PostgreSQL 17 nodes, HAProxy, and a client box. Plan for about 2 GB of free RAM, and about 3 GB of disk with the small Bazaar dataset or about 10 GB with the full one (three copies of it).
 - Every container, network, and volume is prefixed with `m20-`, so the lab cannot collide with your course database. `./lab/scripts/down.sh` removes all of it.
 - The lab scripts are Bash and assume GNU `date` (Linux, WSL, or macOS with coreutils).
 
 ```bash
 cd modules/20-high-availability/lab
 ./scripts/up.sh                 # build the image (first run: a few minutes) and start the cluster
-./scripts/load-bazaar.sh        # reset.sh 20 against whichever node is the leader
+./scripts/load-bazaar.sh        # reset.sh 20 against whichever node is the leader (2-3 minutes)
+./scripts/load-bazaar.sh 11     # or: the small dataset (seconds), enough for every exercise
 ```
 
 If your network blocks the Debian package mirrors (the image installs Python with `apt-get`), build the fallback image instead: `M20_DOCKERFILE=Dockerfile.prebuilt ./scripts/up.sh`. It copies Python from the official `python` image.
@@ -74,7 +75,7 @@ The parallel formula assumes **independent** failures, and that assumption is th
 
 ### 1.2 RPO and RTO, revisited
 
-Module 18 introduced the two numbers every recovery plan must state:
+[Module 18](../18-backup-recovery/) introduced the two numbers every recovery plan must state:
 
 - **RPO** (recovery point objective): how much committed data you may lose, measured in time or in transactions.
 - **RTO** (recovery time objective): how long the service may be down.
@@ -126,7 +127,7 @@ Any automated failover therefore has to be designed so that it is **safe even wh
 
 ## 3. Why manual failover doesn't scale
 
-Module 19 ended with a manual failover. In outline:
+[Module 19](../19-replication/) ended with a manual failover. In outline:
 
 1. Notice that the primary is gone (an alert, or angry users).
 2. Confirm that it is really gone, and make sure it **stays** gone: stop the service, power off the VM, or at least block its port.
@@ -536,7 +537,7 @@ Tags are local configuration. Change them in the node's file and restart that no
 
 ## 8. The REST API
 
-Every Patroni agent serves HTTP on port 8008. The **health-check endpoints** answer with a status code (and a JSON body) so that dumb load balancers can make smart decisions. Here is what the three lab nodes answered at one moment, with `pg3` as leader, `pg1` as synchronous standby, and `pg2` as asynchronous replica:
+Every Patroni agent serves HTTP on port 8008. The **health-check endpoints** answer with a status code (and a JSON body) so that dumb load balancers can make smart decisions. Here is what the three lab nodes answered at one moment, with `pg3` as leader, `pg1` as synchronous standby, and `pg2` as asynchronous replica (try it yourself with `./scripts/rest.sh all /primary`, `./scripts/rest.sh m20-pg2 /patroni`, and so on):
 
 | Endpoint | 200 when... | pg1 (sync standby) | pg2 (async replica) | pg3 (leader) |
 |---|---|---|---|---|
@@ -816,13 +817,14 @@ verification on m20-pg1: rows in table 290
   error reported but row COMMITTED: 0
 ```
 
-These are all our measurements on this lab (3 etcd + 3 Patroni nodes on one 4-CPU machine), with the write loop going through HAProxy unless noted:
+These are all our measurements on this lab (3 etcd + 3 Patroni nodes on one 4-CPU machine, Bazaar at reset state 11 unless noted), with the write loop going through HAProxy unless noted:
 
 | Event | Settings | New leader running after | Write gap seen by the client |
 |---|---|---|---|
 | `docker kill` leader (hard crash), 6 runs | ttl 30, loop_wait 10, retry_timeout 10 | 27.3 – 30.9 s | 28.0 – 30.3 s |
 | `docker kill` leader, client with multi-host libpq string instead of HAProxy | same | 22.7 s | 22.8 s |
 | `docker kill` leader, 3 runs | **ttl 20, loop_wait 2, retry_timeout 5** | 18.8 – 20.1 s | 19.3 – 19.7 s |
+| `docker kill` leader, full reset-20 dataset (500k orders) | defaults, synchronous mode | 25.5 s | 25.1 s |
 | `docker stop` leader (clean shutdown: key released) | defaults | 3.6 s | 4.4 s |
 | `patronictl switchover` | defaults | 4.2 s (incl. the command itself) | 2.3 s |
 | Network partition of the leader | defaults | 25.3 s | 25.0 s |
@@ -904,10 +906,10 @@ Compared with HAProxy, there is no extra hop and nothing extra to run. The downs
 
 ### 13.3 PgBouncer: where to put the pooler
 
-Module 17 introduced PgBouncer. In an HA cluster there are three common placements:
+[Module 17](../17-operations/) introduced PgBouncer. In an HA cluster there are three common placements:
 
 1. **On each database node, in front of the local Postgres.** HAProxy health checks still use Patroni's REST API and route to the PgBouncer port of the primary. The pooling is close to the database, and a failover moves the clients to another node's pooler. This is the most common setup.
-2. **A separate PgBouncer tier pointing at HAProxy's port 5000** (or at a VIP). PgBouncer itself doesn't know about roles, so after a failover its server connections point to a dead node and fail, and PgBouncer opens new ones through HAProxy. Set `server_check_query`, a short `server_lifetime`, and reconnect promptly. Run at least two poolers.
+2. **A separate PgBouncer tier pointing at HAProxy's port 5000** (or at a VIP). PgBouncer itself doesn't know about roles. After a failover its server connections to the old primary fail, and it opens new ones through HAProxy. Idle clients in transaction mode don't even notice. Lower `server_connect_timeout` from its 15 s default: Exercise 12 shows a 15-second stall when a reconnect races the switchover. Run at least two poolers.
 3. **In the application** (psycopg_pool, SQLAlchemy's pool). Combine it with a multi-host string or HAProxy, and make sure the pool discards broken connections (Section 14.4).
 
 A pooler on its own is not HA. Its job here is to absorb the reconnection storm: hundreds of app processes reconnecting at the same second after a failover.
@@ -977,7 +979,7 @@ checkouts acknowledged: 12563  retried: 6  replayed (dedup by request_id): 1
 
 The rest of a good retry policy:
 
-- **Retry only retryable errors:** the connection and shutdown classes above, plus `40001` (serialization failure) and `40P01` (deadlock) from Module 10. Never retry constraint violations or `BZ001` (insufficient stock).
+- **Retry only retryable errors:** the connection and shutdown classes above, plus `40001` (serialization failure) and `40P01` (deadlock) from [Module 10](../10-transactions-concurrency/). Never retry constraint violations or `BZ001` (insufficient stock).
 - **Exponential backoff with jitter** (0.1 s, 0.2 s, 0.4 s ... capped at a couple of seconds, each multiplied by a random factor), so a thousand clients don't hammer the new primary in lockstep the moment it appears.
 - **An overall deadline** longer than your worst failover (about `ttl` plus a margin: 60–90 s with the defaults) and shorter than the user's patience. Past it, fail clearly.
 - **Retry the whole transaction, never one statement** of a transaction that has lost its connection.

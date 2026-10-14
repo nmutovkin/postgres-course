@@ -1,0 +1,86 @@
+# Module 15 lab: PostgreSQL 17 with TLS, client certificates and a strict pg_hba.conf.
+#
+#   cd modules/15-security-rls/lab/tls
+#   ./make-certs.sh                    # once: creates certs/ (CA, server and client certificates)
+#   docker compose up -d --wait
+#   ./tls-demo.sh                      # the sslmode matrix and the authentication checks
+#   docker compose down -v             # remove everything
+#
+# Services:
+#   db      postgres:17, ssl=on, our own pg_hba.conf; reachable in the Compose network
+#           as "db" and as "db.bazaar.internal" (the name in the server certificate);
+#           on your machine at localhost:${LAB_TLS_PORT:-55433}
+#   client  postgres:17 used only as a toolbox (psql, openssl); the certificates are in /lab/certs
+name: m15-tls
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+    # PostgreSQL refuses a private key that others can read, and the key must
+    # belong to the user the server runs as. Bind mounts keep the host's owner,
+    # so copy the files into place with the right owner and mode first.
+    entrypoint:
+      - bash
+      - -c
+      - |
+        install -d -o postgres -g postgres -m 700 /var/lib/postgresql/tls
+        install -o postgres -g postgres -m 600 /certs/server.key /var/lib/postgresql/tls/
+        install -o postgres -g postgres -m 644 /certs/server.crt /certs/ca.crt /var/lib/postgresql/tls/
+        exec docker-entrypoint.sh "$$@"
+      - --
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/var/lib/postgresql/tls/server.crt
+      - -c
+      - ssl_key_file=/var/lib/postgresql/tls/server.key
+      - -c
+      - ssl_ca_file=/var/lib/postgresql/tls/ca.crt
+      - -c
+      - ssl_min_protocol_version=TLSv1.2
+      - -c
+      - hba_file=/etc/postgresql/conf/pg_hba.conf
+      - -c
+      - log_connections=on
+      - -c
+      - cluster_name=bazaar-db
+    volumes:
+      - ./certs:/certs:ro
+      - ./conf:/etc/postgresql/conf:ro
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    networks:
+      default:
+        aliases:
+          - db.bazaar.internal
+    ports:
+      - "${LAB_TLS_PORT:-55433}:5432"
+    healthcheck:
+      # run as the OS user postgres: the "local ... peer" line in pg_hba.conf lets only it in
+      test: ["CMD", "gosu", "postgres", "pg_isready", "-U", "postgres", "-d", "lab"]
+      # poll fast while starting, then rarely (every probe is a logged connection)
+      start_period: 60s
+      start_interval: 1s
+      interval: 5m
+      timeout: 3s
+      retries: 3
+
+  client:
+    image: postgres:17
+    # Same reason as above: libpq refuses a client key readable by others.
+    entrypoint:
+      - bash
+      - -c
+      - |
+        install -d -m 700 /lab/certs
+        install -m 600 /certs/alice.key /lab/certs/
+        install -m 644 /certs/alice.crt /certs/ca.crt /lab/certs/
+        exec sleep infinity
+    volumes:
+      - ./certs:/certs:ro
+    depends_on:
+      db:
+        condition: service_healthy

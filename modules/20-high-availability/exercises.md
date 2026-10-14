@@ -123,7 +123,7 @@ Sections 9 (pause), 10 (sync), 11.1 (candidate rules), 11.4 (DCS failure), 11.5 
 4. Explain why the hard-crash failover time follows `ttl` and not `loop_wait`, and what you risk by making `ttl` small on a real network.
 5. Put the defaults back: `patronictl edit-config -s ttl=30 -s loop_wait=10 -s retry_timeout=10 --force`.
 
-**Self-check:** with defaults we measured 27–31 s per crash. With 20/2/5 we measured 19–20 s. Step 3 logs `Violated the rule "loop_wait + 2*retry_timeout <= ttl"` and Patroni lowers `loop_wait`. A `ttl` below 20 is raised to 20 (`ttl=10 can't be smaller than 20, adjusting...`).
+**Self-check:** with defaults we measured 27–31 s per crash. With 20/2/5 we measured 19–20 s. Step 3 logs `Violated the rule "loop_wait + 2*retry_timeout <= ttl", where ttl=20. Adjusting loop_wait from 10 to 1 and retry_timeout from 10 to 9`, while `patronictl show-config` still shows the values you typed. A `ttl` below 20 is raised to 20 (`ttl=10 can't be smaller than 20, adjusting...`).
 
 <details><summary>Hint</summary>
 
