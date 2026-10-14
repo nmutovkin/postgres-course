@@ -226,7 +226,7 @@ INSERT INTO users (id, email, full_name) OVERRIDING SYSTEM VALUE VALUES
 1. The application then registers `dan@example.com`. What happens? If the application retries the same insert after each failure, which attempt succeeds, and with which id?
 2. Write **one** SQL statement that repairs the identity sequence of `users.id` so that the next generated id is `max(id) + 1`. It must also work when the table is **empty** (the next id is then 1). Test it in both situations.
 
-**Self-check:** (1) two attempts fail with `users_pkey` violations, and the third gets id 4. (2) Run your statement on the empty table (after `reset.sh 03`); the next insert gets id 1. Load the three users and run it again; the next insert gets id 4.
+**Self-check:** (1) three attempts fail with `users_pkey` violations, and the fourth gets id 4. (2) Run your statement on the empty table (after `reset.sh 03`); the next insert gets id 1. Load the three users and run it again; the next insert gets id 4.
 
 <details><summary>Hint</summary>
 

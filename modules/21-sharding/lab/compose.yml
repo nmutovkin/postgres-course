@@ -1,0 +1,108 @@
+# Module 21 lab: three ways to shard Bazaar.
+#
+# Profile "citus" (the default services):
+#   m21-coord      Citus coordinator (clients connect here; holds metadata + reference tables)
+#   m21-worker1    Citus worker
+#   m21-worker2    Citus worker
+#   m21-worker3    third worker, started later to practise rebalancing:
+#                    docker compose --profile scale up -d worker3
+#
+# Profile "fdw" (plain PostgreSQL 17, for the postgres_fdw and app-router sections):
+#   m21-fdw-coord  coordinator: a partitioned table whose partitions are foreign tables
+#   m21-shard1     shard node 1
+#   m21-shard2     shard node 2
+#
+#   cd modules/21-sharding/lab
+#   docker compose up -d                       # Citus coordinator + 2 workers
+#   docker compose --profile fdw up -d         # the plain-Postgres trio
+#   docker compose --profile scale up -d       # add m21-worker3
+#   docker compose --profile fdw --profile scale down -v   # tear everything down
+#
+# No ports are published: use `docker exec -it m21-coord psql -U postgres -d bazaar`.
+# Authentication inside the lab network is `trust` to keep the focus on sharding;
+# a real cluster uses scram-sha-256 plus a .pgpass on every node (Citus nodes
+# connect to each other as the user running the query).
+
+name: m21-lab
+
+x-citus: &citus
+  image: citusdata/citus:14.2.0-pg17        # Citus 14.2 on PostgreSQL 17.10
+  shm_size: 256mb
+  environment:
+    POSTGRES_PASSWORD: postgres
+    POSTGRES_HOST_AUTH_METHOD: trust
+  # citus must come first in shared_preload_libraries; pg_stat_statements is
+  # needed by Bazaar's 1201 migration. wal_level=logical lets the shard
+  # rebalancer move shards ONLINE (it copies a shard, then streams the changes
+  # made meanwhile through logical replication).
+  command: ["postgres", "-c", "shared_preload_libraries=citus,pg_stat_statements",
+            "-c", "wal_level=logical"]
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres"]
+    interval: 2s
+    timeout: 3s
+    retries: 60
+
+x-plain: &plain
+  image: postgres:17
+  shm_size: 256mb
+  profiles: ["fdw"]
+  environment:
+    POSTGRES_PASSWORD: postgres
+    POSTGRES_HOST_AUTH_METHOD: trust
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres"]
+    interval: 2s
+    timeout: 3s
+    retries: 60
+
+services:
+  coord:
+    <<: *citus
+    container_name: m21-coord
+    hostname: m21-coord
+    volumes: [coord:/var/lib/postgresql/data]
+
+  worker1:
+    <<: *citus
+    container_name: m21-worker1
+    hostname: m21-worker1
+    volumes: [worker1:/var/lib/postgresql/data]
+
+  worker2:
+    <<: *citus
+    container_name: m21-worker2
+    hostname: m21-worker2
+    volumes: [worker2:/var/lib/postgresql/data]
+
+  worker3:
+    <<: *citus
+    profiles: ["scale"]
+    container_name: m21-worker3
+    hostname: m21-worker3
+    volumes: [worker3:/var/lib/postgresql/data]
+
+  fdw-coord:
+    <<: *plain
+    container_name: m21-fdw-coord
+    hostname: m21-fdw-coord
+    # max_prepared_transactions > 0 lets section 9 demonstrate PREPARE TRANSACTION
+    command: ["postgres", "-c", "max_prepared_transactions=10"]
+
+  shard1:
+    <<: *plain
+    container_name: m21-shard1
+    hostname: m21-shard1
+    command: ["postgres", "-c", "max_prepared_transactions=10"]
+
+  shard2:
+    <<: *plain
+    container_name: m21-shard2
+    hostname: m21-shard2
+    command: ["postgres", "-c", "max_prepared_transactions=10"]
+
+volumes:
+  coord:
+  worker1:
+  worker2:
+  worker3:

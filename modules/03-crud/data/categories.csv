@@ -1,0 +1,24 @@
+id,parent_id,name,slug,created_at
+1,,Electronics,electronics,2023-03-01 08:00:00+00
+2,1,Computers,computers,2023-03-01 08:00:00+00
+3,2,Laptops,laptops,2023-03-01 08:00:00+00
+4,2,Monitors,monitors,2023-03-01 08:00:00+00
+5,1,Audio,audio,2023-03-01 08:00:00+00
+6,5,Headphones,headphones,2023-03-01 08:00:00+00
+7,5,Speakers,speakers,2023-03-01 08:00:00+00
+8,,Home & Garden,home-garden,2023-03-01 08:00:00+00
+9,8,Kitchen,kitchen,2023-03-01 08:00:00+00
+10,9,Cookware,cookware,2023-03-01 08:00:00+00
+11,9,Cutlery,cutlery,2023-03-01 08:00:00+00
+12,8,Garden,garden,2023-03-01 08:00:00+00
+13,12,Planters,planters,2023-03-01 08:00:00+00
+14,,Books,books,2023-03-01 08:00:00+00
+15,14,Fiction,fiction,2023-03-01 08:00:00+00
+16,15,Science Fiction,science-fiction,2023-03-01 08:00:00+00
+17,15,Mystery,mystery,2023-03-01 08:00:00+00
+18,14,Non-Fiction,non-fiction,2023-03-01 08:00:00+00
+19,18,Cooking,cooking,2023-03-01 08:00:00+00
+20,18,History,history,2023-03-01 08:00:00+00
+21,,Clothing,clothing,2023-03-01 08:00:00+00
+22,21,T-Shirts,t-shirts,2023-03-01 08:00:00+00
+23,21,Hoodies,hoodies,2023-03-01 08:00:00+00
