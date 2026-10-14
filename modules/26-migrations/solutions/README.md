@@ -1,10 +1,33 @@
 # Module 26 solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 25 SQLAlchemy ORM](../../25-sqlalchemy-orm/README.md) · [Course home](../../../README.md) · [27 Production Python and Postgres →](../../27-python-production/README.md)
+<!-- nav:end -->
+
 All solutions ran against PostgreSQL 17.11 with the large dataset (`reset.sh 26`, stamped at 2600 and upgraded to 2701), Alembic 1.20.0, SQLAlchemy 2.1.4, psycopg 3.3.6. Run them from `project/python` with the venv active, for example `python ../../modules/26-migrations/solutions/ex02_check.py`.
 
 Most solutions use [`scratch_alembic.py`](scratch_alembic.py): `scratch_migrations(*files)` copies `alembic.ini` and `migrations/` to a temporary directory and adds the exercise's revision files; `scratch_db()` creates an empty database and drops it afterwards. Solutions that need the large dataset run against the reference database and downgrade back to 2701 at the end. Timings depend on the machine and on what's cached; the ratios are what matter.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1: Review the locks of a release](#exercise-1-review-the-locks-of-a-release)
+- [Exercise 2: A new order status](#exercise-2-a-new-order-status)
+- [Exercise 3: Which revision is this database at?](#exercise-3-which-revision-is-this-database-at)
+- [Exercise 4: Review this migration](#exercise-4-review-this-migration)
+- [Exercise 5: From autogenerate's draft to a revision](#exercise-5-from-autogenerates-draft-to-a-revision)
+- [Exercise 6: A denormalized counter, backfilled under load](#exercise-6-a-denormalized-counter-backfilled-under-load)
+- [Exercise 7: A unique constraint on dirty data](#exercise-7-a-unique-constraint-on-dirty-data)
+- [Exercise 8: Rename a table without breaking running code](#exercise-8-rename-a-table-without-breaking-running-code)
+- [Exercise 9: Two heads](#exercise-9-two-heads)
+- [Exercise 10: Prove that writers were never blocked](#exercise-10-prove-that-writers-were-never-blocked)
+- [Exercise 11: Split `users.full_name`, with zero downtime](#exercise-11-split-usersfull_name-with-zero-downtime)
+- [Exercise 12: Squash the history](#exercise-12-squash-the-history)
+
+<!-- toc:end -->
 
 ## Exercise 1: Review the locks of a release
 

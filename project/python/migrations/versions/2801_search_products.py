@@ -1,4 +1,4 @@
-"""storefront search: search_products() from module 13, and its trigram index
+"""storefront: search_products() from module 13, its trigram index, a browse index
 
 Revision ID: 2801
 Revises: 2701
@@ -20,8 +20,16 @@ GET /search calls it, so it becomes part of the schema here, as a revision:
   Unchanged from module 13, except that it is created by bazaar_owner (env.py's
   SET ROLE) so that module 15's default privileges grant EXECUTE to bazaar_app.
 
+One more index for GET /products (browsing a category, newest first):
+
+* products_active_category_id_id_idx on (category_id, id) WHERE status = 'active':
+  module 11's (category_id, price) index serves "cheapest first" per category;
+  this one serves "newest first" (id DESC) per category. The service merges
+  per-category top-N lists (module 28, section 4.7), so each list must come
+  straight out of an index in the right order. Built CONCURRENTLY too (2 s).
+
 Module 13's search_terms materialized view and autocomplete() are left out: the
-service does not use them yet (an exercise of module 28 adds autocomplete).
+service does not use them yet.
 
 Downgrade drops the three objects. The function bodies are kept verbatim in
 this file: a revision must do the same thing in a year (never import them).
@@ -204,9 +212,16 @@ def upgrade() -> None:
         "immutable_unaccent(title) gin_trgm_ops",
         using="gin",
     )
+    create_index_concurrently(
+        "products_active_category_id_id_idx",
+        "products",
+        "category_id, id",
+        where="status = 'active'",
+    )
 
 
 def downgrade() -> None:
+    drop_index_concurrently("products_active_category_id_id_idx")
     drop_index_concurrently("products_title_unaccent_trgm_idx")
     op.execute("DROP FUNCTION IF EXISTS search_products(text, int, int)")
     op.execute("DROP FUNCTION IF EXISTS immutable_unaccent(text)")

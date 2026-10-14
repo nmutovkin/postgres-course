@@ -95,6 +95,15 @@ def category_subtree(category_id: int) -> sa.CTE:
     return tree.union_all(child)
 
 
+def _sort_keys(cols: Any, sort: Sort) -> tuple[list[Any], Any]:
+    """(ORDER BY list, keyset column tuple) for a sort, on `cols` (a table's or a subquery's)."""
+    if sort is Sort.newest:
+        return [cols.id.desc()], (cols.id,)
+    if sort is Sort.price_asc:
+        return [cols.price, cols.id], (cols.price, cols.id)
+    return [cols.price.desc(), cols.id.desc()], (cols.price, cols.id)
+
+
 def products_query(
     *,
     category_id: int | None = None,
@@ -106,6 +115,17 @@ def products_query(
     after: tuple[Any, ...] | None = None,
     limit: int = 20,
 ) -> sa.Select:
+    """The listing statement. Two shapes, chosen by which index can drive it:
+
+    * merge of per-category top-N lists (the usual case): for each category of
+      the subtree (or of the whole catalog), the first limit+1 rows straight
+      from an index in sort order, (category_id, price) or (category_id, id);
+      then the best limit+1 of those. Cost: a few index probes per category,
+      whatever the size of the categories.
+    * a plain filtered query, when another access path is better: an attribute
+      filter (the GIN index on attributes is selective) or "newest first" over
+      the whole catalog (the primary key, backwards).
+    """
     p, i = products, inventory
     available = (i.c.quantity - i.c.reserved).label("available")
     stmt = (
@@ -120,11 +140,10 @@ def products_query(
             p.c.created_at,
         )
         .select_from(p.join(i, i.c.product_id == p.c.id))
-        .where(p.c.status == "active")
+        # A literal, not a bound parameter: the partial indexes say WHERE status =
+        # 'active', and a generic plan for "status = $1" could not use them.
+        .where(sa.text("products.status = 'active'"))
     )
-    if category_id is not None:
-        subtree = category_subtree(category_id)
-        stmt = stmt.where(p.c.category_id.in_(sa.select(subtree.c.id)))
     if min_price is not None:
         stmt = stmt.where(p.c.price >= min_price)
     if max_price is not None:
@@ -133,19 +152,34 @@ def products_query(
         stmt = stmt.where(p.c.attributes.contains(attributes))  # @>: the GIN index
     if in_stock:
         stmt = stmt.where(i.c.quantity - i.c.reserved > 0)
-    if sort is Sort.newest:
-        if after is not None:
-            stmt = stmt.where(p.c.id < after[0])
-        stmt = stmt.order_by(p.c.id.desc())
-    elif sort is Sort.price_asc:
-        if after is not None:
-            stmt = stmt.where(sa.tuple_(p.c.price, p.c.id) > sa.tuple_(*after))
-        stmt = stmt.order_by(p.c.price, p.c.id)
+    order, key = _sort_keys(p.c, sort)
+    if after is not None:
+        descending = sort is not Sort.price_asc
+        cmp = (
+            sa.tuple_(*key) < sa.tuple_(*after)
+            if descending
+            else sa.tuple_(*key) > sa.tuple_(*after)
+        )
+        stmt = stmt.where(cmp)
+
+    if attributes or (category_id is None and sort is Sort.newest):
+        if category_id is not None:
+            subtree = category_subtree(category_id)
+            stmt = stmt.where(p.c.category_id.in_(sa.select(subtree.c.id)))
+        return stmt.order_by(*order).limit(limit + 1)  # one extra row: is there a next page?
+
+    if category_id is not None:
+        cats = category_subtree(category_id)
     else:
-        if after is not None:
-            stmt = stmt.where(sa.tuple_(p.c.price, p.c.id) < sa.tuple_(*after))
-        stmt = stmt.order_by(p.c.price.desc(), p.c.id.desc())
-    return stmt.limit(limit + 1)  # one extra row says whether there is a next page
+        cats = sa.select(categories.c.id).cte("cats")
+    top = stmt.where(p.c.category_id == cats.c.id).order_by(*order).limit(limit + 1).lateral("top")
+    outer_order, _ = _sort_keys(top.c, sort)
+    return (
+        sa.select(*top.c)
+        .select_from(cats.join(top, sa.true()))
+        .order_by(*outer_order)
+        .limit(limit + 1)
+    )
 
 
 @router.get("/products", response_model=Page[ProductSummary])

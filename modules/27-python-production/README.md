@@ -1,5 +1,10 @@
 # Module 27: Production Python and Postgres
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 26 Migrations with Alembic](../26-migrations/README.md) · [Course home](../../README.md) · [28 Capstone: the Bazaar Service →](../28-capstone/README.md)
+<!-- nav:end -->
+
 On Black Friday 2025, Bazaar took 3,527 orders in one day. Somewhere in that day, the primary failed over at two in the morning and every pooled connection died at once; a buyer's phone lost signal after tapping "Pay" and the app retried; two checkouts for the last unit of a product arrived in the same millisecond; a report held a lock that a migration wanted; a slow query pinned the pool at its limit while requests queued; and an order confirmation email had to go out exactly once. Code that works on a laptop meets all of these in production. This module is about the code around the queries: tests that prove behaviour against a real PostgreSQL under concurrency, errors classified and retried correctly, timeouts at every layer, pools sized and configured for PgBouncer, events published reliably with the transactional outbox, and enough observability to know what happened afterwards.
 
 **What you'll learn**
@@ -25,6 +30,61 @@ pytest -n 4                                     # 126 tests, about 11 s
 You need Module 26's migrations and `bazaar.testing`; the outbox builds on Module 10's job queue and Module 23's worker. The PgBouncer lab in [`lab/`](lab/) needs Docker (section 5.3). Outputs come from PostgreSQL 17.11, psycopg 3.3.6, asyncpg 0.32.0, SQLAlchemy 2.1.4, pytest-xdist 3.8.0, testcontainers 4.15.0 and OpenTelemetry 1.45.1.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Testing against real PostgreSQL](#1-testing-against-real-postgresql)
+  - [1.1 Why not SQLite, why not mocks](#11-why-not-sqlite-why-not-mocks)
+  - [1.2 Fixture strategies](#12-fixture-strategies)
+  - [1.3 Rolled-back transactions, and their limits](#13-rolled-back-transactions-and-their-limits)
+  - [1.4 Template databases](#14-template-databases)
+  - [1.5 Parallel tests with pytest-xdist](#15-parallel-tests-with-pytest-xdist)
+  - [1.6 testcontainers: a server per test session](#16-testcontainers-a-server-per-test-session)
+  - [1.7 Test data: factories](#17-test-data-factories)
+  - [1.8 Testing concurrency](#18-testing-concurrency)
+- [2. Failure is normal: classifying database errors](#2-failure-is-normal-classifying-database-errors)
+  - [2.1 Failover, as the application sees it](#21-failover-as-the-application-sees-it)
+- [3. Retrying correctly](#3-retrying-correctly)
+  - [3.1 Retry whole transactions](#31-retry-whole-transactions)
+  - [3.2 The unknown commit, and idempotency](#32-the-unknown-commit-and-idempotency)
+  - [3.3 Backoff with full jitter, within a deadline](#33-backoff-with-full-jitter-within-a-deadline)
+  - [3.4 Retries with real failures](#34-retries-with-real-failures)
+  - [3.5 What not to retry, and how much](#35-what-not-to-retry-and-how-much)
+- [4. Timeouts at every layer](#4-timeouts-at-every-layer)
+- [5. Connection management in production](#5-connection-management-in-production)
+  - [5.1 How big should the pool be?](#51-how-big-should-the-pool-be)
+  - [5.2 One pool per process, and its settings](#52-one-pool-per-process-and-its-settings)
+  - [5.3 PgBouncer in transaction mode, with this package](#53-pgbouncer-in-transaction-mode-with-this-package)
+  - [5.4 Read replicas](#54-read-replicas)
+  - [5.5 Health checks](#55-health-checks)
+  - [5.6 Graceful shutdown](#56-graceful-shutdown)
+  - [5.7 Fork safety](#57-fork-safety)
+- [6. The transactional outbox](#6-the-transactional-outbox)
+  - [6.1 The dual-write problem](#61-the-dual-write-problem)
+  - [6.2 The outbox table (revision 2701)](#62-the-outbox-table-revision-2701)
+  - [6.3 The relay](#63-the-relay)
+  - [6.4 Delivery guarantees, and idempotent consumers](#64-delivery-guarantees-and-idempotent-consumers)
+  - [6.5 Running an outbox](#65-running-an-outbox)
+- [7. LISTEN/NOTIFY: a wake-up call, not a queue](#7-listennotify-a-wake-up-call-not-a-queue)
+- [8. Observability](#8-observability)
+  - [8.1 Name your connections](#81-name-your-connections)
+  - [8.2 Structured logs](#82-structured-logs)
+  - [8.3 Timing every query](#83-timing-every-query)
+  - [8.4 sqlcommenter: tags the database can see](#84-sqlcommenter-tags-the-database-can-see)
+  - [8.5 OpenTelemetry](#85-opentelemetry)
+  - [8.6 Metrics](#86-metrics)
+- [9. Security in the application](#9-security-in-the-application)
+  - [9.1 Least privilege](#91-least-privilege)
+  - [9.2 Secrets](#92-secrets)
+  - [9.3 SQL injection, one last time](#93-sql-injection-one-last-time)
+  - [9.4 Personal data](#94-personal-data)
+- [10. A production readiness checklist](#10-a-production-readiness-checklist)
+- [11. The Bazaar production layer](#11-the-bazaar-production-layer)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Testing against real PostgreSQL
 

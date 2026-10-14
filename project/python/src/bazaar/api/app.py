@@ -20,6 +20,7 @@ import logging
 import os
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import APIRouter, FastAPI
 
@@ -35,11 +36,15 @@ log = logging.getLogger("bazaar.api")
 
 
 def create_app(
-    settings: Settings | None = None, *, extra_routers: Sequence[APIRouter] = ()
+    settings: Settings | None = None,
+    *,
+    extra_routers: Sequence[APIRouter] = (),
+    **fastapi_kwargs: Any,
 ) -> FastAPI:
     """Build the app. Settings default to the environment (read at startup, not import).
 
     extra_routers: more endpoints (the module 28 exercises plug in this way).
+    fastapi_kwargs: passed to FastAPI(), e.g. telemetry={"tracer_provider": ...}.
     """
 
     @asynccontextmanager
@@ -67,6 +72,7 @@ def create_app(
         version="0.28.0",
         summary="The Bazaar marketplace service (PostgreSQL course, module 28)",
         lifespan=lifespan,
+        **fastapi_kwargs,
     )
     errors.install(app)
     timeout = (settings or get_settings()).request_timeout_ms

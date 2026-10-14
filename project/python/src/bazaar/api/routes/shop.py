@@ -101,12 +101,14 @@ async def get_cart(user_id: UserId, session: RwSession) -> Cart:
 # the retry finds the orders of the first attempt instead of ordering twice.
 CHECKOUT_RETRY = RetryPolicy(attempts=3, base_delay=0.05, deadline=5.0)
 
-LOCK_CART = sa.text("""
-    SELECT product_id, quantity
-    FROM cart_items
+# Lock, read and empty the cart in one statement, BEFORE place_order() locks the
+# hot inventory rows: every statement between those row locks and COMMIT makes
+# other buyers of the same products wait (section 9.3). If the checkout fails,
+# the rollback puts the cart back.
+TAKE_CART = sa.text("""
+    DELETE FROM cart_items
     WHERE user_id = :user_id
-    ORDER BY product_id
-    FOR UPDATE
+    RETURNING product_id, quantity
 """)
 
 DEFAULT_ADDRESS = sa.text("SELECT id FROM addresses WHERE user_id = :user_id AND is_default")
@@ -127,18 +129,18 @@ async def place_cart_order(
     """Check out the user's cart in the session's transaction; (orders, replayed).
 
     1. A key seen before: return its orders (a retried request, a double click).
-    2. Lock the cart rows (FOR UPDATE): two checkouts of the same cart, whatever
-       their keys, run one after the other; the second finds the cart empty.
+    2. Take the cart (DELETE ... RETURNING locks the rows): two checkouts of the
+       same cart, whatever their keys, run one after the other; the second
+       waits for the first to commit and then finds the cart empty.
     3. place_order() through services.checkout_async (one order per seller,
-       stock reserved, the key stored, one outbox event per order), then empty
-       the cart. Same transaction: all of it commits, or none of it.
+       stock reserved, the key stored, one outbox event per order). Same
+       transaction: all of it commits, or none of it (the cart comes back).
     """
     existing = (await session.scalars(_orders_with_key(user_id, key))).all()
     if existing:
         return existing, True
-    items = [
-        (r.product_id, r.quantity) for r in await session.execute(LOCK_CART, {"user_id": user_id})
-    ]
+    taken = await session.execute(TAKE_CART, {"user_id": user_id})
+    items = sorted((r.product_id, r.quantity) for r in taken)
     if not items:
         # Empty: maybe because a concurrent request with this key just checked it out.
         existing = (await session.scalars(_orders_with_key(user_id, key))).all()
@@ -149,9 +151,6 @@ async def place_cart_order(
         shipping_address_id = await session.scalar(DEFAULT_ADDRESS, {"user_id": user_id})
     orders = await services.checkout_async(
         session, user_id, items, shipping_address_id, idempotency_key=key
-    )
-    await session.execute(
-        sa.text("DELETE FROM cart_items WHERE user_id = :user_id"), {"user_id": user_id}
     )
     return orders, False
 

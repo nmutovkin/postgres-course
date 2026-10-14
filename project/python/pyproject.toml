@@ -35,7 +35,8 @@ dev = [
     "pytest-xdist>=3.6",  # module 27: pytest -n 4
     "testcontainers[postgres]>=4.8",  # module 27: tests/test_containers.py (opt-in)
     "bazaar[otel]",  # module 27: the tracing test
-    "httpx>=0.27",  # module 28: API tests (ASGITransport) and the load generator
+    "httpx>=0.27",  # module 28: API tests (ASGITransport)
+    "aiohttp>=3.9",  # module 28: the load generator (modules/28-capstone/examples)
 ]
 
 [project.scripts]

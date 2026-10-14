@@ -1,5 +1,10 @@
 # Module 27 project: a production-ready data layer
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 26 Migrations with Alembic](../26-migrations/README.md) · [Course home](../../README.md) · [28 Capstone: the Bazaar Service →](../28-capstone/README.md)
+<!-- nav:end -->
+
 Before Bazaar's service goes live (Module 28), its data layer must behave under real conditions: concurrent buyers, failovers, slow queries, retried requests, PgBouncer, and engineers who need to know what happened at 2 a.m. In this milestone you add error classification and retries, timeouts on every connection, an idempotent checkout that publishes its events through a transactional outbox, observability hooks, and a test suite that runs in parallel, gets fresh databases from a template, and proves concurrency properties with barriers.
 
 **Starting state:** `./project/bin/reset.sh 27`, `alembic stamp 2600 && alembic upgrade 2604` (your Module 26 milestone), and your Module 26 package (or the reference one).

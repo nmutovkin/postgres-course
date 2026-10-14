@@ -1,5 +1,10 @@
 # Module 26: Migrations with Alembic
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 25 SQLAlchemy ORM](../25-sqlalchemy-orm/README.md) · [Course home](../../README.md) · [27 Production Python and Postgres →](../27-python-production/README.md)
+<!-- nav:end -->
+
 Product pages need URLs like `/p/voltix-wireless-headphones-527-123456`, so `products` needs a `slug` column: unique, never NULL, filled in for the 200,000 products that already exist. Checkout needs an idempotency key, so that a client that retries after a timeout doesn't buy twice. Until now, every schema change in this course was a numbered SQL file, and `reset.sh` applied them by **dropping the database and rebuilding it**. Production can't do that. Its database has been running for years, it holds the only copy of the orders, and while you change its schema, buyers keep checking out. This module brings Bazaar's schema under **Alembic**: versioned, reviewed, repeatable migrations that take every database from wherever it is to where the code needs it to be, written so that the shop stays online while they run.
 
 **What you'll learn**
@@ -26,6 +31,69 @@ export BAZAAR_DSN=postgresql://postgres:postgres@localhost:5432/bazaar
 Don't run `alembic stamp` yet: section 4 does it step by step. You need Module 24's `bazaar.sa.tables` (the metadata), Module 15's roles, and Module 10's view of locks. The examples are in [`examples/`](examples/); run them from `project/python`. Outputs come from Alembic 1.20.0, SQLAlchemy 2.1.4 and psycopg 3.3.6 against PostgreSQL 17.11 with the large dataset. Timings depend on the machine; the ratios are what matter.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Why migrations](#1-why-migrations)
+  - [1.1 The schema is code](#11-the-schema-is-code)
+  - [1.2 What `reset.sh` did, and why it stops here](#12-what-resetsh-did-and-why-it-stops-here)
+  - [1.3 Two families of tools](#13-two-families-of-tools)
+- [2. Alembic's model](#2-alembics-model)
+  - [2.1 The pieces](#21-the-pieces)
+  - [2.2 A revision](#22-a-revision)
+  - [2.3 The version graph and `alembic_version`](#23-the-version-graph-and-alembic_version)
+- [3. Wiring Alembic to Bazaar](#3-wiring-alembic-to-bazaar)
+  - [3.1 `alembic.ini`](#31-alembicini)
+  - [3.2 `env.py`: where to connect, and as whom](#32-envpy-where-to-connect-and-as-whom)
+  - [3.3 `env.py`: what Alembic compares, and where it keeps its version](#33-envpy-what-alembic-compares-and-where-it-keeps-its-version)
+  - [3.4 Alembic from Python](#34-alembic-from-python)
+- [4. Adopting Alembic on an existing database](#4-adopting-alembic-on-an-existing-database)
+  - [4.1 Two kinds of databases](#41-two-kinds-of-databases)
+  - [4.2 Making the baseline](#42-making-the-baseline)
+  - [4.3 The baseline revision](#43-the-baseline-revision)
+  - [4.4 Stamping the reference database](#44-stamping-the-reference-database)
+  - [4.5 Proving that both paths arrive at the same schema](#45-proving-that-both-paths-arrive-at-the-same-schema)
+  - [4.6 Revision 2601: a SQL file becomes a migration](#46-revision-2601-a-sql-file-becomes-a-migration)
+- [5. Revisions and the version graph](#5-revisions-and-the-version-graph)
+  - [5.1 Creating revisions](#51-creating-revisions)
+  - [5.2 Moving around](#52-moving-around)
+  - [5.3 Branches and merges](#53-branches-and-merges)
+  - [5.4 `stamp` beyond adoption](#54-stamp-beyond-adoption)
+  - [5.5 Offline mode: SQL for review](#55-offline-mode-sql-for-review)
+  - [5.6 Downgrades](#56-downgrades)
+- [6. Autogenerate: what it sees and what it misses](#6-autogenerate-what-it-sees-and-what-it-misses)
+  - [6.1 How it works](#61-how-it-works)
+  - [6.2 A demonstration on real drift](#62-a-demonstration-on-real-drift)
+  - [6.3 What autogenerate detects, and what it doesn't](#63-what-autogenerate-detects-and-what-it-doesnt)
+  - [6.4 Filters: `include_name` and `include_object`](#64-filters-include_name-and-include_object)
+  - [6.5 The workflow](#65-the-workflow)
+- [7. Writing revisions by hand](#7-writing-revisions-by-hand)
+  - [7.1 Functions and triggers: `op.execute`](#71-functions-and-triggers-opexecute)
+  - [7.2 Data migrations](#72-data-migrations)
+  - [7.3 Enums: adding values](#73-enums-adding-values)
+- [8. Zero-downtime schema changes](#8-zero-downtime-schema-changes)
+  - [8.1 The lock queue, and `lock_timeout`](#81-the-lock-queue-and-lock_timeout)
+  - [8.2 Measuring instead of guessing](#82-measuring-instead-of-guessing)
+  - [8.3 Adding a column, with and without a default](#83-adding-a-column-with-and-without-a-default)
+  - [8.4 `NOT NULL` without a long lock](#84-not-null-without-a-long-lock)
+  - [8.5 Foreign keys: `NOT VALID`, then `VALIDATE`](#85-foreign-keys-not-valid-then-validate)
+  - [8.6 Indexes: `CONCURRENTLY`, inside Alembic](#86-indexes-concurrently-inside-alembic)
+  - [8.7 Changing a column's type](#87-changing-a-columns-type)
+  - [8.8 Renaming a column: expand and contract](#88-renaming-a-column-expand-and-contract)
+  - [8.9 Dropping a column: application first](#89-dropping-a-column-application-first)
+  - [8.10 The patterns at a glance](#810-the-patterns-at-a-glance)
+- [9. Bazaar's revisions](#9-bazaars-revisions)
+- [10. Testing migrations](#10-testing-migrations)
+- [11. Migrations in CI/CD and deployment](#11-migrations-in-cicd-and-deployment)
+  - [11.1 Who runs migrations, and when](#111-who-runs-migrations-and-when)
+  - [11.2 Deployment ordering](#112-deployment-ordering)
+  - [11.3 When a migration fails in production](#113-when-a-migration-fails-in-production)
+  - [11.4 Squashing old revisions](#114-squashing-old-revisions)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Why migrations
 

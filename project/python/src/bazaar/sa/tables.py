@@ -170,12 +170,19 @@ products = sa.Table(
 )
 
 # module 28 (revision 2801): the trigram index of search_products()' fuzzy fallback,
-# on an expression. postgresql_ops names the expression by its label.
+# on an expression (postgresql_ops names the expression by its label), and the
+# per-category "newest first" index of GET /products.
 sa.Index(
     "products_title_unaccent_trgm_idx",
     sa.func.immutable_unaccent(products.c.title).label("title_unaccent"),
     postgresql_using="gin",
     postgresql_ops={"title_unaccent": "gin_trgm_ops"},
+)
+sa.Index(
+    "products_active_category_id_id_idx",
+    products.c.category_id,
+    products.c.id,
+    postgresql_where=sa.text("status = 'active'"),
 )
 
 inventory = sa.Table(

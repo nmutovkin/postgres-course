@@ -5,7 +5,8 @@
     python -m bazaar.relay
     python -m bazaar.worker --concurrency 4
 
-    # terminal 2
+    # terminal 2 (aiohttp, a dev dependency: httpx is fine for tests, but a load generator
+    # must not be the bottleneck itself, and httpx tops out at a few hundred req/s)
     python modules/28-capstone/examples/loadtest.py --duration 30 --shoppers 40 --browsers 40
 
 What it does:
@@ -46,7 +47,7 @@ import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
-import httpx
+import aiohttp
 import psycopg
 
 DSN = os.environ.get("BAZAAR_DSN", "postgresql://postgres:postgres@localhost:5432/bazaar")
@@ -67,18 +68,24 @@ class Stats:
     checked_out: set[int] = field(default_factory=set)
     dirty_carts: set[int] = field(default_factory=set)  # added items after last checkout
 
-    def record(self, name: str, started: float, r: httpx.Response) -> None:
+    def record(self, name: str, started: float, status: int) -> None:
         self.latencies[name].append((time.perf_counter() - started) * 1000)
-        self.codes[name][r.status_code] += 1
+        self.codes[name][status] += 1
 
 
 async def call(
-    stats: Stats, client: httpx.AsyncClient, name: str, method: str, url: str, **kw
-) -> httpx.Response:
+    stats: Stats, client: aiohttp.ClientSession, name: str, method: str, url: str, **kw
+) -> tuple[int, dict]:
+    """One request; (status, JSON body). Transport errors count as status 599."""
     t0 = time.perf_counter()
-    r = await client.request(method, url, **kw)
-    stats.record(name, t0, r)
-    return r
+    try:
+        async with client.request(method, url, **kw) as r:
+            status = r.status
+            body = await r.json(content_type=None) if status != 204 else {}
+    except (aiohttp.ClientError, TimeoutError):
+        status, body = 599, {}
+    stats.record(name, t0, status)
+    return status, body
 
 
 # --- setup and cleanup --------------------------------------------------------------------
@@ -165,50 +172,50 @@ def cleanup(conn: psycopg.Connection, seller: int, buyers: list[int]) -> None:
 
 
 async def shopper(
-    stats: Stats, client: httpx.AsyncClient, buyers: list[int], products: list[int], stop: float
+    stats: Stats, client: aiohttp.ClientSession, buyers: list[int], products: list[int], stop: float
 ) -> None:
     while time.perf_counter() < stop:
         buyer = random.choice(buyers)
         h = {"X-User-Id": str(buyer)}
         for pid in random.sample(products, random.randint(1, 3)):
-            r = await call(stats, client, "POST /cart/items", "POST", "/cart/items",
-                           json={"product_id": pid, "quantity": random.randint(1, 2)}, headers=h)  # fmt: skip
+            item = {"product_id": pid, "quantity": random.randint(1, 2)}
+            await call(
+                stats, client, "POST /cart/items", "POST", "/cart/items", json=item, headers=h
+            )
             stats.dirty_carts.add(buyer)
         for _attempt in range(3):
-            key = str(uuid.uuid4())
-            hk = {**h, "Idempotency-Key": key}
-            r = await call(stats, client, "POST /checkout", "POST", "/checkout", headers=hk)
-            if r.status_code == 201:
-                ids = [o["id"] for o in r.json()["orders"]]
-                stats.orders[key] = ids
+            hk = {**h, "Idempotency-Key": str(uuid.uuid4())}
+            status, body = await call(
+                stats, client, "POST /checkout", "POST", "/checkout", headers=hk
+            )
+            if status == 201:
+                ids = [o["id"] for o in body["orders"]]
+                stats.orders[hk["Idempotency-Key"]] = ids
                 stats.checked_out.add(buyer)
                 stats.dirty_carts.discard(buyer)
                 if random.random() < 0.10:  # the client "times out" and retries
-                    again = await call(stats, client, "POST /checkout (retry)", "POST",
-                                       "/checkout", headers=hk)  # fmt: skip
-                    stats.replays.append((ids, [o["id"] for o in again.json()["orders"]]))
+                    _, again = await call(stats, client, "POST /checkout (retry)", "POST",
+                                          "/checkout", headers=hk)  # fmt: skip
+                    stats.replays.append((ids, [o["id"] for o in again.get("orders", [])]))
                 break
-            if r.status_code == 409:  # sold out: drop that product, try the rest
-                pid = r.json()["product_id"]
+            if status == 409:  # sold out: drop that product, try the rest
                 await call(stats, client, "DELETE /cart/items/{id}", "DELETE",
-                           f"/cart/items/{pid}", headers=h)  # fmt: skip
+                           f"/cart/items/{body['product_id']}", headers=h)  # fmt: skip
                 continue
             break  # 422 empty cart etc.
 
 
-async def browser(stats: Stats, client: httpx.AsyncClient, stop: float) -> None:
+async def browser(stats: Stats, client: aiohttp.ClientSession, stop: float) -> None:
     while time.perf_counter() < stop:
-        roll = random.random()
-        if roll < 0.45:
+        if random.random() < 0.45:
             params = {"category_id": random.choice(ROOTS),
                       "sort": random.choice(["newest", "price_asc", "price_desc"])}  # fmt: skip
-            r = await call(stats, client, "GET /products", "GET", "/products", params=params)
-            items = r.json().get("items", [])
-            if r.json().get("next_cursor") and random.random() < 0.5:
+            _, page = await call(stats, client, "GET /products", "GET", "/products", params=params)
+            if page.get("next_cursor") and random.random() < 0.5:
                 await call(stats, client, "GET /products (page 2)", "GET", "/products",
-                           params={**params, "cursor": r.json()["next_cursor"]})  # fmt: skip
-            if items:
-                pid = random.choice(items)["id"]
+                           params={**params, "cursor": page["next_cursor"]})  # fmt: skip
+            if page.get("items"):
+                pid = random.choice(page["items"])["id"]
                 await call(stats, client, "GET /products/{id}", "GET", f"/products/{pid}")
         else:
             await call(stats, client, "GET /search", "GET", "/search",
@@ -269,7 +276,9 @@ def check_invariants(
         """,
         (seller,),
     ).fetchone()[0]
-    n_orders = conn.execute("SELECT count(*) FROM orders WHERE seller_id = %s", (seller,)).fetchone()
+    n_orders = conn.execute(
+        "SELECT count(*) FROM orders WHERE seller_id = %s", (seller,)
+    ).fetchone()
     check("order totals == sum of their items", bad_totals == 0, f"{n_orders[0]} orders")
     returned = sorted(i for ids in stats.orders.values() for i in ids)
     in_db = sorted(
@@ -328,14 +337,17 @@ async def main() -> int:
     seller, products, buyers = setup(conn, args)
     print(f"seller {seller}: {len(products)} products x {args.stock} units; {len(buyers)} buyers")
     stats = Stats()
-    limits = httpx.Limits(max_connections=args.shoppers + args.browsers)
+    connector = aiohttp.TCPConnector(limit=args.shoppers + args.browsers)
+    timeout = aiohttp.ClientTimeout(total=30)
     try:
-        async with httpx.AsyncClient(base_url=args.url, limits=limits, timeout=30) as client:
+        async with aiohttp.ClientSession(args.url, connector=connector, timeout=timeout) as client:
             started = time.perf_counter()
             stop = started + args.duration
             async with asyncio.TaskGroup() as tg:
                 for n in range(args.shoppers):  # each shopper has buyers of its own
-                    tg.create_task(shopper(stats, client, buyers[n :: args.shoppers], products, stop))
+                    tg.create_task(
+                        shopper(stats, client, buyers[n :: args.shoppers], products, stop)
+                    )
                 for _ in range(args.browsers):
                     tg.create_task(browser(stats, client, stop))
             elapsed = time.perf_counter() - started

@@ -1,5 +1,10 @@
 # Module 26 project: Alembic takes over Bazaar's schema
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 25 SQLAlchemy ORM](../25-sqlalchemy-orm/README.md) · [Course home](../../README.md) · [27 Production Python and Postgres →](../27-python-production/README.md)
+<!-- nav:end -->
+
 Bazaar's schema has been built by numbered SQL files and `reset.sh`, which drops the database every time. From now on, the schema of a living database changes only through reviewed, versioned migrations that keep the shop online. In this milestone you adopt Alembic on the existing database without recreating anything, make it able to build the same schema from nothing, move Module 23's hand-applied triggers into a migration, ship two features (product slugs, checkout idempotency keys) as zero-downtime revisions, and test all of it.
 
 **Starting state:** `./project/bin/reset.sh 26` (the large dataset, which already contains `sql/2301_notify.sql`'s triggers if you applied them in Module 23; it doesn't matter either way), and your Module 25 package (or the reference one).

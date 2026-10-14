@@ -1,5 +1,10 @@
 # Module 26 exercises: Migrations with Alembic
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 25 SQLAlchemy ORM](../25-sqlalchemy-orm/README.md) · [Course home](../../README.md) · [27 Production Python and Postgres →](../27-python-production/README.md)
+<!-- nav:end -->
+
 **Setup.** `./project/bin/reset.sh 26`, then in `project/python`: `alembic stamp 2600 && alembic upgrade head` (the module's milestone). The database must be back at `2701` after every exercise: the test suite refuses to run otherwise.
 
 Exercises that add a revision number it `2605` (and `2606`) on top of `2701`. You can put your file into `migrations/versions/` while you work on it and remove it (after `alembic downgrade 2701`) when you're done. The reference solutions use [`solutions/scratch_alembic.py`](solutions/scratch_alembic.py) instead: it copies `alembic.ini` and `migrations/` to a temporary directory, adds the exercise's revision there, and runs Alembic on that copy, against an empty scratch database or the reference one. Feel free to use it too.
@@ -7,6 +12,24 @@ Exercises that add a revision number it `2605` (and `2606`) on top of `2701`. Yo
 Measure, don't guess: [`examples/lock_probe.py`](examples/lock_probe.py) runs DDL statements against `orders` (or another table) under concurrent traffic and reports locks and the worst latency.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Review the locks of a release](#exercise-1--review-the-locks-of-a-release)
+- [Exercise 2 ★: A new order status](#exercise-2--a-new-order-status)
+- [Exercise 3 ★: Which revision is this database at?](#exercise-3--which-revision-is-this-database-at)
+- [Exercise 4 ★★: Review this migration](#exercise-4--review-this-migration)
+- [Exercise 5 ★★: From autogenerate's draft to a revision](#exercise-5--from-autogenerates-draft-to-a-revision)
+- [Exercise 6 ★★: A denormalized counter, backfilled under load](#exercise-6--a-denormalized-counter-backfilled-under-load)
+- [Exercise 7 ★★: A unique constraint on dirty data](#exercise-7--a-unique-constraint-on-dirty-data)
+- [Exercise 8 ★★: Rename a table without breaking running code](#exercise-8--rename-a-table-without-breaking-running-code)
+- [Exercise 9 ★★: Two heads](#exercise-9--two-heads)
+- [Exercise 10 ★★★: Prove that writers were never blocked](#exercise-10--prove-that-writers-were-never-blocked)
+- [Exercise 11 ★★★: Split `users.full_name`, with zero downtime](#exercise-11--split-usersfull_name-with-zero-downtime)
+- [Exercise 12 ★★★: Squash the history](#exercise-12--squash-the-history)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Review the locks of a release
 

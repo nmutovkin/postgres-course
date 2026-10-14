@@ -10,7 +10,7 @@ index on (seller_id, day)), at the price of a slower refresh: a diff against
 the old contents. On the large dataset it takes a few seconds, longer than the
 5-second statement_timeout every connection starts with, so this transaction
 raises its own limit with SET LOCAL. In a bigger system this would be a job
-(module 10's queue), scheduled, not an HTTP request; exercise 9 does that.
+(module 10's queue), scheduled, not an HTTP request.
 """
 
 from __future__ import annotations
