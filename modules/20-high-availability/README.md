@@ -656,3 +656,402 @@ INFO: Demoting primary during doing crash recovery in a single user mode
 > **Pitfall:** a cluster left in maintenance mode has no automatic failover. `patronictl list` shows ` Maintenance mode: on` under the table, and `/metrics` exports `patroni_is_paused 1`. **Alert on it** if it stays on for longer than your longest maintenance window.
 
 ---
+## 10. Synchronous mode: trading latency for RPO = 0
+
+With asynchronous replication, a failover loses whatever the primary committed but the chosen replica hadn't received. Usually that's milliseconds of transactions, but for Bazaar's payments even one lost order is a support ticket. Module 19 showed `synchronous_standby_names`. Patroni manages it for you:
+
+```text
+$ docker exec m20-pg1 patronictl edit-config -s synchronous_mode=true --force
+$ ./scripts/cluster.sh
+| pg1    | m20-pg1 | Leader       | running   | 14 |             |     |            |     |
+| pg2    | m20-pg2 | Replica      | streaming | 14 |   0/41B9CA0 |   0 |  0/41B9CA0 |   0 |
+| pg3    | m20-pg3 | Sync Standby | streaming | 14 |   0/41B9CA0 |   0 |  0/41B9CA0 |   0 |
+```
+
+On the leader, Patroni set `synchronous_standby_names = 'pg3'`, and wrote `{"leader":"pg1","sync_standby":"pg3"}` into the `sync` key. Two rules make this give RPO = 0:
+
+1. Every commit on the primary waits until the synchronous standby has flushed its WAL (`synchronous_commit = on`, Module 19).
+2. **Only the node named in the `sync` key may be promoted** automatically. It is the only one guaranteed to have every acknowledged commit.
+
+What happens when the synchronous standby fails? Here is what we measured in the lab, with the write loop running:
+
+- **Kill the sync standby (pg3), pg2 still up:** Patroni noticed within one HA loop, chose pg2 as the new sync standby, and rewrote `synchronous_standby_names`. Writes did not fail, but they **stalled for about 6 seconds**: commits waited for pg3, which would never answer, until Patroni swapped it out.
+- **Kill both replicas, with `synchronous_mode_strict: false`** (the default): one INSERT took **5.74 s**, then Patroni set `synchronous_standby_names` to `''`, and writes continued **without any synchronous replica**. Availability was preserved, and the RPO guarantee was silently gone until a replica returned.
+- **Kill both replicas, with `synchronous_mode_strict: true`:** Patroni set `synchronous_standby_names = '*'` ("any standby"), and **every commit blocked** until a replica came back. Our INSERT hung for 36 s, until we started pg2 again, and finished 1.9 s after that.
+
+So the trade-off is:
+
+| Setting | Survives losing all replicas? | RPO | Cost |
+|---|---|---|---|
+| async (default) | yes | replica lag | none |
+| `synchronous_mode: true` | yes, by dropping to async | 0, except while degraded | +1 network round trip per commit |
+| `synchronous_mode_strict: true` | **no**: writes block | 0, always | the same, plus writes are unavailable without a replica |
+
+Each commit pays a round trip to the standby. In one availability zone that is a fraction of a millisecond. Across zones it is usually 1–2 ms. That doesn't matter for a checkout, but it matters a lot for a bulk load of single-row transactions.
+
+Two further knobs: `synchronous_node_count: 2` keeps two synchronous standbys. `synchronous_mode: quorum` (Patroni 4) uses `ANY n (...)` quorum commit: a commit waits for *any* n of the listed standbys, and Patroni's election makes sure the promoted node is among those that confirmed.
+
+> **Pitfall:** "committed" is not "replicated" when a commit's synchronous wait is cancelled. In strict mode with no replicas, we cancelled a hanging INSERT with `pg_cancel_backend()`. The client then received **success**, with only this warning:
+>
+> ```text
+> WARNING: canceling wait for synchronous replication due to user request
+> DETAIL: The transaction has already committed locally, but might not have been replicated to the standby.
+> ```
+>
+> The row was committed on the primary only. Had the primary died right then, a correctly promoted sync standby would not have it. Note that `statement_timeout` does **not** cancel this wait (it is switched off before the commit), but a cancel request or a terminated session does. Drivers that log and ignore warnings hide this from you.
+
+---
+
+## 11. How Patroni decides: failover rules and edge cases
+
+### 11.1 Who may become the leader
+
+When the leader key is gone, every replica runs the same eligibility check (Section 5.3) and only eligible nodes race for the key. A replica disqualifies itself if any of these is true:
+
+1. It is tagged `nofailover` (or `failover_priority: 0`), or its Postgres isn't running.
+2. Its WAL position is behind the last `optime` the leader published in the DCS by more than **`maximum_lag_on_failover`** (1 MiB by default). A replica that was hours behind would turn a failover into massive data loss, so Patroni prefers no failover at all.
+3. Its timeline is behind the cluster's timeline.
+4. Asking the other members over their REST APIs shows that **another node is still a running primary**, or that **another eligible node has received more WAL**. Then it defers to that node.
+5. Among nodes with **equal** WAL positions, another has a higher `failover_priority`.
+6. In synchronous mode, it is not the node recorded in the `sync` key.
+
+If no node is eligible, for example because every replica lags by more than `maximum_lag_on_failover`, **no failover happens** and the cluster has no primary until a human acts (`patronictl failover --candidate ...` accepts the data loss explicitly). That is deliberate: Patroni won't trade an unknown amount of data for availability without being told to.
+
+### 11.2 Primary process crash: restart in place, not failover
+
+If Postgres on the leader dies but the Patroni agent lives, Patroni still holds the leader key, so no other node may take over. On its next loop it restarts Postgres (crash recovery) as primary. Only if Postgres does not come back within `primary_start_timeout` (300 s by default) does Patroni release the key for a failover. In the lab, `kill -9` of the leader's postmaster gave:
+
+```text
+WARNING: Postgresql is not running.
+INFO: Lock owner: pg2; I am pg2
+INFO: starting primary after failure
+```
+
+The write loop saw a **4.4 s** gap (in other runs up to 11 s: Patroni notices on its next loop, at most `loop_wait` later). There was no timeline change and no replica had to rewind. That is better than a failover, which is why it is the default.
+
+### 11.3 Network partition: the old primary fences itself
+
+We cut the leader off the network (`docker network disconnect`, `./scripts/failover-drill.sh partition`). Inside the isolated node, Patroni logged:
+
+```text
+07:24:46,989 INFO: Lock owner: pg3; I am pg3              <- last successful renewal
+   (partition at 07:24:44.9)
+07:24:55,945 ERROR: Error communicating with DCS
+07:24:55,945 INFO: demoting self because DCS is not accessible and I was a leader
+07:24:55,945 INFO: Demoting self (offline)
+07:24:55.977 LOG:  received fast shutdown request
+```
+
+On the majority side, the leader key expired and `pg2` was promoted 25.3 s after the partition began. The isolated old primary had stopped accepting writes **14 seconds before** the new one started accepting them. That gap is the split-brain margin from Section 5.4 at work. When we reconnected the node, Patroni compared its timeline with the new leader's history (`Local timeline=4 lsn=0/40C8CB0`, `primary_timeline=5`), and the node rejoined as a streaming replica on timeline 5 within 15 seconds.
+
+A detail visible in the logs: the demoted primary's shutdown sat in "shutting down" (refusing new connections with `FATAL: the database system is shutting down`) until the walsenders timed out, because they could not reach the replicas to send the final WAL. That is harmless, since nothing could write to it.
+
+### 11.4 When the DCS itself fails
+
+If the leader cannot reach the DCS, it cannot tell "I am partitioned" apart from "the DCS is down", so by default it demotes itself either way. In the lab we stopped two of the three etcd members (quorum lost) while writing:
+
+- The leader demoted itself **19 s** later. **Every** node was now a read-only replica, and writes failed for **24.6 s** until we restarted etcd, when the same node took the leader key again. A DCS outage became a full write outage, even though every database was healthy.
+
+Patroni 3.0 added **`failsafe_mode: true`** for this case. When the DCS is unreachable, the leader asks **every other member** directly over the REST API (`POST /failsafe`). If *all* of them answer, nobody can be electing a different primary, so it is safe to keep going. We repeated the experiment with failsafe mode on:
+
+```text
+ERROR: Error communicating with DCS
+INFO: Got response from pg3 http://m20-pg3:8008/failsafe: Accepted
+INFO: Got response from pg2 http://m20-pg2:8008/failsafe: Accepted
+INFO: continue to run as a leader because failsafe mode is enabled and all members are accessible
+```
+
+**Zero** failed writes across a 40-second etcd outage. If even one member doesn't answer, the leader demotes as before, so it is still safe. Failsafe mode is worth enabling in most deployments. The leader also needs an up-to-date member list, which Patroni keeps in the DCS while it is healthy.
+
+### 11.5 Rejoining: `pg_rewind`, or clone again
+
+When an old primary comes back, its timeline may have **diverged**: it wrote WAL that the new primary never received (Module 19). With `use_pg_rewind: true`, Patroni runs `pg_rewind` against the new leader automatically. From the lab, after a `docker kill` of the leader and `./scripts/rejoin.sh m20-pg2`:
+
+```text
+INFO: Local timeline=1 lsn=0/5000028
+INFO: primary_timeline=2
+INFO: running pg_rewind from pg1
+INFO: pg_rewind exit code=0
+INFO:  stderr=pg_rewind: servers diverged at WAL location 0/408A050 on timeline 1
+pg_rewind: rewinding from last common checkpoint at 0/2000150 on timeline 1
+pg_rewind: Done!
+INFO: starting as a secondary
+LOG:  started streaming WAL from primary at 0/4000000 on timeline 2
+INFO: no action. I am (pg2), a secondary, and following a leader (pg1)
+```
+
+It was streaming again **6.7 s** after `docker start`. After a *clean* stop there is nothing to rewind, and it took 3.3 s. If `pg_rewind` fails (missing WAL, no `wal_log_hints` or checksums), Patroni can remove the data directory and clone a new replica (`remove_data_directory_on_rewind_failure`, `remove_data_directory_on_diverged_timelines`), or leave it for you to run `patronictl reinit`.
+
+> **Pitfall:** the WAL that `pg_rewind` discards on the old primary consists of transactions that **were committed and acknowledged** there but never reached the new primary: the async RPO made concrete. Patroni rewinds automatically, so the loss is silent unless you look. With asynchronous replication, alert on every unplanned failover and compare the `history` LSN with the old primary's last LSN if you need to know what was lost.
+
+### 11.6 The watchdog
+
+Self-fencing assumes the old leader can act: notice that it failed to renew, and demote. A node frozen for 40 seconds (a stuck hypervisor, a kernel hang) can't. When it wakes up, Postgres is still a primary, and clients with open connections may write to it before Patroni's next loop demotes it.
+
+The **watchdog** closes that gap. With `watchdog.mode: required`, Patroni opens `/dev/watchdog` (the Linux `softdog` module, or a hardware watchdog) when it becomes leader, and arms it to fire shortly before the leader key would expire (`ttl` minus `safety_margin`, default 5 s). Every successful renewal resets the timer. If Patroni hangs and cannot renew, **the kernel reboots the machine** before any other node can become leader. A frozen primary is reset instead of returning as a zombie. With `required`, a node whose watchdog cannot be opened refuses to become leader. With `automatic`, it uses one if available.
+
+Containers usually have no `/dev/watchdog`, so the lab uses `mode: 'off'`. On VMs and bare metal, load `softdog` and give the Patroni user access to `/dev/watchdog`.
+
+---
+
+## 12. The lab: measuring failover
+
+The lab's scripts turn everything above into numbers. The write loop ([`lab/client/writeloop.py`](lab/client/writeloop.py)) inserts a row every 100 ms in autocommit mode, reports when writes start and stop failing, and at the end checks which acknowledged rows actually exist. [`./scripts/failover-drill.sh MODE`](lab/scripts/failover-drill.sh) runs the write loop, hurts the leader after 8 seconds, and times how long until Patroni reports a new running leader.
+
+```text
+$ ./scripts/failover-drill.sh kill 60
+07:22:14.918  docker kill m20-pg2
+07:22:45.792  new leader m20-pg1 is running, 30.9s after the event
+------------------------------- client output -------------------------------
+07:22:07.512  writing to m20-pg2
+07:22:15.045  WRITE FAILED seq=74: OperationalError: consuming input failed: server closed the connection unexpectedly
+07:22:19.254  t= 11.8s  FAILING (3 errors so far)
+...
+07:22:45.279  RECOVERED seq=328 on m20-pg1: writes were failing for 30.23s (254 failed attempts); gap between successful commits 30.34s
+
+=== run 3d69eb0c summary ===
+attempts: 544   acknowledged: 290   failed: 254
+verification on m20-pg1: rows in table 290
+  acknowledged but LOST:            0
+  error reported but row COMMITTED: 0
+```
+
+These are all our measurements on this lab (3 etcd + 3 Patroni nodes on one 4-CPU machine), with the write loop going through HAProxy unless noted:
+
+| Event | Settings | New leader running after | Write gap seen by the client |
+|---|---|---|---|
+| `docker kill` leader (hard crash), 6 runs | ttl 30, loop_wait 10, retry_timeout 10 | 27.3 – 30.9 s | 28.0 – 30.3 s |
+| `docker kill` leader, client with multi-host libpq string instead of HAProxy | same | 22.7 s | 22.8 s |
+| `docker kill` leader, 3 runs | **ttl 20, loop_wait 2, retry_timeout 5** | 18.8 – 20.1 s | 19.3 – 19.7 s |
+| `docker stop` leader (clean shutdown: key released) | defaults | 3.6 s | 4.4 s |
+| `patronictl switchover` | defaults | 4.2 s (incl. the command itself) | 2.3 s |
+| Network partition of the leader | defaults | 25.3 s | 25.0 s |
+| `kill -9` of the leader's postmaster only | defaults | no failover: restarted in place | 4.4 s |
+| Sync standby killed | synchronous mode | no failover | 0 errors, ~6 s stall |
+| 2 of 3 etcd members stopped | `failsafe_mode: false` | none (all read-only) | 24.6 s (until etcd returned) |
+| 2 of 3 etcd members stopped | `failsafe_mode: true` | no change needed | **0** |
+
+Things to notice:
+
+- **A hard crash costs about `ttl`.** The variation between runs depends on when, within its loop, the leader last renewed the key. Lowering `ttl` to its minimum of 20 cut the gap by a third.
+- **Clean events are fast.** Stopping a node through Patroni, or a switchover, releases the key, so the gap was 2–4 s. Planned maintenance is cheap: use switchovers.
+- **`acknowledged but LOST: 0` in every run, even asynchronous ones,** because the write loop's commits had reached the replicas within milliseconds. That is luck plus low load, not a guarantee: a busy primary with 50 ms of lag would have lost the last 50 ms of acknowledged writes.
+- **The other count can be non-zero.** In the postmaster `kill -9` run, the client got an error for `seq=54`, yet the row was there afterwards: `error reported but row COMMITTED: 1 [54]`. Section 14 explains why, and why it matters.
+
+---
+
+## 13. Routing clients to the primary
+
+After a failover the primary has a new address. There are four ways to get clients there.
+
+### 13.1 HAProxy with Patroni health checks
+
+HAProxy is a TCP proxy. It doesn't speak the Postgres protocol at all. It asks every node's Patroni over HTTP who is primary, and forwards TCP connections only to the node that says yes. The lab's [`haproxy.cfg`](lab/haproxy/haproxy.cfg):
+
+```text
+listen primary
+    bind *:5000
+    option httpchk
+    http-check send meth GET uri /primary
+    http-check expect status 200
+    default-server inter 1s fall 2 rise 1 on-marked-down shutdown-sessions resolvers docker init-addr last,libc,none
+    server pg1 m20-pg1:5432 check port 8008
+    server pg2 m20-pg2:5432 check port 8008
+    server pg3 m20-pg3:5432 check port 8008
+
+listen replicas
+    bind *:5001
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /replica
+    ...same servers...
+```
+
+- Port **5000** is read-write: only the node whose `/primary` returns 200. Port **5001** is read-only, round-robin over nodes whose `/replica` returns 200. Use `/replica?lag=10MB` to exclude replicas that are too far behind.
+- `inter 1s fall 2 rise 1`: check every second, mark a node down after 2 failures and up after 1 success. Detection takes about 2 s, which is small next to Patroni's own timings.
+- **`on-marked-down shutdown-sessions`** matters. When the old primary stops answering 200, HAProxy **kills the existing client connections** to it. Without it, connections opened before the failover would stay attached to the old primary, which is client-side fencing undone.
+- HAProxy logs every state change, and they are a useful timeline in a post-mortem (`docker logs m20-haproxy`):
+
+  ```text
+  Server primary/pg1 is DOWN, reason: Layer7 wrong status, code: 503, info: "Service Unavailable", check duration: 1ms. 1 active and 0 backup servers left.
+  Server primary/pg3 is UP, reason: Layer7 check passed, code: 200, check duration: 8ms. 2 active and 0 backup servers online.
+  ```
+
+HAProxy is itself a single point of failure, so run two, either behind a virtual IP (keepalived) or one on each application host, listening on localhost. It is stateless, which makes it easy to duplicate.
+
+### 13.2 libpq multi-host connection strings
+
+libpq, and every driver built on it (psql, psycopg, and most others; asyncpg and the JDBC driver implement the same idea themselves), can be given **several hosts** and told what kind of server it needs:
+
+```text
+host=m20-pg1,m20-pg2,m20-pg3 port=5432 dbname=bazaar user=bazaar_app target_session_attrs=read-write connect_timeout=2
+postgresql://bazaar_app@m20-pg1:5432,m20-pg2:5432,m20-pg3:5432/bazaar?target_session_attrs=read-write&connect_timeout=2
+```
+
+libpq tries the hosts **in order**. After connecting, it checks the server against `target_session_attrs` and moves on to the next host if it doesn't match:
+
+| `target_session_attrs` | Accepts | Lab result with pg3 as primary |
+|---|---|---|
+| `any` (default) | the first server that accepts the connection | always pg1 (a replica) |
+| `read-write` | a server where `default_transaction_read_only` is off and that is not in recovery | always pg3 |
+| `primary` | a server not in recovery | always pg3 |
+| `read-only` / `standby` | a server in recovery (read-only) | always pg1 |
+| `prefer-standby` | a standby if any, else anything | always pg1 |
+
+`load_balance_hosts=random` (PostgreSQL 16+ libpq) shuffles the host list first, which spreads read traffic. Sixty connections with `target_session_attrs=standby load_balance_hosts=random` landed **24 on pg1 and 36 on pg2**, and never on the primary.
+
+Compared with HAProxy, there is no extra hop and nothing extra to run. The downsides: the host list lives in every client's configuration; libpq only checks the role **at connect time**, so a connection opened to a primary that is later demoted stays open (writes fail with `cannot execute INSERT in a read-only transaction`, and your code must reconnect); and a dead host costs up to `connect_timeout` per attempt. In our kill test the multi-host client recovered at the same moment Patroni promoted the new leader, without waiting for any health check.
+
+### 13.3 PgBouncer: where to put the pooler
+
+Module 17 introduced PgBouncer. In an HA cluster there are three common placements:
+
+1. **On each database node, in front of the local Postgres.** HAProxy health checks still use Patroni's REST API and route to the PgBouncer port of the primary. The pooling is close to the database, and a failover moves the clients to another node's pooler. This is the most common setup.
+2. **A separate PgBouncer tier pointing at HAProxy's port 5000** (or at a VIP). PgBouncer itself doesn't know about roles, so after a failover its server connections point to a dead node and fail, and PgBouncer opens new ones through HAProxy. Set `server_check_query`, a short `server_lifetime`, and reconnect promptly. Run at least two poolers.
+3. **In the application** (psycopg_pool, SQLAlchemy's pool). Combine it with a multi-host string or HAProxy, and make sure the pool discards broken connections (Section 14.4).
+
+A pooler on its own is not HA. Its job here is to absorb the reconnection storm: hundreds of app processes reconnecting at the same second after a failover.
+
+### 13.4 DNS and virtual IPs
+
+- **A virtual IP (VIP)** that always sits on the primary. **vip-manager** watches the leader key in etcd and, on whichever node holds it, adds the VIP to the network interface (announced with gratuitous ARP). Clients use a single IP and need nothing else. It works only within one L2 network or subnet. In the cloud you instead use the provider's API to move a secondary IP or an elastic IP, or you use a load balancer.
+- **DNS**: a Patroni callback (`on_role_change`) or a controller updates a record such as `primary.db.bazaar.internal`. It is simple, but clients and resolvers cache answers. Even with a 5-second TTL, some runtimes (the JVM, for one) cache much longer. Treat DNS as a *discovery* mechanism with a short TTL, not as a fencing mechanism.
+- **Service discovery**: Consul DNS, or a Kubernetes Service that Patroni or an operator keeps pointed at the leader pod.
+
+**Callbacks** are scripts Patroni runs on events (`on_start`, `on_stop`, `on_role_change`, `on_reload`). They are the hook for "update DNS / notify the pager / move the IP". They run asynchronously and may fail, so never make correctness depend on a callback. The leader key and health checks provide correctness. Callbacks add convenience.
+
+---
+
+## 14. Client behaviour during failover
+
+The database side of failover is now automatic. Whether Bazaar's customers notice depends on the application.
+
+### 14.1 What clients see
+
+During the drills, the write loop recorded these errors, in roughly this order:
+
+| Error | SQLSTATE | When |
+|---|---|---|
+| `server closed the connection unexpectedly` | `08006` (connection failure) | the primary process or node died under an open connection |
+| `terminating connection due to administrator command` | `57P01` (admin_shutdown) | clean shutdown, switchover, or HAProxy killing sessions on the demoted node |
+| `the database system is shutting down` / `is starting up` | `57P03` (cannot_connect_now) | connecting during a stop or start |
+| `cannot execute INSERT in a read-only transaction` | `25006` (read_only_sql_transaction) | the connection is attached to a node that is now a replica (seen after the DCS-loss demotion) |
+| `connection timeout expired` / `session is read-only` | (client side) | no primary available yet: HAProxy has no server up, or libpq found only replicas |
+
+All of these mean "try again, on a new connection". None of them means the request was invalid.
+
+### 14.2 In-flight transactions
+
+When the primary goes away:
+
+- **A transaction that hadn't sent `COMMIT` yet** is lost entirely. On a crash, its effects were never committed. On a clean shutdown, it is rolled back. Retrying the **whole transaction** from `BEGIN` is safe.
+- **A transaction whose `COMMIT` was sent but whose reply never arrived** has an **unknown outcome**. The commit record may have been flushed, and in synchronous mode also confirmed by the standby, just before the connection died. The client can't tell. That is exactly `error reported but row COMMITTED: 1 [54]` in our postmaster-kill run: the client saw an error for a write that had succeeded.
+
+Retrying an unknown-outcome commit blindly can **double** it: two orders, two payment captures. Not retrying can **lose** it from the user's point of view: "I clicked Pay and got an error, but was I charged?"
+
+### 14.3 Retries with idempotency keys
+
+The standard answer is to make the operation **idempotent**: give each logical request an ID chosen by the client, record that ID **in the same transaction** as the work, and check it first on every attempt:
+
+```sql
+BEGIN;
+SELECT order_ids FROM ha_lab.checkout_requests WHERE request_id = $1;  -- already done?
+-- if a row came back: COMMIT and return the stored result (it was the "unknown outcome")
+SELECT * FROM bazaar.place_order($2, $3);                              -- the real work
+INSERT INTO ha_lab.checkout_requests (request_id, order_ids) VALUES ($1, $4);
+COMMIT;
+```
+
+Because the key and the orders commit atomically, the key exists if and only if the orders do. A retry after an unknown outcome finds the key and returns the original result. The `PRIMARY KEY` on `request_id` also protects against two concurrent retries.
+
+The project milestone builds exactly this client. In a test where we `kill -9`'d the leader's postmaster six times in 80 seconds while it placed orders as fast as it could, one retry found its key already present:
+
+```text
+08:00:12.518  request 2ff61091: OperationalError (None), retrying
+08:00:23.116  request 2ff61091 committed after 11 attempts on m20-pg3 (an earlier attempt had already committed: not placed twice)
+...
+checkouts acknowledged: 12563  retried: 6  replayed (dedup by request_id): 1
+  ... LOST: 0
+  orders created / found in orders: 21644 / 21644
+```
+
+The rest of a good retry policy:
+
+- **Retry only retryable errors:** the connection and shutdown classes above, plus `40001` (serialization failure) and `40P01` (deadlock) from Module 10. Never retry constraint violations or `BZ001` (insufficient stock).
+- **Exponential backoff with jitter** (0.1 s, 0.2 s, 0.4 s ... capped at a couple of seconds, each multiplied by a random factor), so a thousand clients don't hammer the new primary in lockstep the moment it appears.
+- **An overall deadline** longer than your worst failover (about `ttl` plus a margin: 60–90 s with the defaults) and shorter than the user's patience. Past it, fail clearly.
+- **Retry the whole transaction, never one statement** of a transaction that has lost its connection.
+
+### 14.4 Connection pools and timeouts
+
+- **Pools hold stale connections.** After a failover, every pooled connection to the old primary is dead or read-only. Configure the pool to test connections on checkout or discard them on error (psycopg_pool does both), set a maximum connection lifetime, and make sure one connection error doesn't make the pool hand out the next dead connection 50 times in a row.
+- **`connect_timeout`** (2 s in the lab) bounds each attempt against a host that silently drops packets. Without it, a connection attempt to a vanished host can hang for the kernel's TCP timeout of over two minutes.
+- **TCP keepalives and `tcp_user_timeout`** detect a server that disappeared *without* closing the connection (a partition or a powered-off VM). The milestone client uses `keepalives_idle=5 keepalives_interval=2 keepalives_count=2 tcp_user_timeout=5000`. Otherwise a session idle on a dead primary notices only when it next writes, and then waits for TCP retransmission timeouts.
+- **Server-side settings** (`idle_in_transaction_session_timeout`, `statement_timeout`) keep a stuck client from holding locks on the new primary.
+- **Session state is lost.** Prepared statements, temporary tables, `SET` values, and advisory locks belong to the connection. Re-establish them on reconnect, or avoid relying on them.
+
+---
+
+## 15. Alternatives to Patroni
+
+| Tool | How it works | Choose it when |
+|---|---|---|
+| **Patroni** | An agent per node plus an external DCS (etcd, Consul, ZooKeeper, or the Kubernetes API). Lease-based leader election. Manages Postgres configuration, `pg_rewind`, sync mode, REST health checks. | You run Postgres on VMs or bare metal and want the most battle-tested, flexible option. It is the default choice. |
+| **repmgr** | Tools and a daemon (`repmgrd`) for setting up replicas and failing over. Nodes monitor each other, and repmgr's metadata lives *in Postgres itself*. A **witness** node can help with quorum. | Mostly legacy setups. It has no external consensus store, so fencing relies on your own scripts and location-based heuristics. Easier to get split-brain wrong. Development has slowed. |
+| **pg_auto_failover** | A **monitor** node (itself a Postgres instance) tracks keeper agents on each node and drives a state machine. Synchronous replication is built in. | Small clusters where you want something simple and opinionated with RPO = 0 by default. The monitor is a single point of decision: losing it disables failover (but doesn't stop the primary). |
+| **CloudNativePG** (Kubernetes operator) | The operator watches Postgres pods and uses the **Kubernetes API** as its source of truth. It promotes the most advanced replica, updates `-rw`/`-ro` Services, fences pods, and integrates backups and rolling upgrades. | You already run Kubernetes seriously, including its storage, and want Postgres managed the Kubernetes way. (Zalando's Postgres Operator, Crunchy PGO, and StackGres instead run Patroni inside the pods.) |
+| **Managed services**: AWS RDS Multi-AZ, Aurora, Google Cloud SQL HA, Azure Flexible Server zone-redundant HA | The provider runs a synchronous or storage-level standby and flips DNS on failure. Aurora replicates at the storage layer across 3 AZs, and its replicas share the volume. | You'd rather pay than operate: no Patroni, no etcd, no drills of your own. Typical failovers are 30–120 s (Aurora often under 30 s). You give up superuser, some extensions, and control over timing. |
+
+A quick decision guide for Bazaar: on VMs with a team that can run etcd, choose Patroni. On a Kubernetes platform team, choose CloudNativePG. For a small team that wants to sleep at night, use a managed service and spend the saved effort on client-side retries, which you need in every option.
+
+---
+
+## 16. Operating an HA cluster
+
+### 16.1 Failure drills
+
+An untested failover is a hypothesis. Run **drills**, ideally regularly and in production during working hours, since that is where you learn something:
+
+1. Announce it, and watch dashboards and error rates.
+2. Planned: `patronictl switchover`. This should be routine, weekly or with every patch.
+3. Unplanned: kill the leader node (`docker kill`, stop the VM, pull the network). Measure detection, failover, and client recovery times. Check the old node rejoins.
+4. Partition: isolate the leader and confirm it demotes itself. Isolate one etcd member and confirm nothing happens.
+5. Write down the numbers, compare them with your RTO, and fix whatever surprised you, which is usually a client that doesn't reconnect or a pool that keeps dead connections.
+
+The lab's `failover-drill.sh` is a miniature of this.
+
+### 16.2 What to monitor
+
+- **Exactly one leader:** `patroni_primary` summed across nodes must be 1. Zero means an outage, and two means you have a big problem.
+- **Members present and streaming:** count of members, `patroni_postgres_streaming`, replication lag in bytes and seconds.
+- **Timeline changes:** `patroni_postgres_timeline` increased, so a failover happened. Page someone, even if it recovered by itself.
+- **Maintenance mode left on** (`patroni_is_paused`), **pending restarts** (`patroni_pending_restart`).
+- **Synchronous standby present** when you rely on synchronous mode (the `sync` key, or `/sync` returning 200 somewhere). Degraded non-strict sync mode silently means RPO > 0.
+- **DCS health:** etcd member health, leader changes, fsync latency (etcd is very sensitive to slow disks), database size.
+- **Disk space and slot retention**, the classic cause of a cluster-wide outage that no failover fixes.
+
+### 16.3 Upgrades
+
+- **Minor PostgreSQL upgrades** (17.5 → 17.6): install the new binaries on each node. Restart the replicas one by one (`patronictl restart bazaar-ha pg2`), then `switchover` to an upgraded replica, then restart the old leader. Total write unavailability is one switchover, a couple of seconds.
+- **Patroni upgrades:** Patroni can be restarted without restarting Postgres. In maintenance mode (`pause`), stopping the agent leaves Postgres running. Pause, upgrade and restart the agents one by one, then resume.
+- **Major PostgreSQL upgrades** (17 → 18): the data files must be converted. Either run `pg_upgrade` on the primary with the cluster paused, and re-clone the replicas or upgrade them with `rsync --hard-links` (minutes of downtime, carefully scripted), or build a new 18 cluster, replicate into it with **logical replication** (Module 19), and switch the application over (seconds of downtime, but more moving parts). Managed services and operators automate variations of both.
+- **etcd:** keep it on its own small, fast-disk nodes (or at least its own disk). Use 3 members (5 for large estates), spread across failure domains, with periodic compaction and defragmentation, and back it up. Losing etcd's data is recoverable (Patroni re-creates its keys from the running nodes) but stressful.
+
+> **In production:** the single-etcd shortcut. Running one etcd member (or etcd on the database nodes themselves) saves resources, and the lab could have used one. But a single etcd member is a single point of failure for *automatic failover*. With `failsafe_mode` it isn't for the running primary, but without it, losing that one member demotes your primary. Co-locating etcd members on the Postgres nodes ties their failures together: losing a node takes away a database *and* a vote at the same moment. The lab uses three separate etcd containers to show the real topology. On a laptop, a single `m20-etcd1` would also work, with the trade-off just described.
+
+---
+
+## Summary
+
+- Availability is about MTTR. HA turns a 40-minute manual failover into roughly 30 seconds, and planned maintenance into 2-second switchovers. It does not replace backups.
+- The core difficulty is that "dead" and "unreachable" look the same. Safe automation needs **consensus** (a majority quorum), a **lease** with a TTL, and **fencing**, so that an old primary cannot keep accepting writes. Split-brain is the failure that must never happen.
+- **Patroni** runs an agent beside each Postgres, keeps the leader key in a DCS such as etcd, renews it every `loop_wait`, demotes itself when it cannot renew within `retry_timeout`, and lets the best replica take over when the key expires after `ttl` (`loop_wait + 2 × retry_timeout ≤ ttl`).
+- Configuration is layered: dynamic settings live in the DCS (`patronictl edit-config`), local settings in YAML, and `bootstrap` is read only once. Patroni owns `postgresql.conf` and `pg_hba.conf`. Don't use `ALTER SYSTEM`.
+- The REST API (`/primary`, `/replica`, `/health`, ...) lets load balancers route by role. `patronictl` does list, switchover, failover, restart, reinit, edit-config, and pause/resume.
+- Measured in the lab: a hard crash failed over in 27–31 s (19–20 s with `ttl: 20`), a clean stop or switchover in 2–4 s, a primary process crash restarted in place in about 4 s, and losing etcd quorum caused a 25 s write outage that `failsafe_mode` reduced to zero.
+- **Synchronous mode** gives RPO = 0 by only promoting the sync standby. Non-strict mode drops to async when no standby is left. Strict mode blocks writes instead.
+- Clients reach the primary through HAProxy health checks, libpq multi-host strings with `target_session_attrs`, a VIP, or DNS. They must **retry with backoff on a fresh connection**, and protect commits whose outcome is unknown with **idempotency keys**.
+
+## What's next
+
+High availability keeps one primary alive, but every write still lands on that one primary. In [Module 21: Sharding](../21-sharding/) Bazaar outgrows a single writer: you will split data across several Postgres clusters by `seller_id`, each of which you could run as a Patroni cluster like this one.

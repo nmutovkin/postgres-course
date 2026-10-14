@@ -15,7 +15,7 @@ Two design decisions recur throughout the course:
 
 ```
 project/
-├── db/              # ordered SQL files: migrations (schema) and seeds (data)
+├── db/              # ordered SQL files: migrations (schema) and seeds (data); NOTES.md = data dictionary
 │   ├── 0201_schema_core.sql
 │   ├── 0301_seed_small.sql
 │   ├── 0701_schema_modeling.sql
@@ -26,7 +26,9 @@ project/
 └── python/          # the Python package built in Part IV (from module 22)
 ```
 
-File names are `MMNN_kind_name.sql`, where `MM` is the module that introduces the file. `./project/bin/reset.sh 07` drops the `bazaar` database and applies every file whose module number is **lower than 07**, in order. That gives you exactly the state you should have at the *start* of module 07. `./project/bin/reset.sh all` applies everything.
+File names are `MMNN_kind_name.sql`, where `MM` is the module that introduces the file. `./project/bin/reset.sh 07` drops the `bazaar` database and applies every file whose module number is **lower than 07**, in order. That gives you exactly the state you should have at the *start* of module 07. `./project/bin/reset.sh all` applies everything in `db/` (but not the subdirectories: `db/sharding/` is applied by hand in module 21, and `db/tools/` holds the seed generator and the sanity checks in `check.sql`).
+
+The reference implementation also has a [`db/NOTES.md`](db/NOTES.md), with a data dictionary of the notable rows in the datasets (for example, "user 7 never ordered" or "seller 6 has no products"). Exercises often refer to these.
 
 During the course, you write your *own* versions of these files as part of each module's `project.md` milestone. The files here are the reference solutions.
 
@@ -34,7 +36,7 @@ During the course, you write your *own* versions of these files as part of each 
 
 - Database `bazaar`, schema `bazaar` (`search_path` is set to `bazaar, public` at the database level).
 - Table names are plural and `snake_case`. Primary keys are `id bigint GENERATED ALWAYS AS IDENTITY`, except where a natural or composite key is clearly better.
-- Every table has `created_at timestamptz NOT NULL DEFAULT now()`. Tables that are updated also have `updated_at`.
+- Entity tables have `created_at timestamptz NOT NULL DEFAULT now()`, and tables that are updated also have `updated_at`. Pure link and history tables (`cart_items`, `product_price_history`, `inventory`, `events`) carry their own time columns instead.
 - Foreign keys are named `<table>_<column>_fkey` (Postgres's default) and are **always indexed** from Module 11 on.
 
 ## Schema evolution
@@ -52,7 +54,7 @@ During the course, you write your *own* versions of these files as part of each 
 | 13 | `1301_schema_search.sql` | `products.search_vector` (generated, weighted), GIN index, `pg_trgm` for fuzzy titles and autocomplete. |
 | 14 | `1401_schema_events.sql`, `1402_seed_events.sql` | `events`, range-partitioned by month, with a partition-management function. |
 | 15 | `1501_schema_security.sql` | Roles (`bazaar_owner`, `bazaar_app`, `bazaar_readonly`, `bazaar_analyst`, `bazaar_seller`) and RLS so a seller sees only their own products and orders. |
-| 21 | `2101_schema_shard_prep.sql` | Adds `seller_id` to `order_items`/`inventory` and makes PKs shard-key-aware (prerequisite for Citus co-location). |
+| 21 | `sharding/2101_schema_shard_prep.sql` | **Opt-in, applied manually in module 21.** Adds `seller_id` to child tables and makes PKs shard-key-aware (`(seller_id, id)`), a prerequisite for Citus co-location. `reset.sh` never applies it, so later modules keep the ordinary schema. |
 | 22+ | `python/` | The `bazaar` Python package: psycopg data access → async → SQLAlchemy → Alembic (which takes over migrations from module 26) → FastAPI capstone. |
 
 Modules 16–20 (internals, operations, backup, replication, HA) work *on* the Bazaar database without changing its schema. Their infrastructure lives in `infra/`.

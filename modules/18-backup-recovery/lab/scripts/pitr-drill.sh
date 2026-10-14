@@ -27,6 +27,10 @@ DRILL="${DRILL:-m18-drill}"
 DRILL_VOLUME="${DRILL_VOLUME:-m18-drill-pgdata}"
 BACKUPS_VOLUME="${BACKUPS_VOLUME:-m18-lab_backups}"
 ARCHIVE_VOLUME="${ARCHIVE_VOLUME:-m18-lab_archive}"
+# How the drill server fetches archived WAL (the archive is mounted read-only at /archive).
+RESTORE_COMMAND="${RESTORE_COMMAND:-cp /archive/wal/%f %p}"
+# Where the archiver puts finished segments, as seen inside the primary container.
+ARCHIVED_SEGMENT_PATH="${ARCHIVED_SEGMENT_PATH:-/archive/wal/%s}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -68,11 +72,12 @@ psql_primary -F' ' -c "$q ORDER BY 1" > "$WORK/current.txt"
 
 # ---- 3. make sure the WAL containing all of this is archived -------------------
 seg=$(psql_primary -c "SELECT pg_walfile_name(pg_switch_wal())")
+seg_path=$(printf "$ARCHIVED_SEGMENT_PATH" "$seg")
 for _ in $(seq 60); do
-    docker exec "$PRIMARY" test -f "/archive/wal/$seg" && break
+    docker exec "$PRIMARY" test -f "$seg_path" && break
     sleep 1
 done
-docker exec "$PRIMARY" test -f "/archive/wal/$seg" || { echo "segment $seg was not archived in 60s" >&2; exit 1; }
+docker exec "$PRIMARY" test -f "$seg_path" || { echo "segment $seg was not archived in 60s ($seg_path)" >&2; exit 1; }
 log "WAL archived up to $seg"
 
 # ---- 4. restore into a throw-away container ------------------------------------
@@ -91,7 +96,7 @@ docker run --rm \
         cat >> postgresql.auto.conf <<CONF
 # ---- added by pitr-drill.sh ----
 archive_mode = 'off'                      # a drill must NEVER write into the real archive
-restore_command = 'cp /archive/wal/%f %p'
+restore_command = '$RESTORE_COMMAND'
 recovery_target_name = '$point'
 recovery_target_action = 'promote'
 CONF

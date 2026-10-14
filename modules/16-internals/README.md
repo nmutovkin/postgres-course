@@ -1523,8 +1523,11 @@ Read the report from the top:
 - `pages: 0 removed, ... remain, ... scanned (100.00% of total)`: every page had to be scanned because none was all-visible, and none could be removed because the remaining rows are spread over all of them.
 - `tuples: 30000 removed`: the dead tuples are gone.
 - `index scan needed: ... pages from table ... had 30000 dead item identifiers removed`, and the `index "vac_demo_pkey"` line: one pass over the primary key index deleted the 30,000 matching index entries.
-- `visibility map: ... pages set all-visible`: the next VACUUM can skip them.
+- `removable cutoff`: the xmin horizon used to decide what is dead to everyone (section 10.5).
 - The buffer and WAL usage lines show how much I/O the work cost.
+- The second block is the table's TOAST table, which VACUUM processes along with the table (here it is empty).
+
+The report doesn't mention the visibility map, but the summary below shows that VACUUM marked every page all-visible, so the next VACUUM can skip them.
 
 And the effect:
 

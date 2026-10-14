@@ -175,11 +175,11 @@ Copy 10,000 rows of `orders` into `lab.ex_frozen` (with `CREATE TABLE ... AS`). 
 
 Explain every change.
 
-**Self-check:** after step 2, `all_frozen` equals the table's number of pages and `age(relfrozenxid)` is 0 or 1; after step 3, `all_frozen` and `all_visible` are both one page lower.
+**Self-check:** after step 2, `all_frozen` equals the table's number of pages (which may be smaller than in step 1: explain why) and `age(relfrozenxid)` is 0 or 1 on an otherwise idle server; after step 3, `all_frozen` and `all_visible` are both **two** pages lower.
 
 <details><summary>Hint</summary>
 
-`pg_visibility_map_summary(regclass)` returns `all_visible` and `all_frozen` page counts; `pg_relation_size(...) / 8192` gives the number of pages. Think about which page(s) the update touched.
+`pg_visibility_map_summary(regclass)` returns `all_visible` and `all_frozen` page counts; `pg_relation_size(...) / 8192` gives the number of pages. Think about which page(s) the update touched, and where a new row version goes when its page is full.
 
 </details>
 
@@ -195,7 +195,7 @@ SELECT * FROM orders WHERE status = 'cancelled' AND total < 50;
 
 compute the planner's row estimate yourself from `pg_stats` (`status`'s MCV list, `total`'s MCVs and histogram) and `pg_class.reltuples`, assuming, as the planner does, that the two conditions are independent. Compare your number with `EXPLAIN` and with the actual count. Is the independence assumption good for this pair of columns? What would you do if it weren't?
 
-**Self-check:** your estimate matches `EXPLAIN`'s `rows=` within 1%. The actual count is 3,840.
+**Self-check:** your estimate matches `EXPLAIN`'s `rows=` within 1%. The actual count is 3,973.
 
 <details><summary>Hint</summary>
 

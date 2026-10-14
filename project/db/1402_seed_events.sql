@@ -1,8 +1,9 @@
 -- =============================================================================
 -- 1402_seed_events.sql  --  Module 14: Partitioning
 -- -----------------------------------------------------------------------------
--- ~4 million clickstream events for calendar year 2025 (partitions
--- events_y2025m01 .. events_y2025m12; 2026 partitions and DEFAULT stay empty),
+-- ~5 million (4,983,725) clickstream events for calendar year 2025 (partitions
+-- events_y2025m01 .. events_y2025m12; a handful spill into events_y2026m01;
+-- later partitions and DEFAULT stay empty),
 -- generated from ~850k browsing sessions with a realistic funnel:
 --
 --   every session      1-3 page_view
@@ -21,7 +22,7 @@
 --
 -- Deterministic: all choices are hash functions of the session number (see
 -- 1101_seed_large.sql for the rnd() technique).
--- Runtime: ~60 s on the reference machine; ~1 GB on disk including indexes.
+-- Runtime: ~65 s on the reference machine; ~860 MB on disk including indexes.
 -- =============================================================================
 
 SET search_path = bazaar, public;

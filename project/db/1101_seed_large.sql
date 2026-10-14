@@ -16,21 +16,23 @@
 --   orders                500,000   2023-01-01 .. 2025-12-31, growth trend,
 --                                   weekly + Nov/Dec seasonality, Black Friday spikes;
 --                                   ids in chronological order
---   order_items         ~1,300,000   orders.total = sum(quantity * unit_price) exactly
---   addresses            ~125,000   every user has a default address (id = user id)
---   payments             ~470,000
---   reviews              ~300,000   ~98% by buyers of a delivered order, ~2% not
---   cart_items            ~25,000
---   product_price_history ~230,000   ~15% of products changed price once;
+--   order_items          1,266,928   orders.total = sum(quantity * unit_price) exactly
+--   addresses              125,017   every user has a default address (id = user id)
+--   payments               536,816
+--   reviews                292,355   ~98% by buyers of a delivered order, 6,060 not
+--   cart_items              19,843
+--   product_price_history  230,263   ~15% of products changed price once;
 --                                   unit_price always matches the history
---   promotions             ~12,000
+--   promotions              15,047
 --   audit_log, jobs         empty
 --
 -- "Today" in this dataset is 2025-12-31: open orders (pending/paid/shipped)
 -- cluster in the last days of December 2025.
 --
--- Runtime: ~85 s on the reference machine (4 vCPU, PostgreSQL 17 defaults in
--- Docker), including VACUUM ANALYZE. Disk: ~1 GB.
+-- Runtime: ~70 s on the reference machine (4 vCPU, PostgreSQL 17 defaults in
+-- Docker), including VACUUM ANALYZE. The database is ~1 GB afterwards.
+-- Status mix: ~90.5% delivered, 5% cancelled, 3% refunded; the ~7,600 open
+-- orders (pending / paid / shipped) are all from the last 12 days of 2025.
 --
 -- Determinism. Every "random" choice is a pure function of a row key:
 --     rnd(key, salt) = hashint8extended(key, salt) mapped to [0, 1)
@@ -379,7 +381,7 @@ OVERRIDING SYSTEM VALUE
 SELECT
     a.id, a.user_id, a.label, a.recipient,
     (1 + floor(pg_temp.rnd(a.id, 11) * 240))::int || ' '
-        || pg_temp.pick('{"Market Street","Oak Avenue","High Street","Station Road","Mill Lane","Park Road","Church Street","Harbour Road","Elm Road","Victoria Road","King Street","Lindenweg"}'::text[], pg_temp.rnd(a.id, 12)),
+        || pg_temp.pick('{"Market Street","Oak Avenue","High Street","Station Road","Mill Lane","Park Road","Church Street","Harbour Road","Elm Road","Victoria Road","King Street","Maple Drive"}'::text[], pg_temp.rnd(a.id, 12)),
     CASE WHEN pg_temp.rnd(a.id, 13) < 0.2 THEN 'Apt ' || (1 + floor(pg_temp.rnd(a.id, 14) * 60))::int END,
     pg_temp.pick(cc.cities, pg_temp.rnd(a.id, 15)),
     CASE
