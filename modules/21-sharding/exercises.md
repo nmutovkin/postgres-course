@@ -1,5 +1,10 @@
 # Module 21 exercises: Sharding
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 20 High Availability](../20-high-availability/README.md) · [Course home](../../README.md) · [22 psycopg 3 →](../22-psycopg/README.md)
+<!-- nav:end -->
+
 Unless an exercise says otherwise, work on the Citus lab after a fresh small build:
 
 ```bash

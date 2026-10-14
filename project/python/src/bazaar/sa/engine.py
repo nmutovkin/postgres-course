@@ -18,8 +18,10 @@ in transaction mode, Module 17), pass `poolclass=NullPool`.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from typing import Any
 
 import sqlalchemy as sa
@@ -36,6 +38,8 @@ __all__ = [
     "count_statements",
     "create_async_engine",
     "create_engine",
+    "create_read_engine",
+    "dispose_after_fork",
     "sa_url",
 ]
 
@@ -59,7 +63,7 @@ def _pool_args(s: Settings) -> dict[str, Any]:
     return {
         "pool_size": s.pool_max_size,
         "max_overflow": 0,
-        "pool_timeout": 10,  # seconds to wait for a free connection, then TimeoutError
+        "pool_timeout": s.pool_timeout_s,  # wait for a free connection, then TimeoutError
         "pool_pre_ping": True,  # test a connection on checkout (one round trip)
         "pool_recycle": 1800,  # replace connections older than 30 minutes
     }
@@ -69,8 +73,8 @@ def create_engine(settings: Settings | None = None, **overrides: Any) -> Engine:
     """The process-wide sync engine (psycopg 3 driver)."""
     s = settings or get_settings()
     connect_args: dict[str, Any] = {"application_name": s.app_name, "connect_timeout": 5}
-    if s.statement_timeout_ms:
-        connect_args["options"] = f"-c statement_timeout={s.statement_timeout_ms}"
+    if s.libpq_options():
+        connect_args["options"] = s.libpq_options()
     params: dict[str, Any] = {"connect_args": connect_args, **_pool_args(s)}
     params.update(overrides)  # e.g. create_engine(echo=True) or poolclass=NullPool
     if params.get("poolclass") is NullPool:
@@ -85,14 +89,11 @@ def create_async_engine(
     """The process-wide async engine. Create it inside the running event loop."""
     s = settings or get_settings()
     if driver == "asyncpg":
-        server_settings = {"application_name": s.app_name}
-        if s.statement_timeout_ms:
-            server_settings["statement_timeout"] = str(s.statement_timeout_ms)
-        connect_args: dict[str, Any] = {"server_settings": server_settings, "timeout": 5}
+        connect_args: dict[str, Any] = {"server_settings": s.session_settings(), "timeout": 5}
     elif driver == "psycopg":
         connect_args = {"application_name": s.app_name, "connect_timeout": 5}
-        if s.statement_timeout_ms:
-            connect_args["options"] = f"-c statement_timeout={s.statement_timeout_ms}"
+        if s.libpq_options():
+            connect_args["options"] = s.libpq_options()
     else:
         raise ValueError(f"unknown async driver {driver!r}")
     params: dict[str, Any] = {"connect_args": connect_args, **_pool_args(s)}
@@ -101,6 +102,46 @@ def create_async_engine(
         for k in ("pool_size", "max_overflow", "pool_timeout"):
             params.pop(k, None)
     return _create_async_engine(sa_url(s.dsn, driver), **params)
+
+
+def create_read_engine(settings: Settings | None = None, **overrides: Any) -> Engine:
+    """An engine for reads that may be slightly stale (module 19's "two pools").
+
+    It connects to BAZAAR_REPLICA_DSN when set, else to the primary, and in
+    both cases with default_transaction_read_only=on: code that accidentally
+    writes through it fails at once (SQLSTATE 25006) instead of working in
+    development (one database) and failing in production (a replica).
+    Read-your-own-writes paths (show the order just placed) must use the
+    primary engine: a replica may lag behind by some milliseconds or more.
+    """
+    s = settings or get_settings()
+    s = replace(s, dsn=s.replica_dsn or s.dsn, app_name=f"{s.app_name}-ro")
+    engine = create_engine(s, **overrides)
+
+    @event.listens_for(engine, "connect")
+    def _read_only(dbapi_conn, record) -> None:  # noqa: ANN001
+        # A startup option would need a second `-c` in connect_args["options"]
+        # (merged with the timeouts); a SET on connect is simpler and per engine.
+        autocommit = dbapi_conn.autocommit
+        dbapi_conn.autocommit = True
+        dbapi_conn.execute("SET default_transaction_read_only = on")
+        dbapi_conn.autocommit = autocommit
+
+    return engine
+
+
+def dispose_after_fork(engine: Engine | AsyncEngine) -> None:
+    """Make a forked child start with an empty pool (gunicorn --preload, multiprocessing).
+
+    A pooled connection is a socket; after fork() parent and child share it,
+    and two processes talking on one PostgreSQL connection corrupt each other's
+    protocol state. dispose(close=False) drops the child's references without
+    closing the parent's sockets (closing would send a Terminate message on
+    the parent's behalf). Better still: create engines after the fork (in the
+    worker's startup hook), which is what the module 28 service does.
+    """
+    target = engine.sync_engine if isinstance(engine, AsyncEngine) else engine
+    os.register_at_fork(after_in_child=lambda: target.dispose(close=False))
 
 
 @contextmanager

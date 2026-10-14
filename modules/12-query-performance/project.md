@@ -1,5 +1,26 @@
 # Module 12 milestone: a performance review of Bazaar
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 11 Indexes](../11-indexes/README.md) · [Course home](../../README.md) · [13 Full-Text and Fuzzy Search →](../13-full-text-search/README.md)
+<!-- nav:end -->
+
+<!-- toc:start -->
+**Contents**
+
+- [The goal](#the-goal)
+- [Starting state](#starting-state)
+- [Requirements](#requirements)
+  - [1. The migration](#1-the-migration)
+  - [2. The six slow queries](#2-the-six-slow-queries)
+  - [3. Targets](#3-targets)
+  - [4. The write-up](#4-the-write-up)
+- [Acceptance checks](#acceptance-checks)
+- [Hints](#hints)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
+
 ## The goal
 
 Bazaar's back office has filed six tickets about slow screens and reports. You are the database person on call. For each query you will **measure** it, **explain** from its plan why it is slow, **fix** it (with a rewrite, an index, statistics, or a setting), and **document** the before-and-after numbers, so the team can review your changes and learn from them.

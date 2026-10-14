@@ -1,5 +1,10 @@
 # Module 09: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 08 Beyond Scalars](../../08-beyond-scalars/README.md) · [Course home](../../../README.md) · [10 Transactions and Concurrency →](../../10-transactions-concurrency/README.md)
+<!-- nav:end -->
+
 All solutions were run on PostgreSQL 17 against `./project/bin/reset.sh 10`, in order, in one database. The complete script is [`exercises.sql`](exercises.sql):
 
 ```bash
@@ -10,6 +15,24 @@ docker exec -i course-pg psql -X -U postgres -d bazaar < modules/09-views-functi
 Exercise 10 archives (deletes) orders, so reset afterwards.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: `effective_price()`](#exercise-1--effective_price)
+- [Exercise 2 ★: A view on a view](#exercise-2--a-view-on-a-view)
+- [Exercise 3 ★: No repricing archived products](#exercise-3--no-repricing-archived-products)
+- [Exercise 4 ★★: Price history that keeps itself](#exercise-4--price-history-that-keeps-itself)
+- [Exercise 5 ★★: Breadcrumbs](#exercise-5--breadcrumbs)
+- [Exercise 6 ★★: Row counts of every table](#exercise-6--row-counts-of-every-table)
+- [Exercise 7 ★★: A ratings materialized view](#exercise-7--a-ratings-materialized-view)
+- [Exercise 8 ★★: A forgiving price import](#exercise-8--a-forgiving-price-import)
+- [Exercise 9 ★★: What happened to this column?](#exercise-9--what-happened-to-this-column)
+- [Exercise 10 ★★★: Archive cancelled orders in batches](#exercise-10--archive-cancelled-orders-in-batches)
+- [Exercise 11 ★★★: Order status drives inventory](#exercise-11--order-status-drives-inventory)
+- [Exercise 12 ★★★: Row-level versus statement-level](#exercise-12--row-level-versus-statement-level)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: `effective_price()`
 

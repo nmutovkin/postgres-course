@@ -1,5 +1,10 @@
 # Module 24: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 23 Async Python: psycopg async and asyncpg](../../23-async-python/README.md) · [Course home](../../../README.md) · [25 SQLAlchemy ORM →](../../25-sqlalchemy-orm/README.md)
+<!-- nav:end -->
+
 Every solution is a runnable script in this directory, run against `./project/bin/reset.sh 24` plus `project/python/sql/2301_notify.sql`, with Python 3.13, SQLAlchemy 2.1.4, psycopg 3.3.6, asyncpg 0.32.0 and PostgreSQL 17.11. The outputs below come from those runs. Run them from `project/python` with the venv active:
 
 ```bash
@@ -8,6 +13,24 @@ python ../../modules/24-sqlalchemy-core/solutions/ex04_translate_reports.py
 ```
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: An engine that says who it is](#exercise-1--an-engine-that-says-who-it-is)
+- [Exercise 2 ★: Loyal buyers](#exercise-2--loyal-buyers)
+- [Exercise 3 ★: Five queries that lie](#exercise-3--five-queries-that-lie)
+- [Exercise 4 ★★: Four reports, translated and proven](#exercise-4--four-reports-translated-and-proven)
+- [Exercise 5 ★★: A product listing with filters, sorts and cursors](#exercise-5--a-product-listing-with-filters-sorts-and-cursors)
+- [Exercise 6 ★★: A cart that merges](#exercise-6--a-cart-that-merges)
+- [Exercise 7 ★★: Ten thousand price changes](#exercise-7--ten-thousand-price-changes)
+- [Exercise 8 ★★: A data dictionary from the Inspector](#exercise-8--a-data-dictionary-from-the-inspector)
+- [Exercise 9 ★★: The seller statement on asyncio](#exercise-9--the-seller-statement-on-asyncio)
+- [Exercise 10 ★★★: Commission to the cent](#exercise-10--commission-to-the-cent)
+- [Exercise 11 ★★★: A drift check that can't be fooled](#exercise-11--a-drift-check-that-cant-be-fooled)
+- [Exercise 12 ★★★: Export a Core query, two ways](#exercise-12--export-a-core-query-two-ways)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: An engine that says who it is
 

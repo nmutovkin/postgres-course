@@ -1,5 +1,10 @@
 # Module 21 solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 20 High Availability](../../20-high-availability/README.md) · [Course home](../../../README.md) · [22 psycopg 3 →](../../22-psycopg/README.md)
+<!-- nav:end -->
+
 All SQL was run on the module's lab: Citus 14.2 on PostgreSQL 17.10 (`citus-build.sh small`), plain PostgreSQL 17 for the fdw and router cluster (`fdw-setup.sh`), and a single PostgreSQL 17 node with the large dataset for exercise 4. The runnable files are next to this README:
 
 | File | Exercise |
@@ -14,6 +19,24 @@ All SQL was run on the module's lab: Citus 14.2 on PostgreSQL 17.10 (`citus-buil
 | `milestone-checks.sql` | the project milestone |
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1: Pick the shard key](#exercise-1-pick-the-shard-key)
+- [Exercise 2: Router or multi-shard?](#exercise-2-router-or-multi-shard)
+- [Exercise 3: Where would seller 42 live?](#exercise-3-where-would-seller-42-live)
+- [Exercise 4: Measure the skew, without Citus](#exercise-4-measure-the-skew-without-citus)
+- [Exercise 5: Make them co-located](#exercise-5-make-them-co-located)
+- [Exercise 6: Global IDs](#exercise-6-global-ids)
+- [Exercise 7: Clean up after a failed two-phase commit](#exercise-7-clean-up-after-a-failed-two-phase-commit)
+- [Exercise 8: postgres_fdw pushdown puzzles](#exercise-8-postgres_fdw-pushdown-puzzles)
+- [Exercise 9: Reference or distributed?](#exercise-9-reference-or-distributed)
+- [Exercise 10: Give the biggest seller a node of its own](#exercise-10-give-the-biggest-seller-a-node-of-its-own)
+- [Exercise 11: Distribute the clickstream](#exercise-11-distribute-the-clickstream)
+- [Exercise 12: Rebalance the application-level shards](#exercise-12-rebalance-the-application-level-shards)
+
+<!-- toc:end -->
 
 ## Exercise 1: Pick the shard key
 

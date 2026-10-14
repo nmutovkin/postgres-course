@@ -12,6 +12,22 @@ Reference solution for the Module 18 milestone. It is written for the lab (`m18-
 
 ---
 
+<!-- toc:start -->
+**Contents**
+
+- [1. What is backed up, where, and how often](#1-what-is-backed-up-where-and-how-often)
+- [2. Monitoring](#2-monitoring)
+- [3. Before you restore: decide](#3-before-you-restore-decide)
+- [4. Finding the recovery target](#4-finding-the-recovery-target)
+- [5. Salvage: restore a copy and copy data back (production keeps running)](#5-salvage-restore-a-copy-and-copy-data-back-production-keeps-running)
+- [6. Full restore (production is lost or must be rewound)](#6-full-restore-production-is-lost-or-must-be-rewound)
+  - [6a. With the lab's base backups and WAL archive](#6a-with-the-labs-base-backups-and-wal-archive)
+  - [6b. With pgBackRest (in place, delta)](#6b-with-pgbackrest-in-place-delta)
+- [7. After every restore](#7-after-every-restore)
+- [8. Drills](#8-drills)
+
+<!-- toc:end -->
+
 ## 1. What is backed up, where, and how often
 
 | What | How | Schedule | Where (lab) | Where (production) | Retention |

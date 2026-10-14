@@ -1,5 +1,10 @@
 # Module 00: Setup
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [Course home](../../README.md) · [01 psql and the Postgres Landscape →](../01-psql/README.md)
+<!-- nav:end -->
+
 Bazaar, the marketplace you build in this course, will eventually run on replicated, sharded PostgreSQL clusters behind a Python service. It starts much smaller: one PostgreSQL 17 server in a Docker container on your laptop, and a terminal connected to it. This module gets that server running, shows you how to connect to it in three different ways, and explains how the rest of the course is organised so you can find your way around.
 
 If you have used Docker and PostgreSQL before, skim sections 1 and 4, run the quick check in section 9, and move on to [Module 01](../01-psql/).
@@ -19,6 +24,35 @@ If you have used Docker and PostgreSQL before, skim sections 1 and 4, run the qu
 You need a terminal, about 1 GB of free disk space, and permission to install software. No database knowledge is assumed.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. How this course works](#1-how-this-course-works)
+  - [1.1 Modules](#11-modules)
+  - [1.2 Exercise levels](#12-exercise-levels)
+  - [1.3 The project and `reset.sh`](#13-the-project-and-resetsh)
+  - [1.4 Keep your own work in `workspace/`](#14-keep-your-own-work-in-workspace)
+  - [1.5 Callouts](#15-callouts)
+- [2. Installing Docker and Docker Compose](#2-installing-docker-and-docker-compose)
+- [3. Starting the course database](#3-starting-the-course-database)
+- [4. What the compose file configures, and why](#4-what-the-compose-file-configures-and-why)
+- [5. Connecting with `./project/bin/psql.sh`](#5-connecting-with-projectbinpsqlsh)
+- [6. A native psql on your machine](#6-a-native-psql-on-your-machine)
+  - [6.1 Installing psql 17](#61-installing-psql-17)
+  - [6.2 Connection parameters](#62-connection-parameters)
+  - [6.3 `~/.pgpass`: passwords without typing them](#63-pgpass-passwords-without-typing-them)
+- [7. A GUI, briefly](#7-a-gui-briefly)
+- [8. Troubleshooting](#8-troubleshooting)
+  - [Port 5432 is already taken](#port-5432-is-already-taken)
+  - [The container isn't running, or isn't ready](#the-container-isnt-running-or-isnt-ready)
+  - [Authentication and name errors](#authentication-and-name-errors)
+  - [Starting over: resetting the volume](#starting-over-resetting-the-volume)
+- [9. Which version am I running?](#9-which-version-am-i-running)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. How this course works
 

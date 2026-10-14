@@ -1,5 +1,10 @@
 # Module 25: SQLAlchemy ORM
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 24 SQLAlchemy Core](../24-sqlalchemy-core/README.md) · [Course home](../../README.md) · [26 Migrations with Alembic →](../26-migrations/README.md)
+<!-- nav:end -->
+
 The seller portal needs screens, not reports: "my products" with their stock, "edit this product", "my latest orders with their items and buyers", "ship this order". Each screen reads a small graph of related rows, changes a few of them, and saves. Writing that with Core (Module 24) means hand-building every join, mapping rows to objects, tracking which fields changed, and ordering the `INSERT`s so that foreign keys are satisfied. The **ORM** does that bookkeeping: Python classes mapped to Bazaar's tables, relationships you can navigate (`order.items[0].product.seller`), a `Session` that remembers every object it loaded and writes back exactly what changed, in the right order, in one transaction. It also makes it dangerously easy to send 400 queries to render one page. This module teaches the ORM as a PostgreSQL user should learn it: what SQL each feature produces, when it produces it, how to keep the query count under control, and when to put the ORM aside and write the query yourself.
 
 **What you'll learn**
@@ -28,6 +33,69 @@ export BAZAAR_DSN=postgresql://postgres:postgres@localhost:5432/bazaar
 You need Module 24's package (`bazaar.sa`: engine, tables, `count_statements`). The examples are in [`examples/`](examples/); run them from `project/python`. Outputs come from SQLAlchemy 2.1.4 (2.0-style API), psycopg 3.3.6 and asyncpg 0.32.0 against PostgreSQL 17.11. Ids of rows that examples insert and roll back vary between runs, because sequences advance even when transactions roll back (Module 10).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. What an ORM does](#1-what-an-orm-does)
+  - [1.1 Three ideas](#11-three-ideas)
+  - [1.2 The Session is a transaction-scoped workspace](#12-the-session-is-a-transaction-scoped-workspace)
+- [2. Declarative mapping, 2.0 style](#2-declarative-mapping-20-style)
+  - [2.1 The base class and typed columns](#21-the-base-class-and-typed-columns)
+  - [2.2 Bazaar's entities](#22-bazaars-entities)
+  - [2.3 Enums, JSONB, arrays and ranges](#23-enums-jsonb-arrays-and-ranges)
+- [3. Sessions](#3-sessions)
+  - [3.1 Creating sessions](#31-creating-sessions)
+  - [3.2 Object states](#32-object-states)
+  - [3.3 Flush versus commit](#33-flush-versus-commit)
+  - [3.4 `expire_on_commit`](#34-expire_on_commit)
+  - [3.5 Autoflush: helpful, until it isn't](#35-autoflush-helpful-until-it-isnt)
+  - [3.6 The identity map in practice](#36-the-identity-map-in-practice)
+- [4. Querying, 2.0 style](#4-querying-20-style)
+  - [4.1 Joins along relationships](#41-joins-along-relationships)
+  - [4.2 `any()` and `has()`](#42-any-and-has)
+  - [4.3 `contains_eager()`: use your join to fill a collection](#43-contains_eager-use-your-join-to-fill-a-collection)
+- [5. Relationships](#5-relationships)
+  - [5.1 `relationship()` and `back_populates`](#51-relationship-and-back_populates)
+  - [5.2 The association object](#52-the-association-object)
+  - [5.3 A self-referential tree](#53-a-self-referential-tree)
+  - [5.4 `foreign_keys`: when there are two paths](#54-foreign_keys-when-there-are-two-paths)
+  - [5.5 Cascades](#55-cascades)
+  - [5.6 `passive_deletes`: let `ON DELETE CASCADE` do it](#56-passive_deletes-let-on-delete-cascade-do-it)
+  - [5.7 `lazy`: when a relationship is loaded](#57-lazy-when-a-relationship-is-loaded)
+- [6. The N+1 problem](#6-the-n1-problem)
+  - [6.1 What it looks like](#61-what-it-looks-like)
+  - [6.2 Seeing it](#62-seeing-it)
+- [7. Loading strategies](#7-loading-strategies)
+  - [7.1 The options](#71-the-options)
+  - [7.2 `raiseload`: make the N+1 impossible](#72-raiseload-make-the-n1-impossible)
+  - [7.3 Choosing](#73-choosing)
+  - [7.4 The right default in the mapping](#74-the-right-default-in-the-mapping)
+- [8. Writing: the unit of work and bulk operations](#8-writing-the-unit-of-work-and-bulk-operations)
+  - [8.1 What the unit of work is good at](#81-what-the-unit-of-work-is-good-at)
+  - [8.2 Bulk INSERT with `insert(Model)`](#82-bulk-insert-with-insertmodel)
+  - [8.3 Bulk UPDATE by primary key](#83-bulk-update-by-primary-key)
+  - [8.4 ORM-enabled `UPDATE` and `DELETE` with `WHERE`](#84-orm-enabled-update-and-delete-with-where)
+- [9. Optimistic concurrency with `version_id_col`](#9-optimistic-concurrency-with-version_id_col)
+- [10. Values the database computes](#10-values-the-database-computes)
+  - [10.1 Identity, defaults, generated columns, triggers](#101-identity-defaults-generated-columns-triggers)
+  - [10.2 Hybrid properties](#102-hybrid-properties)
+  - [10.3 `column_property`](#103-column_property)
+- [11. Views and database functions](#11-views-and-database-functions)
+  - [11.1 A view, read-only](#111-a-view-read-only)
+  - [11.2 Calling `place_order()`](#112-calling-place_order)
+- [12. Row-level security with the ORM](#12-row-level-security-with-the-orm)
+- [13. The async ORM](#13-the-async-orm)
+  - [13.1 `AsyncSession`](#131-asyncsession)
+  - [13.2 The greenlet, and why lazy loading raises](#132-the-greenlet-and-why-lazy-loading-raises)
+  - [13.3 Designing for it](#133-designing-for-it)
+- [14. Testing with the ORM](#14-testing-with-the-orm)
+- [15. When to drop to Core or raw SQL](#15-when-to-drop-to-core-or-raw-sql)
+- [16. The Bazaar ORM layer](#16-the-bazaar-orm-layer)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. What an ORM does
 

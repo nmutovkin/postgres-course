@@ -1,5 +1,23 @@
 # Module 19 milestone: the Bazaar analytics replica
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 18 Backup and Recovery](../18-backup-recovery/README.md) · [Course home](../../README.md) · [20 High Availability →](../20-high-availability/README.md)
+<!-- nav:end -->
+
+<!-- toc:start -->
+**Contents**
+
+- [Goal](#goal)
+- [Requirements](#requirements)
+  - [Publisher (`m19-primary`)](#publisher-m19-primary)
+  - [Subscriber (`m19-analytics`)](#subscriber-m19-analytics)
+  - [Monitoring](#monitoring)
+- [Reference solution](#reference-solution)
+- [Acceptance checks](#acceptance-checks)
+
+<!-- toc:end -->
+
 ## Goal
 
 The finance and seller-success teams run heavy reports on orders: revenue per day, per seller, per category, three years back. Running them on the primary slows down checkout; running them on a physical standby gets them cancelled by replication conflicts (or, with `hot_standby_feedback`, bloats the primary). They also want their own indexes and views, which a read-only physical replica cannot have.

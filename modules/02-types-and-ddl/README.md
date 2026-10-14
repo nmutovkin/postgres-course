@@ -1,5 +1,10 @@
 # Module 02: Data Types and Tables
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 01 psql and the Postgres Landscape](../01-psql/README.md) · [Course home](../../README.md) · [03 Reading and Writing Data →](../03-crud/README.md)
+<!-- nav:end -->
+
 The Bazaar database exists, but it's empty. Before the first shopper signs up, someone has to decide what a "user" is, what an "order" is, and which facts about them the database will store. Is a price `19.99` or `19.990000000001`? Is "2025-03-30 02:30 in Berlin" a real moment in time? Can two shops have the same name? Can an order point to a product that no longer exists? Every one of those questions is answered by a **data type** or a **constraint**, and it's answered once, in the table definition, for every program that will ever touch the data. In this module you learn the types PostgreSQL offers and why you'd choose one over another, the constraints that let the database defend its own data, and the DDL statements that create and change tables. You finish by building the Bazaar core schema: users, sellers, categories, products, inventory, orders and order items.
 
 **What you'll learn**
@@ -31,6 +36,69 @@ SET search_path = lab, bazaar, public;
 You need to be comfortable with psql (module 01): `\d` and friends, `\x`, `\pset null`, and running files. You don't need to know any SQL yet. This module uses a minimal form of `INSERT` and `SELECT * FROM table` to try things out, and module 03 covers both properly.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Tables and the relational model](#1-tables-and-the-relational-model)
+  - [1.1 Relations, rows and columns](#11-relations-rows-and-columns)
+  - [1.2 A schema for your data](#12-a-schema-for-your-data)
+  - [1.3 SQL is declarative](#13-sql-is-declarative)
+  - [1.4 DDL, DML, and the rest](#14-ddl-dml-and-the-rest)
+  - [1.5 Your first table](#15-your-first-table)
+- [2. Meet Bazaar](#2-meet-bazaar)
+- [3. Numbers](#3-numbers)
+  - [3.1 Integers: `smallint`, `integer`, `bigint`](#31-integers-smallint-integer-bigint)
+  - [3.2 Why identifiers are `bigint`](#32-why-identifiers-are-bigint)
+  - [3.3 Exact decimals: `numeric`](#33-exact-decimals-numeric)
+  - [3.4 Floating point: `real` and `double precision`](#34-floating-point-real-and-double-precision)
+  - [3.5 Money is `numeric(12,2)`](#35-money-is-numeric122)
+- [4. Text](#4-text)
+- [5. Boolean](#5-boolean)
+- [6. Dates, times and time zones](#6-dates-times-and-time-zones)
+  - [6.1 The types](#61-the-types)
+  - [6.2 `timestamptz` is an instant, `timestamp` is a wall-clock reading](#62-timestamptz-is-an-instant-timestamp-is-a-wall-clock-reading)
+  - [6.3 The session `TimeZone`](#63-the-session-timezone)
+  - [6.4 `AT TIME ZONE`: converting between the two](#64-at-time-zone-converting-between-the-two)
+  - [6.5 Intervals and daylight saving time](#65-intervals-and-daylight-saving-time)
+  - [6.6 `now()` is the start of the transaction](#66-now-is-the-start-of-the-transaction)
+- [7. `uuid`, `bytea`, and the rest](#7-uuid-bytea-and-the-rest)
+  - [7.1 `uuid`](#71-uuid)
+  - [7.2 `bytea`](#72-bytea)
+  - [7.3 Types you'll meet later](#73-types-youll-meet-later)
+- [8. Identity columns, sequences and `serial`](#8-identity-columns-sequences-and-serial)
+  - [8.1 Sequences](#81-sequences)
+  - [8.2 The old way: `serial`](#82-the-old-way-serial)
+  - [8.3 The modern way: identity columns](#83-the-modern-way-identity-columns)
+- [9. Defaults and generated columns](#9-defaults-and-generated-columns)
+  - [9.1 Defaults](#91-defaults)
+  - [9.2 Generated columns](#92-generated-columns)
+- [10. `NULL`: the unknown value](#10-null-the-unknown-value)
+- [11. Constraints: the database defends its data](#11-constraints-the-database-defends-its-data)
+  - [11.1 `NOT NULL`](#111-not-null)
+  - [11.2 `CHECK`](#112-check)
+  - [11.3 `UNIQUE`](#113-unique)
+  - [11.4 `PRIMARY KEY`](#114-primary-key)
+  - [11.5 `FOREIGN KEY`](#115-foreign-key)
+  - [11.6 Deferrable constraints](#116-deferrable-constraints)
+  - [11.7 Reading constraint errors](#117-reading-constraint-errors)
+- [12. Building the Bazaar core schema](#12-building-the-bazaar-core-schema)
+  - [12.1 The schema (namespace) and a script header](#121-the-schema-namespace-and-a-script-header)
+  - [12.2 `users`](#122-users)
+  - [12.3 `sellers`](#123-sellers)
+  - [12.4 `categories`: a table that references itself](#124-categories-a-table-that-references-itself)
+  - [12.5 `products`](#125-products)
+  - [12.6 `inventory`, `orders`, `order_items`: design notes](#126-inventory-orders-order_items-design-notes)
+  - [12.7 Comments](#127-comments)
+- [13. Changing tables: `ALTER TABLE`](#13-changing-tables-alter-table)
+  - [13.1 Changing a column's type with `USING`](#131-changing-a-columns-type-with-using)
+  - [13.2 The common operations](#132-the-common-operations)
+  - [13.3 Locks and rewrites: why some `ALTER`s are dangerous](#133-locks-and-rewrites-why-some-alters-are-dangerous)
+- [14. Inspecting what you built](#14-inspecting-what-you-built)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Tables and the relational model
 

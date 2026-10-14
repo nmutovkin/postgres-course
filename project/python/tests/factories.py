@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from decimal import Decimal
 
 import psycopg
@@ -71,9 +72,13 @@ def make_product(
 def cleanup(conn: psycopg.Connection, user_ids: list[int], seller_ids: list[int]) -> None:
     """Delete committed test rows (orders first, then products, sellers, users)."""
     with conn.transaction():
-        conn.execute(
-            "DELETE FROM orders WHERE user_id = ANY(%s) OR seller_id = ANY(%s)",
+        orders = conn.execute(
+            "DELETE FROM orders WHERE user_id = ANY(%s) OR seller_id = ANY(%s) RETURNING id",
             (user_ids, seller_ids),
+        ).fetchall()
+        conn.execute(  # outbox events of those orders (module 27)
+            "DELETE FROM outbox WHERE aggregate_type = 'order' AND aggregate_id = ANY(%s)",
+            ([str(o[0]) for o in orders],),
         )
         conn.execute("DELETE FROM products WHERE seller_id = ANY(%s)", (seller_ids,))
         owners = conn.execute(
@@ -83,3 +88,41 @@ def cleanup(conn: psycopg.Connection, user_ids: list[int], seller_ids: list[int]
             "DELETE FROM addresses WHERE user_id = ANY(%s)", (user_ids + [o[0] for o in owners],)
         )
         conn.execute("DELETE FROM users WHERE id = ANY(%s)", (user_ids + [o[0] for o in owners],))
+
+
+def make_category(conn: psycopg.Connection) -> int:
+    t = _tag()
+    row = conn.execute(
+        "INSERT INTO categories (name, slug) VALUES (%s, %s) RETURNING id",
+        (f"Test category {t}", f"test-{t}"),
+    ).fetchone()
+    assert row
+    return row[0]
+
+
+@dataclass(frozen=True)
+class Shop:
+    """A buyer with an address, a seller, and products with stock: enough to check out."""
+
+    buyer: int
+    address: int
+    seller: int
+    products: list[int]
+
+
+def make_shop(
+    conn: psycopg.Connection,
+    *,
+    products: int = 2,
+    stock: int = 10,
+    price: Decimal = Decimal("10.00"),
+) -> Shop:
+    """Works on an EMPTY database (fresh_db) as well as on the reference one."""
+    category = make_category(conn)
+    buyer = make_user(conn)
+    seller = make_seller(conn)
+    pids = [
+        make_product(conn, seller, stock=stock, price=price, category_id=category)
+        for _ in range(products)
+    ]
+    return Shop(buyer, make_address(conn, buyer), seller, pids)

@@ -1,5 +1,10 @@
 # Module 14: Partitioning
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 13 Full-Text and Fuzzy Search](../13-full-text-search/README.md) · [Course home](../../README.md) · [15 Security and Row-Level Security →](../15-security-rls/README.md)
+<!-- nav:end -->
+
 Every click on Bazaar becomes a row in `events`: 5 million in 2025, and growing every month. The analysts query it by month ("what was November's conversion funnel?"), the privacy policy says clickstream data is kept for 12 months, and every month somebody has to delete the oldest month. On a single 5-million-row table, that monthly `DELETE` writes tens of megabytes of WAL, leaves dead rows for VACUUM to clean, and returns no disk space to the operating system. With **partitioning**, `events` becomes a set of monthly tables behind one name: a query for November reads only November, and deleting January is a `DROP TABLE` that takes a millisecond. This module explains how PostgreSQL's declarative partitioning works, what it really buys you (and what it costs: it is *not* a general speed-up), how to maintain partitions month after month, and how to convert a big table that is already in production.
 
 **What you'll learn**
@@ -43,6 +48,48 @@ The copy takes about 790 MB; drop it (`DROP SCHEMA lab CASCADE`) when you are do
 You need [Module 11](../11-indexes/) (indexes, `CREATE INDEX CONCURRENTLY`), [Module 12](../12-query-performance/) (`EXPLAIN ANALYZE`), and the lock levels from [Module 10](../10-transactions-concurrency/).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. What partitioning is for, and what it is not for](#1-what-partitioning-is-for-and-what-it-is-not-for)
+- [2. Declarative partitioning](#2-declarative-partitioning)
+  - [2.1 RANGE partitioning and bound semantics](#21-range-partitioning-and-bound-semantics)
+  - [2.2 LIST and HASH partitioning](#22-list-and-hash-partitioning)
+  - [2.3 The DEFAULT partition](#23-the-default-partition)
+  - [2.4 Sub-partitioning](#24-sub-partitioning)
+  - [2.5 Looking at a partition tree](#25-looking-at-a-partition-tree)
+- [3. Keys and constraints](#3-keys-and-constraints)
+  - [3.1 Unique constraints must include the partition key](#31-unique-constraints-must-include-the-partition-key)
+  - [3.2 Identity columns, `NOT NULL`, `CHECK`, defaults](#32-identity-columns-not-null-check-defaults)
+  - [3.3 Foreign keys](#33-foreign-keys)
+- [4. Indexes on partitioned tables](#4-indexes-on-partitioned-tables)
+  - [4.1 Building an index without blocking writes](#41-building-an-index-without-blocking-writes)
+  - [4.2 No global index: lookups without the key](#42-no-global-index-lookups-without-the-key)
+- [5. Partition pruning](#5-partition-pruning)
+  - [5.1 Plan-time pruning](#51-plan-time-pruning)
+  - [5.2 Execution-time pruning](#52-execution-time-pruning)
+  - [5.3 What prevents pruning](#53-what-prevents-pruning)
+  - [5.4 Settings](#54-settings)
+- [6. The costs: planning, locking, and how many partitions](#6-the-costs-planning-locking-and-how-many-partitions)
+- [7. Partitionwise joins and aggregates](#7-partitionwise-joins-and-aggregates)
+- [8. Writing to a partitioned table](#8-writing-to-a-partitioned-table)
+  - [8.1 Inserts and `COPY`](#81-inserts-and-copy)
+  - [8.2 Row movement on `UPDATE`](#82-row-movement-on-update)
+- [9. Maintenance](#9-maintenance)
+  - [9.1 Creating partitions ahead of time](#91-creating-partitions-ahead-of-time)
+  - [9.2 The default-partition trap](#92-the-default-partition-trap)
+  - [9.3 `ATTACH` and `DETACH`](#93-attach-and-detach)
+  - [9.4 Retention: `DROP` versus `DELETE`](#94-retention-drop-versus-delete)
+  - [9.5 Archiving a detached partition](#95-archiving-a-detached-partition)
+  - [9.6 VACUUM, ANALYZE and statistics](#96-vacuum-analyze-and-statistics)
+  - [9.7 Automating it: `pg_partman` and `pg_cron`](#97-automating-it-pg_partman-and-pg_cron)
+- [10. Migrating an existing table to partitioning](#10-migrating-an-existing-table-to-partitioning)
+- [11. Beyond one server, and before PostgreSQL 10](#11-beyond-one-server-and-before-postgresql-10)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. What partitioning is for, and what it is not for
 

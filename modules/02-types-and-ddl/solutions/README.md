@@ -1,5 +1,10 @@
 # Module 02: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 01 psql and the Postgres Landscape](../../01-psql/README.md) · [Course home](../../../README.md) · [03 Reading and Writing Data →](../../03-crud/README.md)
+<!-- nav:end -->
+
 Every solution was run on PostgreSQL 17 against `./project/bin/reset.sh 03` (the reference core schema with empty tables), with the session time zone at UTC. Scratch tables live in the `lab` schema:
 
 ```sql
@@ -19,6 +24,24 @@ Files in this directory:
 The milestone's reference solution itself is [`project/db/0201_schema_core.sql`](../../../project/db/0201_schema_core.sql).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Every rule in one list](#exercise-1--every-rule-in-one-list)
+- [Exercise 2 ★: Which of these are true?](#exercise-2--which-of-these-are-true)
+- [Exercise 3 ★: A customer in Sydney](#exercise-3--a-customer-in-sydney)
+- [Exercise 4 ★★: Design the `coupons` table](#exercise-4--design-the-coupons-table)
+- [Exercise 5 ★★: Sibling categories must have different names](#exercise-5--sibling-categories-must-have-different-names)
+- [Exercise 6 ★★: Predict the cascade](#exercise-6--predict-the-cascade)
+- [Exercise 7 ★★: Cleaning up a supplier feed](#exercise-7--cleaning-up-a-supplier-feed)
+- [Exercise 8 ★★: The sequence that fell behind](#exercise-8--the-sequence-that-fell-behind)
+- [Exercise 9 ★★: Where does each foreign key point?](#exercise-9--where-does-each-foreign-key-point)
+- [Exercise 10 ★★★: Migrating `timestamp` to `timestamptz`](#exercise-10--migrating-timestamp-to-timestamptz)
+- [Exercise 11 ★★★: Shifting image positions](#exercise-11--shifting-image-positions)
+- [Exercise 12 ★★★: Every store has a flagship](#exercise-12--every-store-has-a-flagship)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Every rule in one list
 

@@ -1,5 +1,10 @@
 # Module 07: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 06 Advanced SQL](../06-advanced-sql/README.md) · [Course home](../../README.md) · [08 Beyond Scalars →](../08-beyond-scalars/README.md)
+<!-- nav:end -->
+
 **Starting state.** Unless an exercise says otherwise, start from the state *after* this module's milestone, which is the reference schema v2 with its data:
 
 ```bash
@@ -17,6 +22,24 @@ docker exec -i course-pg psql -X -U postgres -d bazaar < modules/07-data-modelin
 Solutions: [solutions/README.md](solutions/README.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Keys the data can't prove](#exercise-1--keys-the-data-cant-prove)
+- [Exercise 2 ★: What happened to prices?](#exercise-2--what-happened-to-prices)
+- [Exercise 3 ★: Review this design](#exercise-3--review-this-design)
+- [Exercise 4 ★★: Dissect a spreadsheet](#exercise-4--dissect-a-spreadsheet)
+- [Exercise 5 ★★: The catalogue on New Year's Eve](#exercise-5--the-catalogue-on-new-years-eve)
+- [Exercise 6 ★★: Did the price change hurt sales?](#exercise-6--did-the-price-change-hurt-sales)
+- [Exercise 7 ★★: Four tables, many problems](#exercise-7--four-tables-many-problems)
+- [Exercise 8 ★★: Soft-delete users, keep emails reusable](#exercise-8--soft-delete-users-keep-emails-reusable)
+- [Exercise 9 ★★: The address must belong to the buyer](#exercise-9--the-address-must-belong-to-the-buyer)
+- [Exercise 10 ★★: Reconcile the payments ledger](#exercise-10--reconcile-the-payments-ledger)
+- [Exercise 11 ★★★: Normalize the spreadsheet](#exercise-11--normalize-the-spreadsheet)
+- [Exercise 12 ★★★: A closure table for the category tree](#exercise-12--a-closure-table-for-the-category-tree)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Keys the data can't prove
 

@@ -1,5 +1,10 @@
 # Module 13: Full-Text and Fuzzy Search
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 12 Query Planning and Performance](../12-query-performance/README.md) · [Course home](../../README.md) · [14 Partitioning →](../14-partitioning/README.md)
+<!-- nav:end -->
+
 A shopper types `wireless headphones` into Bazaar's search box. Behind it there are 200,000 products. The shopper expects the best matches first, expects "headphone" to find "Headphones", expects a typo like `headphnes` to still work, and expects all of this in a few milliseconds. The first version of the search, `WHERE title ILIKE '%wireless headphones%'`, finds 64 products, misses hundreds of relevant ones, cannot say which result is best, and gets slower as the catalog grows. This module replaces it with real search, built entirely inside PostgreSQL: full-text search (documents, lexemes, ranking, highlighting) for relevance, and trigram matching (`pg_trgm`) for typos, substrings and autocomplete. At the end you build `search_products()`, the function the storefront calls, and an `autocomplete()` function for the search box.
 
 **What you'll learn**
@@ -36,6 +41,54 @@ docker exec -i course-pg psql -U postgres -d bazaar < project/db/1301_schema_sea
 You need [Module 11](../11-indexes/) (GIN and GiST, expression indexes) and [Module 12](../12-query-performance/) (reading `EXPLAIN ANALYZE`). This module doesn't re-explain them.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Why `LIKE` is not search](#1-why-like-is-not-search)
+- [2. The pipeline: from document to lexemes](#2-the-pipeline-from-document-to-lexemes)
+  - [2.1 The parser and its token types](#21-the-parser-and-its-token-types)
+  - [2.2 Dictionaries](#22-dictionaries)
+  - [2.3 Configurations](#23-configurations)
+- [3. Building your own configuration](#3-building-your-own-configuration)
+  - [3.1 Adding `unaccent`](#31-adding-unaccent)
+  - [3.2 Adding a synonym dictionary](#32-adding-a-synonym-dictionary)
+  - [3.3 Query-side synonyms with `ts_rewrite`](#33-query-side-synonyms-with-ts_rewrite)
+- [4. `tsvector`: the document](#4-tsvector-the-document)
+  - [4.1 Weights](#41-weights)
+  - [4.2 What is in the whole catalog?](#42-what-is-in-the-whole-catalog)
+- [5. `tsquery`: the query](#5-tsquery-the-query)
+  - [5.1 Matching with `@@`](#51-matching-with-)
+- [6. Turning user input into a `tsquery`](#6-turning-user-input-into-a-tsquery)
+- [7. Ranking](#7-ranking)
+  - [7.1 Combining text rank with business signals](#71-combining-text-rank-with-business-signals)
+  - [7.2 What ranking costs](#72-what-ranking-costs)
+- [8. Highlighting with `ts_headline`](#8-highlighting-with-ts_headline)
+  - [8.1 Its cost: only run it on the rows you return](#81-its-cost-only-run-it-on-the-rows-you-return)
+- [9. Storing the search document](#9-storing-the-search-document)
+  - [9.1 Option 1: a stored generated column (Bazaar's choice)](#91-option-1-a-stored-generated-column-bazaars-choice)
+  - [9.2 Option 2: an expression index](#92-option-2-an-expression-index)
+  - [9.3 Option 3: a trigger-maintained column](#93-option-3-a-trigger-maintained-column)
+  - [9.4 Indexes for `tsvector`: GIN and GiST](#94-indexes-for-tsvector-gin-and-gist)
+  - [9.5 GIN's pending list (`fastupdate`)](#95-gins-pending-list-fastupdate)
+- [10. Multilingual search](#10-multilingual-search)
+- [11. Fuzzy matching with `pg_trgm`](#11-fuzzy-matching-with-pg_trgm)
+  - [11.1 Trigrams and similarity](#111-trigrams-and-similarity)
+  - [11.2 Operators and thresholds](#112-operators-and-thresholds)
+  - [11.3 Trigram indexes: GIN and GiST](#113-trigram-indexes-gin-and-gist)
+  - [11.4 Speeding up `LIKE`, `ILIKE` and regular expressions](#114-speeding-up-like-ilike-and-regular-expressions)
+  - [11.5 "Did you mean?"](#115-did-you-mean)
+- [12. `unaccent`, and the immutable wrapper](#12-unaccent-and-the-immutable-wrapper)
+- [13. Autocomplete](#13-autocomplete)
+  - [13.1 Prefix `tsquery`](#131-prefix-tsquery)
+  - [13.2 Trigram `ILIKE`](#132-trigram-ilike)
+  - [13.3 B-tree prefix on titles](#133-b-tree-prefix-on-titles)
+  - [13.4 Which one?](#134-which-one)
+- [14. When to reach for a dedicated search engine](#14-when-to-reach-for-a-dedicated-search-engine)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Why `LIKE` is not search
 

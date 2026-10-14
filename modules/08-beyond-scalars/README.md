@@ -1,5 +1,10 @@
 # Module 08: Beyond Scalars
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 07 Data Modeling](../07-data-modeling/README.md) · [Course home](../../README.md) · [09 Views, Functions and Triggers →](../09-views-functions-triggers/README.md)
+<!-- nav:end -->
+
 Bazaar's catalog has outgrown its columns. A laptop has RAM, a CPU and a screen size. A book has an author, a page count and an ISBN. A T-shirt comes in five sizes and a colour. Adding a column for every property of every kind of product would give `products` hundreds of mostly-NULL columns, and every new category would need a migration. Sellers also want free-form tags ("bestseller", "gaming"), marketing wants time-boxed promotions that must never overlap, and the status columns from module 02 are still `text` with a `CHECK`. PostgreSQL has a richer type system than "number, string, date" for exactly these problems. In this module you learn the types that hold *structure*, such as JSON documents, arrays, enums, domains, composite values and ranges. You also learn when each one is the right tool and when it quietly makes things worse.
 
 **What you'll learn**
@@ -28,6 +33,67 @@ When you start the [project milestone](project.md), reset to `08` and build the 
 You need the SQL from modules 03–06 (joins, `LATERAL`, `GROUP BY`, `array_agg`, CTEs) and the modelling vocabulary of [module 07](../07-data-modeling/): normal forms, junction tables, and why we normally prefer one fact per column.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Why go beyond scalar columns?](#1-why-go-beyond-scalar-columns)
+- [2. `json` versus `jsonb`](#2-json-versus-jsonb)
+- [3. Building JSON from rows](#3-building-json-from-rows)
+- [4. Reading JSON: the arrow operators, containment and existence](#4-reading-json-the-arrow-operators-containment-and-existence)
+  - [4.1 `->`, `->>`, `#>`, `#>>`](#41------)
+  - [4.2 Comparing values: the cast trap](#42-comparing-values-the-cast-trap)
+  - [4.3 Containment: `@>` and `<@`](#43-containment--and-)
+  - [4.4 Existence: `?`, `?|`, `?&`](#44-existence---)
+  - [4.5 Subscripting (PostgreSQL 14+)](#45-subscripting-postgresql-14)
+- [5. Changing documents](#5-changing-documents)
+  - [5.1 Merge and delete operators](#51-merge-and-delete-operators)
+  - [5.2 `jsonb_set`, `jsonb_set_lax` and `jsonb_insert`](#52-jsonb_set-jsonb_set_lax-and-jsonb_insert)
+  - [5.3 Subscripts in `UPDATE`](#53-subscripts-in-update)
+- [6. From JSON back to rows](#6-from-json-back-to-rows)
+- [7. SQL/JSON path expressions](#7-sqljson-path-expressions)
+  - [7.1 Syntax in five minutes](#71-syntax-in-five-minutes)
+  - [7.2 Filters: the reason jsonpath exists](#72-filters-the-reason-jsonpath-exists)
+  - [7.3 Lax and strict mode](#73-lax-and-strict-mode)
+- [8. The SQL-standard JSON functions (PostgreSQL 16 and 17)](#8-the-sql-standard-json-functions-postgresql-16-and-17)
+  - [8.1 `JSON_VALUE`, `JSON_QUERY`, `JSON_EXISTS`](#81-json_value-json_query-json_exists)
+  - [8.2 `JSON_TABLE`: a document as a table](#82-json_table-a-document-as-a-table)
+- [9. Validating JSONB with constraints](#9-validating-jsonb-with-constraints)
+- [10. Indexing JSONB: a preview](#10-indexing-jsonb-a-preview)
+- [11. When JSONB is right, and when it is wrong](#11-when-jsonb-is-right-and-when-it-is-wrong)
+  - [11.1 The problem it solves: EAV, revisited](#111-the-problem-it-solves-eav-revisited)
+  - [11.2 Where JSONB goes wrong](#112-where-jsonb-goes-wrong)
+  - [11.3 A rule of thumb](#113-a-rule-of-thumb)
+- [12. Arrays](#12-arrays)
+  - [12.1 Writing arrays](#121-writing-arrays)
+  - [12.2 Indexing, slices and length](#122-indexing-slices-and-length)
+  - [12.3 Searching arrays: `ANY`, `ALL`, `@>`, `<@`, `&&`](#123-searching-arrays-any-all---)
+  - [12.4 From arrays to rows and back](#124-from-arrays-to-rows-and-back)
+  - [12.5 Multi-dimensional arrays: mostly avoid them](#125-multi-dimensional-arrays-mostly-avoid-them)
+  - [12.6 Arrays or a junction table?](#126-arrays-or-a-junction-table)
+- [13. Enums](#13-enums)
+  - [13.1 How enums behave](#131-how-enums-behave)
+  - [13.2 Changing an enum: easy to add, hard to remove](#132-changing-an-enum-easy-to-add-hard-to-remove)
+  - [13.3 Enum, `CHECK` or lookup table?](#133-enum-check-or-lookup-table)
+- [14. Domains](#14-domains)
+  - [14.1 How domain constraints are enforced](#141-how-domain-constraints-are-enforced)
+  - [14.2 Domain or `CHECK` on the column?](#142-domain-or-check-on-the-column)
+- [15. Composite types](#15-composite-types)
+- [16. Range types and multiranges](#16-range-types-and-multiranges)
+  - [16.1 Built-in range types and bounds](#161-built-in-range-types-and-bounds)
+  - [16.2 Range operators](#162-range-operators)
+  - [16.3 Multiranges (PostgreSQL 14+)](#163-multiranges-postgresql-14)
+  - [16.4 Generating rows from a range](#164-generating-rows-from-a-range)
+- [17. Exclusion constraints](#17-exclusion-constraints)
+  - [17.1 How it works, and why it needs `btree_gist`](#171-how-it-works-and-why-it-needs-btree_gist)
+- [18. Putting it together: the v3 migration](#18-putting-it-together-the-v3-migration)
+  - [18.1 Converting `text` + `CHECK` columns to enums](#181-converting-text--check-columns-to-enums)
+  - [18.2 The domain and the case-insensitive e-mail index](#182-the-domain-and-the-case-insensitive-e-mail-index)
+  - [18.3 Attributes, tags and promotions](#183-attributes-tags-and-promotions)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Why go beyond scalar columns?
 

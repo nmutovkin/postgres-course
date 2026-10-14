@@ -1,5 +1,10 @@
 # Module 17: Configuration, Maintenance and Monitoring
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 16 Internals Deep Dive](../16-internals/README.md) · [Course home](../../README.md) · [18 Backup and Recovery →](../18-backup-recovery/README.md)
+<!-- nav:end -->
+
 It is the Monday after Black Friday. Bazaar's checkout is slow, the on-call engineer sees 400 connections on the database, a migration that "only adds a default" has been waiting for ten minutes, and the `jobs` table that holds the e-mail queue is ten times its usual size. Each of these is an everyday operational problem with a known diagnosis and a known fix, and each fix depends on the internals from Module 16. This module is about running PostgreSQL rather than querying it: where configuration lives and how to change it safely, how to size memory and connections, how to tune checkpoints and autovacuum, how to measure and remove bloat, how to see what the server is doing right now (and what it was doing at 3 a.m.), how to stop a runaway query, and how to put a connection pooler in front of it all.
 
 **What you'll learn**
@@ -34,6 +39,68 @@ CREATE EXTENSION IF NOT EXISTS pg_buffercache;
 Many commands here change server-wide settings. On the course container that's fine: `./project/bin/reset.sh` doesn't reset them, but section 1 shows how to undo anything with `ALTER SYSTEM RESET`. Never experiment like this on a shared server.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Where settings come from](#1-where-settings-come-from)
+  - [1.1 The files](#11-the-files)
+  - [1.2 pg_settings and contexts](#12-pg_settings-and-contexts)
+  - [1.3 ALTER SYSTEM](#13-alter-system)
+  - [1.4 Restart vs reload](#14-restart-vs-reload)
+  - [1.5 Per-database, per-role, per-session, per-transaction](#15-per-database-per-role-per-session-per-transaction)
+- [2. Memory](#2-memory)
+  - [2.1 shared_buffers](#21-shared_buffers)
+  - [2.2 work_mem and the multiplication hazard](#22-work_mem-and-the-multiplication-hazard)
+  - [2.3 maintenance_work_mem and autovacuum_work_mem](#23-maintenance_work_mem-and-autovacuum_work_mem)
+  - [2.4 effective_cache_size](#24-effective_cache_size)
+  - [2.5 A worked sizing example](#25-a-worked-sizing-example)
+- [3. Connections](#3-connections)
+- [4. Checkpoints and WAL](#4-checkpoints-and-wal)
+  - [4.1 The settings](#41-the-settings)
+  - [4.2 Measuring](#42-measuring)
+  - [4.3 Other WAL settings worth knowing](#43-other-wal-settings-worth-knowing)
+- [5. Autovacuum](#5-autovacuum)
+  - [5.1 How autovacuum decides](#51-how-autovacuum-decides)
+  - [5.2 Throttling: the cost-based delay](#52-throttling-the-cost-based-delay)
+  - [5.3 Per-table settings](#53-per-table-settings)
+  - [5.4 Watching autovacuum work](#54-watching-autovacuum-work)
+  - [5.5 When autovacuum can't keep up](#55-when-autovacuum-cant-keep-up)
+- [6. Bloat](#6-bloat)
+  - [6.1 Making some](#61-making-some)
+  - [6.2 Measuring exactly: pgstattuple](#62-measuring-exactly-pgstattuple)
+  - [6.3 Estimating cheaply](#63-estimating-cheaply)
+  - [6.4 Fixing it](#64-fixing-it)
+- [7. Monitoring what is happening now](#7-monitoring-what-is-happening-now)
+  - [7.1 pg_stat_activity](#71-pg_stat_activity)
+  - [7.2 Wait events](#72-wait-events)
+  - [7.3 Locks and blocking chains](#73-locks-and-blocking-chains)
+  - [7.4 Long transactions and the xmin horizon](#74-long-transactions-and-the-xmin-horizon)
+- [8. Monitoring over time: the statistics views](#8-monitoring-over-time-the-statistics-views)
+  - [8.1 Tables: pg_stat_user_tables](#81-tables-pg_stat_user_tables)
+  - [8.2 Indexes: unused and duplicate indexes](#82-indexes-unused-and-duplicate-indexes)
+  - [8.3 Databases: pg_stat_database](#83-databases-pg_stat_database)
+  - [8.4 Background writer, checkpointer, and pg_stat_io](#84-background-writer-checkpointer-and-pg_stat_io)
+  - [8.5 pg_stat_statements, operationally](#85-pg_stat_statements-operationally)
+- [9. Logging](#9-logging)
+  - [9.1 Where logs go](#91-where-logs-go)
+  - [9.2 What to log](#92-what-to-log)
+  - [9.3 auto_explain](#93-auto_explain)
+- [10. Stopping runaway work](#10-stopping-runaway-work)
+  - [10.1 Cancel or terminate](#101-cancel-or-terminate)
+  - [10.2 Timeouts that do it for you](#102-timeouts-that-do-it-for-you)
+- [11. Connection pooling with PgBouncer](#11-connection-pooling-with-pgbouncer)
+  - [11.1 Why a pooler](#111-why-a-pooler)
+  - [11.2 Pool modes](#112-pool-modes)
+  - [11.3 The lab](#113-the-lab)
+  - [11.4 What pooling buys: pgbench](#114-what-pooling-buys-pgbench)
+  - [11.5 What breaks: pitfalls.sh](#115-what-breaks-pitfallssh)
+  - [11.6 Running PgBouncer in production](#116-running-pgbouncer-in-production)
+- [12. Metrics stacks](#12-metrics-stacks)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Where settings come from
 

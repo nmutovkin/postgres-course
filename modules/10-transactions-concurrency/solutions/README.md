@@ -1,5 +1,10 @@
 # Module 10 solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 09 Views, Functions and Triggers](../../09-views-functions-triggers/README.md) · [Course home](../../../README.md) · [11 Indexes →](../../11-indexes/README.md)
+<!-- nav:end -->
+
 All solutions were run on PostgreSQL 17 against `./project/bin/reset.sh 11` (state 10 plus the module 10 reference). Two-session solutions were run with real concurrent psql sessions ([`examples/sessions.py`](../examples/sessions.py)); transaction ids and process ids will differ on your machine.
 
 Files in this directory:
@@ -13,6 +18,26 @@ Files in this directory:
 | [`exercises/`](exercises/) | Runnable solutions for exercises 4, 5, 6, 10, 11, 12, 13 |
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Milestone notes](#milestone-notes)
+- [Exercise 1: Savepoint bookkeeping](#exercise-1-savepoint-bookkeeping)
+- [Exercise 2: Row-version forensics](#exercise-2-row-version-forensics)
+- [Exercise 3: When is the snapshot taken?](#exercise-3-when-is-the-snapshot-taken)
+- [Exercise 4: Fix a lost-update bug](#exercise-4-fix-a-lost-update-bug)
+- [Exercise 5: Optimistic locking for product edits](#exercise-5-optimistic-locking-for-product-edits)
+- [Exercise 6: A deadlock-free stock transfer](#exercise-6-a-deadlock-free-stock-transfer)
+- [Exercise 7: Diagnose a blocking chain](#exercise-7-diagnose-a-blocking-chain)
+- [Exercise 8: Write skew on the support rota](#exercise-8-write-skew-on-the-support-rota)
+- [Exercise 9: Predict the outcome](#exercise-9-predict-the-outcome)
+- [Exercise 10: Ship orders with `SKIP LOCKED`](#exercise-10-ship-orders-with-skip-locked)
+- [Exercise 11: A singleton report refresh](#exercise-11-a-singleton-report-refresh)
+- [Exercise 12: A migration that cannot take the site down](#exercise-12-a-migration-that-cannot-take-the-site-down)
+- [Exercise 13: Idempotent checkout](#exercise-13-idempotent-checkout)
+
+<!-- toc:end -->
 
 ## Milestone notes
 

@@ -1,5 +1,10 @@
 # Module 10: Transactions and Concurrency
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 09 Views, Functions and Triggers](../09-views-functions-triggers/README.md) · [Course home](../../README.md) · [11 Indexes →](../11-indexes/README.md)
+<!-- nav:end -->
+
 It is 9:00 on Black Friday. Product 15, the *Titan G15 Gaming Laptop*, has four units in stock, and four hundred shoppers press **Buy** within the same second. Each checkout has to check the stock, reserve it, create one order per seller and add the order items. If two checkouts both read "4 available" and both reserve 3, Bazaar has sold six laptops it does not have. If a checkout crashes halfway, a shopper has an order with no reserved stock, or reserved stock with no order. If checkouts lock rows in different orders, they deadlock and both fail. Up to now every example in this course ran alone. In this module many sessions run at the same time, and you learn the tools PostgreSQL gives you to keep the data correct anyway: transactions, MVCC snapshots, isolation levels and locks.
 
 By the end you will have built `place_order()`, Bazaar's checkout. It is one database call that reserves stock without ever overselling, cannot deadlock against itself, and fails with a clean, catchable error code. You will also build a job queue that many workers can drain at once without processing a job twice. You will prove both with a concurrency stress test.
@@ -43,6 +48,32 @@ CREATE SCHEMA IF NOT EXISTS lab;
 ```
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Why transactions?](#1-why-transactions)
+- [2. Controlling transactions](#2-controlling-transactions)
+- [3. Errors inside a transaction](#3-errors-inside-a-transaction)
+- [4. MVCC: how PostgreSQL lets everybody work at once](#4-mvcc-how-postgresql-lets-everybody-work-at-once)
+- [5. Isolation levels](#5-isolation-levels)
+- [6. READ COMMITTED](#6-read-committed)
+- [7. REPEATABLE READ](#7-repeatable-read)
+- [8. SERIALIZABLE](#8-serializable)
+- [9. The anomalies table](#9-the-anomalies-table)
+- [10. Row-level locks](#10-row-level-locks)
+- [11. Table-level locks](#11-table-level-locks)
+- [12. Seeing locks and blocking](#12-seeing-locks-and-blocking)
+- [13. Deadlocks](#13-deadlocks)
+- [14. Advisory locks](#14-advisory-locks)
+- [15. Concurrency patterns](#15-concurrency-patterns)
+- [16. Worked example: `place_order()`](#16-worked-example-place_order)
+- [17. A job queue with `SKIP LOCKED`](#17-a-job-queue-with-skip-locked)
+- [18. Long transactions and timeouts](#18-long-transactions-and-timeouts)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Why transactions?
 

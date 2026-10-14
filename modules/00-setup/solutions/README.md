@@ -1,8 +1,25 @@
 # Module 00: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [Course home](../../../README.md) · [01 psql and the Postgres Landscape →](../../01-psql/README.md)
+<!-- nav:end -->
+
 All outputs below come from a PostgreSQL 17 container started from the course's `docker-compose.yml`. Some captures were taken from a test container published on host port **5433** (because 5432 was in use on the test machine), which is why a few lines say 5433. On your machine they say 5432 unless you set `PGPORT_HOST`.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Three version numbers](#exercise-1--three-version-numbers)
+- [Exercise 2 ★: Same server, two doors](#exercise-2--same-server-two-doors)
+- [Exercise 3 ★: `down` versus `down -v`](#exercise-3--down-versus-down--v)
+- [Exercise 4 ★★: Prove the compose file is in effect](#exercise-4--prove-the-compose-file-is-in-effect)
+- [Exercise 5 ★★: Password-free native psql, done right](#exercise-5--password-free-native-psql-done-right)
+- [Exercise 6 ★★: Find yourself in the server](#exercise-6--find-yourself-in-the-server)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Three version numbers
 

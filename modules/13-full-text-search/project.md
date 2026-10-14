@@ -1,11 +1,27 @@
 # Module 13 project: Bazaar product search
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 12 Query Planning and Performance](../12-query-performance/README.md) · [Course home](../../README.md) · [14 Partitioning →](../14-partitioning/README.md)
+<!-- nav:end -->
+
 Bazaar's storefront search is `title ILIKE '%...%'`. It misses plurals, can't rank, ignores ratings and sales, shows nothing for a typo, and reads the whole products table on every keystroke. In this milestone you replace it with two database functions that the web application (and, in [Module 28](../28-capstone/), the FastAPI service) calls directly:
 
 - `search_products(q, category_id, max_results)` for the results page;
 - `autocomplete(prefix, max_results)` for the suggestions under the search box.
 
 **Starting state:** `./project/bin/reset.sh 13`.
+
+<!-- toc:start -->
+**Contents**
+
+- [Part 1: the search document](#part-1-the-search-document)
+- [Part 2: `search_products`](#part-2-search_products)
+- [Part 3: `autocomplete`](#part-3-autocomplete)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Part 1: the search document
 

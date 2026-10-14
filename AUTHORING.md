@@ -2,6 +2,20 @@
 
 These are the conventions every module follows, so the course reads as one book. They apply both to people extending the course and to the agents that wrote it.
 
+<!-- toc:start -->
+**Contents**
+
+- [Module layout](#module-layout)
+- [Theory (`README.md`)](#theory-readmemd)
+- [Exercises (`exercises.md`)](#exercises-exercisesmd)
+- [Solutions (`solutions/README.md`)](#solutions-solutionsreadmemd)
+- [Project milestone (`project.md`)](#project-milestone-projectmd)
+- [SQL style](#sql-style)
+- [Python style (Part IV)](#python-style-part-iv)
+- [Navigation](#navigation)
+
+<!-- toc:end -->
+
 ## Module layout
 
 ```
@@ -66,3 +80,12 @@ Depth: heavy modules (indexes, performance, internals, concurrency, replication,
 
 - Python 3.12+, type hints, and `ruff` formatting conventions.
 - psycopg 3, asyncpg, SQLAlchemy 2.0 (2.0-style APIs only), and Alembic. All code in `project/python/` must run.
+
+## Navigation
+
+The nav bar at the top of each module file and the **Contents** list in every Markdown file are generated. Don't edit the blocks between `` or `` by hand. After adding or renaming headings or modules, run:
+
+```bash
+python3 tools/gen_nav.py           # refresh everything
+python3 tools/gen_nav.py --check   # CI-style check: exit 1 if anything is stale
+```

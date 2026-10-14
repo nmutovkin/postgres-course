@@ -1,10 +1,28 @@
 # Module 05: Project milestone — the monthly seller statement
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 04 Joins and Subqueries](../04-joins-subqueries/README.md) · [Course home](../../README.md) · [06 Advanced SQL →](../06-advanced-sql/README.md)
+<!-- nav:end -->
+
 **Goal.** On the first of every month, Bazaar pays its shops. Each shop owner gets a statement for the previous months: how many orders they received, how many items they shipped, how much those orders were worth, how much was refunded, and the net amount Bazaar owes them. The finance team runs the same statement for all shops at once, with a subtotal per shop and a grand total at the bottom, and reconciles it against the bank. A statement that double counts an order, or silently leaves out a month with no sales, gets noticed by exactly the people you don't want to notice it.
 
 In this milestone you write that statement as a psql script, in two versions: a plain one (one row per shop and month) and a `ROLLUP` one (with subtotals and a grand total).
 
 Put your work in `workspace/05/seller_statement.sql`.
+
+<!-- toc:start -->
+**Contents**
+
+- [Requirements](#requirements)
+  - [Definitions](#definitions)
+  - [Part 1: the statement](#part-1-the-statement)
+  - [Part 2: the statement with subtotals](#part-2-the-statement-with-subtotals)
+  - [Parameters](#parameters)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Requirements
 

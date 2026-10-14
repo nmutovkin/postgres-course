@@ -1,8 +1,24 @@
 # Module 04: Project milestone — the admin's saved questions
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 03 Reading and Writing Data](../03-crud/README.md) · [Course home](../../README.md) · [05 Aggregation and Grouping →](../05-aggregation/README.md)
+<!-- nav:end -->
+
 **Goal.** The Bazaar operations team asks the same questions every week: "what exactly was in this order?", "who stopped buying?", "what's about to run out?", "what happened in the last seven days?". Right now, each time somebody asks, an engineer writes a query from scratch, slightly differently, and sometimes wrongly. In this milestone you write those questions down once, as a file of saved, documented, tested queries that anyone on the team can run. Each query comes with the question it answers in plain words, and its **expected answer on the small dataset**, so whoever changes the query later can tell immediately whether it still works.
 
 Put your work in `workspace/04/queries.sql`. Like module 01's report, it's a psql script: it should run top to bottom with `ON_ERROR_STOP`, print a header line before each query (`\echo`), and change no data.
+
+<!-- toc:start -->
+**Contents**
+
+- [Requirements](#requirements)
+  - [Format](#format)
+  - [The questions](#the-questions)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Requirements
 

@@ -1,5 +1,10 @@
 # Module 11: Indexes
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 10 Transactions and Concurrency](../10-transactions-concurrency/README.md) · [Course home](../../README.md) · [12 Query Planning and Performance →](../12-query-performance/README.md)
+<!-- nav:end -->
+
 Until now Bazaar has lived on a few dozen hand-written rows, and every query was instant because there was nothing to search. That changes in this module. You load the **large dataset**: 100,000 users, 200,000 products, half a million orders and 1.27 million order lines. The storefront immediately feels it. "My orders" takes 40 ms instead of 0.1 ms, a category page reads 80 MB of product data to show 24 items, and deleting a single draft product takes 70 ms because PostgreSQL scans every order line to make sure nobody bought it. None of these queries is wrong. They are missing **indexes**: the auxiliary data structures that let PostgreSQL jump to the rows it needs instead of reading everything.
 
 Indexes are the single most effective performance tool you have, and also the most misused one. Each index makes some reads faster and *every* write slower. It takes disk space and memory, and it only helps queries whose shape it matches. This module teaches you how indexes really work, so that you can design the right ones for a workload and prove that they help.
@@ -53,6 +58,35 @@ CREATE SCHEMA IF NOT EXISTS lab;                -- scratch tables for demos that
 **About the numbers.** Every plan and timing in this module is real output from PostgreSQL 17.11 in Docker on a 4-vCPU machine with 15 GB of RAM and the **default configuration** (`shared_buffers = 128MB`, `work_mem = 4MB`, `random_page_cost = 4`). Your timings will differ, and they differ between runs on the same machine too: the first run of a query reads from disk (`read=` in the plans), later runs find the pages in memory (`hit=`). Compare *orders of magnitude* and *buffer counts*, which are stable, rather than exact milliseconds. Many examples turn off parallel query with `SET max_parallel_workers_per_gather = 0;` so that plans are simpler to read. Module 12 explains parallel plans.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. What an index is, and what it costs](#1-what-an-index-is-and-what-it-costs)
+- [2. Three ways to read a table](#2-three-ways-to-read-a-table)
+- [3. Inside a B-tree](#3-inside-a-b-tree)
+- [4. What a B-tree can answer](#4-what-a-b-tree-can-answer)
+- [5. Multicolumn indexes and column order](#5-multicolumn-indexes-and-column-order)
+- [6. Indexes that sort](#6-indexes-that-sort)
+- [7. Index-only scans and covering indexes](#7-index-only-scans-and-covering-indexes)
+- [8. Partial indexes](#8-partial-indexes)
+- [9. Expression indexes](#9-expression-indexes)
+- [10. Unique indexes and unique constraints](#10-unique-indexes-and-unique-constraints)
+- [11. Indexing foreign keys](#11-indexing-foreign-keys)
+- [12. GIN: indexes for values that contain values](#12-gin-indexes-for-values-that-contain-values)
+- [13. GiST and SP-GiST](#13-gist-and-sp-gist)
+- [14. BRIN: tiny indexes for naturally ordered data](#14-brin-tiny-indexes-for-naturally-ordered-data)
+- [15. Hash indexes](#15-hash-indexes)
+- [16. Text: collations and `LIKE 'prefix%'`](#16-text-collations-and-like-prefix)
+- [17. Building indexes on a live system](#17-building-indexes-on-a-live-system)
+- [18. Finding missing and unused indexes](#18-finding-missing-and-unused-indexes)
+- [19. Index bloat](#19-index-bloat)
+- [20. When the planner ignores your index](#20-when-the-planner-ignores-your-index)
+- [21. The Bazaar index set](#21-the-bazaar-index-set)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. What an index is, and what it costs
 

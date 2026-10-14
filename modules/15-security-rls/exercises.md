@@ -1,5 +1,10 @@
 # Module 15: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 14 Partitioning](../14-partitioning/README.md) · [Course home](../../README.md) · [16 Internals Deep Dive →](../16-internals/README.md)
+<!-- nav:end -->
+
 **Starting state.** Unless an exercise says otherwise, use the small dataset with the reference roles and RLS applied:
 
 ```bash
@@ -23,6 +28,27 @@ Exercises 11 and 12 use the TLS lab in [`lab/tls/`](lab/tls/) (`./make-certs.sh`
 Solutions: [solutions/README.md](solutions/README.md). Runnable scripts are in [solutions/](solutions/).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: A role report from the catalogs](#exercise-1--a-role-report-from-the-catalogs)
+- [Exercise 2 ★: What can each login role do?](#exercise-2--what-can-each-login-role-do)
+- [Exercise 3 ★: The append-only audit log](#exercise-3--the-append-only-audit-log)
+- [Exercise 4 ★★: A read-only reporting role, two ways](#exercise-4--a-read-only-reporting-role-two-ways)
+- [Exercise 5 ★★: Hide users.email from the read-only bundle](#exercise-5--hide-usersemail-from-the-read-only-bundle)
+- [Exercise 6 ★★: Sellers cannot modify archived products](#exercise-6--sellers-cannot-modify-archived-products)
+- [Exercise 7 ★★: Find and fix mis-owned objects](#exercise-7--find-and-fix-mis-owned-objects)
+- [Exercise 8 ★★★: Design a "support" role](#exercise-8--design-a-support-role)
+- [Exercise 9 ★★★: Reviews, per seller](#exercise-9--reviews-per-seller)
+- [Exercise 10 ★★★: Measure RLS overhead (large data)](#exercise-10--measure-rls-overhead-large-data)
+- [Exercise 11 ★★: sslmode in the lab](#exercise-11--sslmode-in-the-lab)
+- [Exercise 12 ★★★: Harden pg_hba.conf and migrate off md5](#exercise-12--harden-pg_hbaconf-and-migrate-off-md5)
+- [Exercise 13 ★★★: Exploit, then fix, a search_path hole](#exercise-13--exploit-then-fix-a-search_path-hole)
+- [Exercise 14 ★★: Close the sequence side channel](#exercise-14--close-the-sequence-side-channel)
+- [Exercise 15 ★★★: Prove the FK existence leak and seal it](#exercise-15--prove-the-fk-existence-leak-and-seal-it)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: A role report from the catalogs
 

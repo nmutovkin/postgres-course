@@ -1,5 +1,28 @@
 # Module 21 milestone: Bazaar on Citus
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 20 High Availability](../20-high-availability/README.md) · [Course home](../../README.md) · [22 psycopg 3 →](../22-psycopg/README.md)
+<!-- nav:end -->
+
+<!-- toc:start -->
+**Contents**
+
+- [Goal](#goal)
+- [Starting point](#starting-point)
+- [Requirements](#requirements)
+  - [1. A role for every table](#1-a-role-for-every-table)
+  - [2. Explain the shard-prep migration](#2-explain-the-shard-prep-migration)
+  - [3. Distribute](#3-distribute)
+  - [4. Adapt what breaks](#4-adapt-what-breaks)
+  - [5. Verify](#5-verify)
+  - [6. Measure (recommended: large dataset)](#6-measure-recommended-large-dataset)
+  - [7. Scale out](#7-scale-out)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
+
 ## Goal
 
 Bazaar's growth plan says one primary won't be enough in two years. Your job is to prove that the marketplace can run **sharded by seller** on a Citus cluster: every seller's catalogue, stock, orders and payments on one node, checkout and the seller dashboard as single-node operations, and global reports still correct. You also have to write down *why* each table ended up where it did, so the next engineer can extend the schema without breaking co-location.

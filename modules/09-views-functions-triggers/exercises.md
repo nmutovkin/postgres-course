@@ -1,5 +1,10 @@
 # Module 09: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 08 Beyond Scalars](../08-beyond-scalars/README.md) · [Course home](../../README.md) · [10 Transactions and Concurrency →](../10-transactions-concurrency/README.md)
+<!-- nav:end -->
+
 **Starting state.** The exercises build on this module's milestone. Start from the reference state that includes it:
 
 ```bash
@@ -12,6 +17,24 @@ That's the state at the end of this module: `set_updated_at`, `audit_log` with `
 "Today" in the small dataset is 2025-06-30, and all timestamps are UTC. Solutions: [solutions/README.md](solutions/README.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: `effective_price()`](#exercise-1--effective_price)
+- [Exercise 2 ★: A view on a view](#exercise-2--a-view-on-a-view)
+- [Exercise 3 ★: No repricing archived products](#exercise-3--no-repricing-archived-products)
+- [Exercise 4 ★★: Price history that keeps itself](#exercise-4--price-history-that-keeps-itself)
+- [Exercise 5 ★★: Breadcrumbs](#exercise-5--breadcrumbs)
+- [Exercise 6 ★★: Row counts of every table](#exercise-6--row-counts-of-every-table)
+- [Exercise 7 ★★: A ratings materialized view](#exercise-7--a-ratings-materialized-view)
+- [Exercise 8 ★★: A forgiving price import](#exercise-8--a-forgiving-price-import)
+- [Exercise 9 ★★: What happened to this column?](#exercise-9--what-happened-to-this-column)
+- [Exercise 10 ★★★: Archive cancelled orders in batches](#exercise-10--archive-cancelled-orders-in-batches)
+- [Exercise 11 ★★★: Order status drives inventory](#exercise-11--order-status-drives-inventory)
+- [Exercise 12 ★★★: Row-level versus statement-level](#exercise-12--row-level-versus-statement-level)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: `effective_price()`
 

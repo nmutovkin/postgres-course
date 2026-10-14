@@ -2,6 +2,18 @@
 
 Everything here was verified on PostgreSQL 17.11 (`course-pg`). `./project/bin/reset.sh NN` succeeds for every NN; tested: 03, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 21, 22 and `all`. Sanity checks: `docker exec -i course-pg psql -U postgres -d bazaar < project/db/tools/check.sql`. All checks show 0 at states 07, 10 and `all`. The only exception is the deliberate "(info)" row: 1 on small data, 6,060 on large data.
 
+<!-- toc:start -->
+**Contents**
+
+- [Files](#files)
+- [Small dataset (states 03–11)](#small-dataset-states-0311)
+- [Large dataset (state 12 and later; module 11 starts from the small data)](#large-dataset-state-12-and-later-module-11-starts-from-the-small-data)
+- [Things module authors must know](#things-module-authors-must-know)
+- [Spec deviations and issues to resolve](#spec-deviations-and-issues-to-resolve)
+- [Pointers added later](#pointers-added-later)
+
+<!-- toc:end -->
+
 ## Files
 
 | File | Module | Content |

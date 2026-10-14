@@ -1,5 +1,10 @@
 # Module 13: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 12 Query Planning and Performance](../12-query-performance/README.md) · [Course home](../../README.md) · [14 Partitioning →](../14-partitioning/README.md)
+<!-- nav:end -->
+
 **Starting state.** Unless an exercise says otherwise:
 
 ```bash
@@ -18,6 +23,24 @@ docker exec -i course-pg psql -U postgres -d bazaar < modules/13-full-text-searc
 Solutions: [solutions/README.md](solutions/README.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: The stop words in our descriptions](#exercise-1--the-stop-words-in-our-descriptions)
+- [Exercise 2 ★: Title or elsewhere?](#exercise-2--title-or-elsewhere)
+- [Exercise 3 ★: Say it in websearch syntax](#exercise-3--say-it-in-websearch-syntax)
+- [Exercise 4 ★★: Phrases versus bags of words](#exercise-4--phrases-versus-bags-of-words)
+- [Exercise 5 ★★: Where do the hits come from?](#exercise-5--where-do-the-hits-come-from)
+- [Exercise 6 ★★: When the two ranking functions disagree](#exercise-6--when-the-two-ranking-functions-disagree)
+- [Exercise 7 ★★: Synonyms the shoppers use](#exercise-7--synonyms-the-shoppers-use)
+- [Exercise 8 ★★: Accent-insensitive full-text search](#exercise-8--accent-insensitive-full-text-search)
+- [Exercise 9 ★★: The zero-results report](#exercise-9--the-zero-results-report)
+- [Exercise 10 ★★★: Did you mean?](#exercise-10--did-you-mean)
+- [Exercise 11 ★★★: Facets](#exercise-11--facets)
+- [Exercise 12 ★★★: A prefix query that can't break](#exercise-12--a-prefix-query-that-cant-break)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: The stop words in our descriptions
 

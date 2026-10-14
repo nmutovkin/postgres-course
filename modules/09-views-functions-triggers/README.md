@@ -1,5 +1,10 @@
 # Module 09: Views, Functions and Triggers
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 08 Beyond Scalars](../08-beyond-scalars/README.md) · [Course home](../../README.md) · [10 Transactions and Concurrency →](../10-transactions-concurrency/README.md)
+<!-- nav:end -->
+
 Bazaar's rules have been living in many places. The storefront query that lists "active products with stock" is copy-pasted into three services. `products.updated_at` is only correct when the developer remembered to set it. Nobody can answer "who changed the price of product 10, and when?". `orders.total` is supposed to equal the sum of the order's lines, but nothing enforces that. And the seller dashboard recomputes a year of sales on every page load. PostgreSQL can hold this logic next to the data: **views** name and share queries, **materialized views** cache expensive ones, **functions** and **procedures** package logic in SQL or PL/pgSQL, and **triggers** run that logic automatically whenever rows change. This module teaches all four, with the mechanics that decide whether they help or hurt: inlining, volatility, subtransactions, trigger ordering and recursion. It ends with an honest discussion of what belongs in the database and what belongs in the application.
 
 **What you'll learn**
@@ -25,6 +30,61 @@ This is the v3 schema from module 08. Sections 1–12 create small example funct
 You need the SQL of modules 03–06 (especially CTEs and `LATERAL`) and the types of module 08 (JSONB, arrays, enums).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Logic in the database: what's on offer](#1-logic-in-the-database-whats-on-offer)
+- [2. Views](#2-views)
+  - [2.1 A view is a stored query](#21-a-view-is-a-stored-query)
+  - [2.2 Dependencies: why you can't drop that column](#22-dependencies-why-you-cant-drop-that-column)
+  - [2.3 `CREATE OR REPLACE VIEW` and its rules](#23-create-or-replace-view-and-its-rules)
+  - [2.4 `security_barrier`: views as a security boundary](#24-security_barrier-views-as-a-security-boundary)
+- [3. Updatable views and `WITH CHECK OPTION`](#3-updatable-views-and-with-check-option)
+- [4. Materialized views](#4-materialized-views)
+  - [4.1 Refreshing](#41-refreshing)
+  - [4.2 Living with staleness](#42-living-with-staleness)
+- [5. Functions in SQL](#5-functions-in-sql)
+  - [5.1 Anatomy](#51-anatomy)
+  - [5.2 Functions that return rows](#52-functions-that-return-rows)
+  - [5.3 Inlining: why SQL functions can be free](#53-inlining-why-sql-functions-can-be-free)
+  - [5.4 String bodies versus `BEGIN ATOMIC`](#54-string-bodies-versus-begin-atomic)
+- [6. Volatility, `STRICT` and friends: promises to the planner](#6-volatility-strict-and-friends-promises-to-the-planner)
+- [7. PL/pgSQL](#7-plpgsql)
+  - [7.1 Block structure and variables](#71-block-structure-and-variables)
+  - [7.2 Conditionals](#72-conditionals)
+  - [7.3 Loops](#73-loops)
+  - [7.4 Returning sets: `RETURN QUERY` and `RETURN NEXT`](#74-returning-sets-return-query-and-return-next)
+  - [7.5 The `RETURNS TABLE` name trap](#75-the-returns-table-name-trap)
+- [8. Errors and exceptions](#8-errors-and-exceptions)
+  - [8.1 `RAISE`](#81-raise)
+  - [8.2 Catching errors: `EXCEPTION` blocks](#82-catching-errors-exception-blocks)
+- [9. Dynamic SQL](#9-dynamic-sql)
+- [10. `SECURITY DEFINER`: a preview](#10-security-definer-a-preview)
+- [11. Procedures and `DO` blocks](#11-procedures-and-do-blocks)
+  - [11.1 Procedures](#111-procedures)
+  - [11.2 Functions or procedures?](#112-functions-or-procedures)
+  - [11.3 `DO` blocks](#113-do-blocks)
+- [12. Triggers: the model](#12-triggers-the-model)
+  - [12.1 The dimensions of a trigger](#121-the-dimensions-of-a-trigger)
+  - [12.2 Inside a trigger function](#122-inside-a-trigger-function)
+  - [12.3 Return values](#123-return-values)
+  - [12.4 Firing order](#124-firing-order)
+- [13. Worked example: `set_updated_at`](#13-worked-example-set_updated_at)
+  - [13.1 A `WHEN` condition: alerts only on the crossing](#131-a-when-condition-alerts-only-on-the-crossing)
+  - [13.2 `INSTEAD OF` triggers: making a join view writable](#132-instead-of-triggers-making-a-join-view-writable)
+- [14. Worked example: a generic audit log](#14-worked-example-a-generic-audit-log)
+- [15. Worked example: `orders.total` with transition tables](#15-worked-example-orderstotal-with-transition-tables)
+- [16. Trigger pitfalls](#16-trigger-pitfalls)
+  - [16.1 Recursion](#161-recursion)
+  - [16.2 Hidden work and surprising semantics](#162-hidden-work-and-surprising-semantics)
+  - [16.3 Constraint triggers: checks at commit time](#163-constraint-triggers-checks-at-commit-time)
+  - [16.4 What triggers cost](#164-what-triggers-cost)
+- [17. Logic in the database or in the application?](#17-logic-in-the-database-or-in-the-application)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Logic in the database: what's on offer
 

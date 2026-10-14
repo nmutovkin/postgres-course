@@ -1,10 +1,27 @@
 # Module 00: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [Course home](../../README.md) · [01 psql and the Postgres Landscape →](../01-psql/README.md)
+<!-- nav:end -->
+
 These are small, hands-on checks that your environment works and that you understand what you just installed. Run them against the course container after `./project/bin/reset.sh 01`. Solutions are in [solutions/README.md](solutions/README.md).
 
 If you moved the server to another host port (`PGPORT_HOST`), use that port wherever these exercises say 5432.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Three version numbers](#exercise-1--three-version-numbers)
+- [Exercise 2 ★: Same server, two doors](#exercise-2--same-server-two-doors)
+- [Exercise 3 ★: `down` versus `down -v`](#exercise-3--down-versus-down--v)
+- [Exercise 4 ★★: Prove the compose file is in effect](#exercise-4--prove-the-compose-file-is-in-effect)
+- [Exercise 5 ★★: Password-free native psql, done right](#exercise-5--password-free-native-psql-done-right)
+- [Exercise 6 ★★: Find yourself in the server](#exercise-6--find-yourself-in-the-server)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Three version numbers
 

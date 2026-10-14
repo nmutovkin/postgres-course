@@ -1,5 +1,10 @@
 # Module 08: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 07 Data Modeling](../../07-data-modeling/README.md) · [Course home](../../../README.md) · [09 Views, Functions and Triggers →](../../09-views-functions-triggers/README.md)
+<!-- nav:end -->
+
 All solutions were run on PostgreSQL 17 against `./project/bin/reset.sh 09`, in the order below. The complete script is [`exercises.sql`](exercises.sql):
 
 ```bash
@@ -10,6 +15,25 @@ docker exec -i course-pg psql -X -U postgres -d bazaar < modules/08-beyond-scala
 Exercises 3, 7 and 12 change the schema, so run `./project/bin/reset.sh 09` again when you're done.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Laptops with at least 16 GB, three ways](#exercise-1--laptops-with-at-least-16-gb-three-ways)
+- [Exercise 2 ★: "You might also like"](#exercise-2--you-might-also-like)
+- [Exercise 3 ★: A new order status](#exercise-3--a-new-order-status)
+- [Exercise 4 ★★: What's actually in `attributes`?](#exercise-4--whats-actually-in-attributes)
+- [Exercise 5 ★★: Tags that travel together](#exercise-5--tags-that-travel-together)
+- [Exercise 6 ★★: Monitor spec sheet with `JSON_TABLE`](#exercise-6--monitor-spec-sheet-with-json_table)
+- [Exercise 7 ★★: A `country_code` domain](#exercise-7--a-country_code-domain)
+- [Exercise 8 ★★: Will this batch of promotions fit?](#exercise-8--will-this-batch-of-promotions-fit)
+- [Exercise 9 ★★: Promotion calendar for June 2025](#exercise-9--promotion-calendar-for-june-2025)
+- [Exercise 10 ★★: Sale prices at a given moment](#exercise-10--sale-prices-at-a-given-moment)
+- [Exercise 11 ★★★: Did customers get their discount?](#exercise-11--did-customers-get-their-discount)
+- [Exercise 12 ★★★: Taking a status back](#exercise-12--taking-a-status-back)
+- [Exercise 13 ★★★: Gaps between promotions](#exercise-13--gaps-between-promotions)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Laptops with at least 16 GB, three ways
 

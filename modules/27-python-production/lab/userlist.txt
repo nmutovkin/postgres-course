@@ -1,0 +1,3 @@
+"postgres" "postgres"
+"bazaar_app" "app"
+"bazaar_seller" "seller"

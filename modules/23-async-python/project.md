@@ -1,5 +1,10 @@
 # Module 23 project: the async layer and the job worker
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 22 psycopg 3](../22-psycopg/README.md) · [Course home](../../README.md) · [24 SQLAlchemy Core →](../24-sqlalchemy-core/README.md)
+<!-- nav:end -->
+
 Bazaar's storefront is going to be an async web service (Module 28), and its background work (order confirmations, receipts, search reindexing) needs a worker that reacts within milliseconds when a job is queued, without hammering the database when the queue is empty. In this milestone you add the async half of the `bazaar` package: async connections and pools for both drivers, an async twin of the Module 22 repository, NOTIFY triggers, and an async job worker you can start with `python -m bazaar.worker`.
 
 **Starting state:** `./project/bin/reset.sh 23` and your Module 22 package (or the reference one).

@@ -1,5 +1,10 @@
 # Module 10 milestone: a checkout that survives Black Friday
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 09 Views, Functions and Triggers](../09-views-functions-triggers/README.md) · [Course home](../../README.md) · [11 Indexes →](../11-indexes/README.md)
+<!-- nav:end -->
+
 Bazaar is about to run its first big sale. Until now an "order" was something we inserted by hand, one statement at a time, in a quiet database. From this milestone on, checkout is **one database call** that hundreds of shoppers make at the same time, and it must never oversell, never deadlock, and never leave half an order behind. Bazaar also needs a place to put background work (confirmation emails, seller webhooks, refreshing the sales report) that several worker processes can drain in parallel without doing any job twice.
 
 You build:
@@ -9,6 +14,22 @@ You build:
 3. **Extension: `cancel_order()`**, which gives reserved stock back when an order is cancelled. Nothing in the reference implementation does that yet.
 
 Then you prove that they work under concurrency with `pgbench`.
+
+<!-- toc:start -->
+**Contents**
+
+- [Getting started](#getting-started)
+- [Requirements](#requirements)
+  - [1. `place_order(p_user_id bigint, p_items jsonb, p_shipping_address_id bigint DEFAULT NULL) RETURNS SETOF bigint`](#1-place_orderp_user_id-bigint-p_items-jsonb-p_shipping_address_id-bigint-default-null-returns-setof-bigint)
+  - [2. The job queue](#2-the-job-queue)
+  - [3. Extension: `cancel_order(p_order_id bigint) RETURNS boolean`](#3-extension-cancel_orderp_order_id-bigint-returns-boolean)
+- [Acceptance checks](#acceptance-checks)
+  - [A. The contract, in one session](#a-the-contract-in-one-session)
+  - [B. Concurrency: no overselling, no deadlocks, no double processing](#b-concurrency-no-overselling-no-deadlocks-no-double-processing)
+  - [C. Extension: cancellations under concurrency](#c-extension-cancellations-under-concurrency)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Getting started
 

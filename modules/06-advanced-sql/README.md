@@ -1,5 +1,10 @@
 # Module 06: Advanced SQL
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 05 Aggregation and Grouping](../05-aggregation/README.md) · [Course home](../../README.md) · [07 Data Modeling →](../07-data-modeling/README.md)
+<!-- nav:end -->
+
 Bazaar's analysts have started asking harder questions. "Show me the whole Books category tree with revenue rolled up to every level." "Which seller climbed the leaderboard this month?" "Who are each seller's three best customers?" "How many months in a row has this shopper bought something?" "Archive last year's cancelled orders, and do it in one statement so nothing gets lost halfway." You can answer some of these with the joins, subqueries and `GROUP BY` from modules 04 and 05, but the queries get long, repetitive and slow. This module adds the four tools that make such questions routine: **common table expressions** (`WITH`) to structure big queries and chain data changes, **recursive CTEs** to walk trees and graphs, **window functions** to compute rankings, running totals and row-to-row differences without collapsing rows, and **`MERGE`** to synchronise one table with another in a single statement.
 
 **What you'll learn**
@@ -27,6 +32,56 @@ A few facts about the data that come up repeatedly (they are listed in [`project
 - "Today" is 2025-06-30. Orders run from 2024-01-12 to 2025-06-30.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Common table expressions](#1-common-table-expressions)
+  - [1.1 The idea: name the steps](#11-the-idea-name-the-steps)
+  - [1.2 Inlined or materialized? How PostgreSQL executes a CTE](#12-inlined-or-materialized-how-postgresql-executes-a-cte)
+- [2. Data-modifying CTEs](#2-data-modifying-ctes)
+  - [2.1 Chaining changes with RETURNING](#21-chaining-changes-with-returning)
+  - [2.2 The snapshot rule](#22-the-snapshot-rule)
+- [3. Recursive CTEs](#3-recursive-ctes)
+  - [3.1 Why recursion](#31-why-recursion)
+  - [3.2 The mechanics: anchor, recursive term, working table](#32-the-mechanics-anchor-recursive-term-working-table)
+  - [3.3 Walking down: a subtree with depth](#33-walking-down-a-subtree-with-depth)
+  - [3.4 Paths: arrays and strings](#34-paths-arrays-and-strings)
+  - [3.5 Walking up: breadcrumbs](#35-walking-up-breadcrumbs)
+  - [3.6 Cycles: when the tree isn't a tree](#36-cycles-when-the-tree-isnt-a-tree)
+  - [3.7 Ordering with SEARCH](#37-ordering-with-search)
+  - [3.8 Generating series recursively](#38-generating-series-recursively)
+- [4. Window functions: the idea](#4-window-functions-the-idea)
+  - [4.1 Aggregates that don't collapse rows](#41-aggregates-that-dont-collapse-rows)
+  - [4.2 Where window functions run](#42-where-window-functions-run)
+  - [4.3 The parts of OVER](#43-the-parts-of-over)
+- [5. Ranking functions](#5-ranking-functions)
+- [6. Offset and value functions](#6-offset-and-value-functions)
+  - [6.1 lag and lead](#61-lag-and-lead)
+  - [6.2 first_value, last_value, nth_value, and the default-frame trap](#62-first_value-last_value-nth_value-and-the-default-frame-trap)
+- [7. Aggregates as windows: running totals and moving averages](#7-aggregates-as-windows-running-totals-and-moving-averages)
+- [8. Frames in depth](#8-frames-in-depth)
+  - [8.1 The frame clause](#81-the-frame-clause)
+  - [8.2 ROWS, RANGE and GROUPS, and why the default bites running totals](#82-rows-range-and-groups-and-why-the-default-bites-running-totals)
+  - [8.3 RANGE over time: a real 3-month moving average](#83-range-over-time-a-real-3-month-moving-average)
+  - [8.4 EXCLUDE](#84-exclude)
+- [9. Named windows: the WINDOW clause](#9-named-windows-the-window-clause)
+- [10. Filtering on window results](#10-filtering-on-window-results)
+- [11. Classic patterns](#11-classic-patterns)
+  - [11.1 Top-N per group: three ways](#111-top-n-per-group-three-ways)
+  - [11.2 Deduplication](#112-deduplication)
+  - [11.3 Gaps and islands](#113-gaps-and-islands)
+  - [11.4 Sessionization (a preview)](#114-sessionization-a-preview)
+  - [11.5 Month-over-month change](#115-month-over-month-change)
+- [12. MERGE](#12-merge)
+  - [12.1 What MERGE does](#121-what-merge-does)
+  - [12.2 A full sync: seller_month_stats](#122-a-full-sync-seller_month_stats)
+  - [12.3 One source row per target row](#123-one-source-row-per-target-row)
+  - [12.4 MERGE versus INSERT ... ON CONFLICT](#124-merge-versus-insert--on-conflict)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Common table expressions
 

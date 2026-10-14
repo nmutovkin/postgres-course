@@ -1,5 +1,10 @@
 # Module 01: psql and the Postgres Landscape
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 00 Setup](../00-setup/README.md) · [Course home](../../README.md) · [02 Data Types and Tables →](../02-types-and-ddl/README.md)
+<!-- nav:end -->
+
 It's the first week of Bazaar. Before anyone designs a table, the team needs to agree on where things live. Which server? Which database? Which schema? Who owns what? Everyone also needs to be fluent in the one tool that is available on every PostgreSQL machine you'll ever log into: `psql`. In this module you learn the map (cluster, databases, schemas, roles) and the tool. By the end you'll set up the Bazaar database yourself, configure psql the way experienced people do, and write a psql script that reports on the database's health.
 
 **What you'll learn**
@@ -24,6 +29,66 @@ The `bazaar` database is empty at this point: the Bazaar tables arrive in module
 You should be comfortable connecting as described in [Module 00](../00-setup/). Examples use the container's psql via `./project/bin/psql.sh` unless they say otherwise.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Client and server](#1-client-and-server)
+  - [1.1 One process per connection](#11-one-process-per-connection)
+- [2. Cluster, databases, schemas, objects](#2-cluster-databases-schemas-objects)
+  - [2.1 A connection is to exactly one database](#21-a-connection-is-to-exactly-one-database)
+  - [2.2 `postgres`, `template1` and `template0`](#22-postgres-template1-and-template0)
+  - [2.3 Schemas](#23-schemas)
+- [3. `search_path`: what does a bare name mean?](#3-search_path-what-does-a-bare-name-mean)
+  - [3.1 Lookup in action](#31-lookup-in-action)
+  - [3.2 Where do new objects go?](#32-where-do-new-objects-go)
+  - [3.3 Setting it: session, role, database](#33-setting-it-session-role-database)
+  - [3.4 Shadowing built-ins](#34-shadowing-built-ins)
+- [4. Roles, briefly](#4-roles-briefly)
+- [5. psql basics](#5-psql-basics)
+  - [5.1 Starting psql](#51-starting-psql)
+  - [5.2 Reading the prompt](#52-reading-the-prompt)
+  - [5.3 Statements, buffers, cancelling](#53-statements-buffers-cancelling)
+- [6. The scratch table for this module](#6-the-scratch-table-for-this-module)
+- [7. Describing things: `\d` and friends](#7-describing-things-d-and-friends)
+  - [7.1 Tables, views, functions](#71-tables-views-functions)
+  - [7.2 Patterns](#72-patterns)
+- [8. Formatting output](#8-formatting-output)
+  - [8.1 Expanded display: `\x`](#81-expanded-display-x)
+  - [8.2 Making NULL visible](#82-making-null-visible)
+  - [8.3 Borders, lines, formats](#83-borders-lines-formats)
+  - [8.4 `\timing`](#84-timing)
+- [9. Working with files and the editor](#9-working-with-files-and-the-editor)
+  - [9.1 `\e`: edit the query in your editor](#91-e-edit-the-query-in-your-editor)
+  - [9.2 `\i` and `\ir`: run a file](#92-i-and-ir-run-a-file)
+  - [9.3 `\o` and `\w`: write output and queries to files](#93-o-and-w-write-output-and-queries-to-files)
+  - [9.4 `\!`: run a shell command](#94--run-a-shell-command)
+- [10. Ways to run a query: `\g`, `\gx`, `\gset`, `\gexec`, `\watch`](#10-ways-to-run-a-query-g-gx-gset-gexec-watch)
+  - [10.1 `\g` and `\gx`](#101-g-and-gx)
+  - [10.2 `\gset`: store results in variables](#102-gset-store-results-in-variables)
+  - [10.3 `\gexec`: run the statements a query generates](#103-gexec-run-the-statements-a-query-generates)
+  - [10.4 `\watch`: re-run a query periodically](#104-watch-re-run-a-query-periodically)
+  - [10.5 Two more: `\crosstabview` and `\bind`](#105-two-more-crosstabview-and-bind)
+- [11. Variables and conditionals](#11-variables-and-conditionals)
+  - [11.1 Setting and using variables](#111-setting-and-using-variables)
+  - [11.2 Special variables](#112-special-variables)
+  - [11.3 `\if`, `\elif`, `\else`, `\endif`](#113-if-elif-else-endif)
+  - [11.4 Errors and transactions: `ON_ERROR_STOP`, `ON_ERROR_ROLLBACK`, `AUTOCOMMIT`](#114-errors-and-transactions-on_error_stop-on_error_rollback-autocommit)
+- [12. `\copy` versus `COPY`](#12-copy-versus-copy)
+- [13. History and `~/.psqlrc`](#13-history-and-psqlrc)
+  - [13.1 History](#131-history)
+  - [13.2 `~/.psqlrc`](#132-psqlrc)
+- [14. Scripting psql from the shell](#14-scripting-psql-from-the-shell)
+- [15. The system catalogs and `information_schema`](#15-the-system-catalogs-and-information_schema)
+  - [15.1 The three you need first](#151-the-three-you-need-first)
+  - [15.2 OIDs and the `reg*` casts](#152-oids-and-the-reg-casts)
+  - [15.3 How `\d` is built: `psql -E`](#153-how-d-is-built-psql--e)
+  - [15.4 `information_schema`](#154-information_schema)
+- [16. Getting help](#16-getting-help)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Client and server
 

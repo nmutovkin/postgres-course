@@ -1,5 +1,10 @@
 # Module 14: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 13 Full-Text and Fuzzy Search](../13-full-text-search/README.md) · [Course home](../../README.md) · [15 Security and Row-Level Security →](../15-security-rls/README.md)
+<!-- nav:end -->
+
 **Starting state.** Unless an exercise says otherwise:
 
 ```bash
@@ -14,6 +19,24 @@ Several exercises change `events` temporarily. Each one says how to undo its cha
 Solutions: [solutions/README.md](solutions/README.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Pruning puzzles](#exercise-1--pruning-puzzles)
+- [Exercise 2 ★: Where are the rows?](#exercise-2--where-are-the-rows)
+- [Exercise 3 ★: The BETWEEN bug](#exercise-3--the-between-bug)
+- [Exercise 4 ★★: The funnel, month by month](#exercise-4--the-funnel-month-by-month)
+- [Exercise 5 ★★: LIST partitioning by event type](#exercise-5--list-partitioning-by-event-type)
+- [Exercise 6 ★★: Hash-partitioning cart_items: worth it?](#exercise-6--hash-partitioning-cart_items-worth-it)
+- [Exercise 7 ★★: Rescue the default partition](#exercise-7--rescue-the-default-partition)
+- [Exercise 8 ★★: Archive a month, then bring it back](#exercise-8--archive-a-month-then-bring-it-back)
+- [Exercise 9 ★★: Make old months maintenance-free](#exercise-9--make-old-months-maintenance-free)
+- [Exercise 10 ★★★: Find an event by id, fast](#exercise-10--find-an-event-by-id-fast)
+- [Exercise 11 ★★★: Merge three months into a quarter](#exercise-11--merge-three-months-into-a-quarter)
+- [Exercise 12 ★★★: Funnel by session start](#exercise-12--funnel-by-session-start)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Pruning puzzles
 

@@ -1,5 +1,10 @@
 # Module 03: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 02 Data Types and Tables](../02-types-and-ddl/README.md) · [Course home](../../README.md) · [04 Joins and Subqueries →](../04-joins-subqueries/README.md)
+<!-- nav:end -->
+
 **Starting state.** Every exercise uses the small dataset:
 
 ```bash
@@ -14,6 +19,24 @@ Exercises that change data say so. Do them inside `BEGIN` ... `ROLLBACK` unless 
 Solutions: [solutions/README.md](solutions/README.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Cheap reads](#exercise-1--cheap-reads)
+- [Exercise 2 ★: Where are our users?](#exercise-2--where-are-our-users)
+- [Exercise 3 ★: Page 3 of the catalogue](#exercise-3--page-3-of-the-catalogue)
+- [Exercise 4 ★★: The first quarter of 2025](#exercise-4--the-first-quarter-of-2025)
+- [Exercise 5 ★★: How fast do we deliver?](#exercise-5--how-fast-do-we-deliver)
+- [Exercise 6 ★★: A `NULL` audit](#exercise-6--a-null-audit)
+- [Exercise 7 ★★: A price rise with nice endings](#exercise-7--a-price-rise-with-nice-endings)
+- [Exercise 8 ★★: A stock delivery](#exercise-8--a-stock-delivery)
+- [Exercise 9 ★★: URL slugs](#exercise-9--url-slugs)
+- [Exercise 10 ★★★: Ship the paid orders](#exercise-10--ship-the-paid-orders)
+- [Exercise 11 ★★★: Catalogue clean-up](#exercise-11--catalogue-clean-up)
+- [Exercise 12 ★★★: Is every order's history consistent?](#exercise-12--is-every-orders-history-consistent)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Cheap reads
 

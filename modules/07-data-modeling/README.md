@@ -1,5 +1,10 @@
 # Module 07: Data Modeling
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 06 Advanced SQL](../06-advanced-sql/README.md) · [Course home](../../README.md) · [08 Beyond Scalars →](../08-beyond-scalars/README.md)
+<!-- nav:end -->
+
 So far you have used Bazaar's schema as it was handed to you: seven tables from module 02. The business has moved on. Customers want to save several delivery addresses. Finance needs to see every payment attempt and every refund. Product pages need reviews. Shoppers expect their cart to survive a browser restart. And when a customer disputes an old order ("I paid 999, not 1,049!"), support needs to know what the price *was* on the day of the order. Each of these is a few `CREATE TABLE` statements, but each also hides decisions that are expensive to change later: what identifies a row, which facts live where, what happens to child rows when a parent goes away, and how to remember the past. This module is about making those decisions on purpose. You'll learn the vocabulary (entities, keys, functional dependencies, normal forms), see the problems that bad designs cause with real data, and then design and build **Bazaar schema v2**.
 
 **What you'll learn**
@@ -30,6 +35,61 @@ The milestone asks you to design schema v2 yourself. The theory, however, uses t
 If you want to design v2 without being influenced, do the milestone in [`project.md`](project.md) first, and come back to sections 7–9 afterwards. Examples that change data run inside `BEGIN ... ROLLBACK`.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. From requirements to tables](#1-from-requirements-to-tables)
+  - [1.1 Three levels of model](#11-three-levels-of-model)
+  - [1.2 Bazaar v2: the requirements](#12-bazaar-v2-the-requirements)
+  - [1.3 From words to entities](#13-from-words-to-entities)
+- [2. Entities, relationships and ER diagrams](#2-entities-relationships-and-er-diagrams)
+  - [2.1 Vocabulary](#21-vocabulary)
+  - [2.2 Crow's foot notation in Mermaid](#22-crows-foot-notation-in-mermaid)
+  - [2.3 Mapping relationships to tables](#23-mapping-relationships-to-tables)
+- [3. Keys](#3-keys)
+  - [3.1 Candidate, primary and alternate keys](#31-candidate-primary-and-alternate-keys)
+  - [3.2 Natural versus surrogate keys](#32-natural-versus-surrogate-keys)
+  - [3.3 Composite keys](#33-composite-keys)
+  - [3.4 bigint or UUID?](#34-bigint-or-uuid)
+- [4. Functional dependencies and anomalies](#4-functional-dependencies-and-anomalies)
+  - [4.1 A spreadsheet in a table](#41-a-spreadsheet-in-a-table)
+  - [4.2 Functional dependencies](#42-functional-dependencies)
+  - [4.3 The three anomalies](#43-the-three-anomalies)
+- [5. Normal forms](#5-normal-forms)
+  - [5.1 First normal form (1NF): one value per cell, no repeating groups](#51-first-normal-form-1nf-one-value-per-cell-no-repeating-groups)
+  - [5.2 Second normal form (2NF): no partial dependencies](#52-second-normal-form-2nf-no-partial-dependencies)
+  - [5.3 Third normal form (3NF): no transitive dependencies](#53-third-normal-form-3nf-no-transitive-dependencies)
+  - [5.4 Boyce-Codd normal form (BCNF): every determinant is a key](#54-boyce-codd-normal-form-bcnf-every-determinant-is-a-key)
+  - [5.5 Fourth normal form (4NF), briefly](#55-fourth-normal-form-4nf-briefly)
+  - [5.6 How far to normalize](#56-how-far-to-normalize)
+- [6. Deliberate denormalization](#6-deliberate-denormalization)
+  - [6.1 Derived data: orders.total](#61-derived-data-orderstotal)
+  - [6.2 Snapshots: order_items.unit_price is a historical fact](#62-snapshots-order_itemsunit_price-is-a-historical-fact)
+- [7. Relationship patterns](#7-relationship-patterns)
+  - [7.1 One-to-one](#71-one-to-one)
+  - [7.2 One-to-many](#72-one-to-many)
+  - [7.3 Many-to-many: junction tables that carry attributes](#73-many-to-many-junction-tables-that-carry-attributes)
+  - [7.4 Self-references and trees](#74-self-references-and-trees)
+  - [7.5 Polymorphic associations, and what to do instead](#75-polymorphic-associations-and-what-to-do-instead)
+  - [7.6 Lookup tables, enums or CHECK?](#76-lookup-tables-enums-or-check)
+- [8. Business rules as constraints](#8-business-rules-as-constraints)
+  - [8.1 "At most one default address": a partial unique index](#81-at-most-one-default-address-a-partial-unique-index)
+  - [8.2 The other v2 rules](#82-the-other-v2-rules)
+  - [8.3 Choosing ON DELETE](#83-choosing-on-delete)
+- [9. Temporal modeling](#9-temporal-modeling)
+  - [9.1 History tables](#91-history-tables)
+  - [9.2 "The price at time T"](#92-the-price-at-time-t)
+  - [9.3 Soft delete versus hard delete](#93-soft-delete-versus-hard-delete)
+  - [9.4 Audit trails](#94-audit-trails)
+- [10. The EAV anti-pattern versus JSONB](#10-the-eav-anti-pattern-versus-jsonb)
+- [11. Multi-tenancy](#11-multi-tenancy)
+- [12. Naming conventions](#12-naming-conventions)
+- [13. Documenting the schema with COMMENT](#13-documenting-the-schema-with-comment)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. From requirements to tables
 

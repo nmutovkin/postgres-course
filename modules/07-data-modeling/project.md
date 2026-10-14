@@ -1,5 +1,10 @@
 # Module 07: Project milestone — Bazaar schema v2
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 06 Advanced SQL](../06-advanced-sql/README.md) · [Course home](../../README.md) · [08 Beyond Scalars →](../08-beyond-scalars/README.md)
+<!-- nav:end -->
+
 **Goal.** Bazaar v1 can take orders, but it can't remember where to ship them, how they were paid, what customers thought of the products, what's waiting in a shopper's cart, or what a product cost last year. In this milestone you design and write **schema v2**: the migration that adds addresses, shipping addresses on orders, payments and refunds, reviews, carts and price history. This time, the requirements are given in business terms only. Choosing keys, types, constraints and delete behaviour is your job.
 
 Keep your files in `workspace/07/`. Start from the v1 schema:
@@ -7,6 +12,19 @@ Keep your files in `workspace/07/`. Start from the v1 schema:
 ```bash
 ./project/bin/reset.sh 07
 ```
+
+<!-- toc:start -->
+**Contents**
+
+- [Business requirements](#business-requirements)
+  - [Names](#names)
+- [What to deliver](#what-to-deliver)
+- [Acceptance checks](#acceptance-checks)
+  - [1. Behaviour: the constraint tests](#1-behaviour-the-constraint-tests)
+  - [2. Data: load the reference seed into your schema](#2-data-load-the-reference-seed-into-your-schema)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Business requirements
 

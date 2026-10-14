@@ -1,5 +1,10 @@
 # Module 24 project: the Core layer, a drift test, and two reports
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 23 Async Python: psycopg async and asyncpg](../23-async-python/README.md) · [Course home](../../README.md) · [25 SQLAlchemy ORM →](../25-sqlalchemy-orm/README.md)
+<!-- nav:end -->
+
 Finance wants two reports that the plain-SQL repository makes painful to write: a **monthly statement per seller** (every order with its units, payments and refunds, plus totals) and a **revenue roll-up over the category tree** (every category with its own revenue and the revenue of everything below it). Both must run as single statements inside the caller's transaction. In this milestone you add SQLAlchemy Core to the `bazaar` package: an engine built from the existing settings, a description of the whole Bazaar schema as `Table` metadata, a test that fails the moment that description drifts from the real database, and the two reports written with the expression language.
 
 **Starting state:** `./project/bin/reset.sh 24` plus `project/python/sql/2301_notify.sql`, and your Module 23 package (or the reference one).

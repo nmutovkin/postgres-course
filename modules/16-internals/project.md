@@ -1,8 +1,23 @@
 # Module 16 project: a storage report, and HOT inventory updates
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 15 Security and Row-Level Security](../15-security-rls/README.md) · [Course home](../../README.md) · [17 Configuration, Maintenance and Monitoring →](../17-operations/README.md)
+<!-- nav:end -->
+
 Bazaar's schema doesn't change in this module (modules 16 to 20 work *on* the database, not on its design). Instead, you take a close look at how its data is stored and make one targeted storage change that the internals justify: making the constant stream of `inventory` updates HOT.
 
 **Starting state:** `./project/bin/reset.sh 16`, plus the contrib extensions from the [theory's "Before you start"](README.md#module-16-internals-deep-dive) (`pg_visibility` is needed by the report).
+
+<!-- toc:start -->
+**Contents**
+
+- [Part 1: the storage report](#part-1-the-storage-report)
+- [Part 2: make inventory updates HOT](#part-2-make-inventory-updates-hot)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Part 1: the storage report
 

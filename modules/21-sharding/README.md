@@ -1,6 +1,73 @@
 # Module 21: Sharding
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 20 High Availability](../20-high-availability/README.md) · [Course home](../../README.md) · [22 psycopg 3 →](../22-psycopg/README.md)
+<!-- nav:end -->
+
 Bazaar's board has a slide titled "10× in two years". Marketing wants every seller to have a live dashboard, finance wants to keep every order forever, and the Black Friday peak of 3,527 orders in a day is supposed to become 35,000. Modules 19 and 20 gave you replicas for reads and automatic failover, but every `INSERT`, every stock reservation and every row of every table still lives on **one primary**. One day that box is the biggest one you can buy, and it is still too small. **Sharding** splits the data itself across several independent PostgreSQL servers, so that each one stores and writes only a slice. It is the most powerful scaling tool in this course and also the most expensive one: it changes your keys, your queries, your transactions and your operations. This module teaches you when it is worth that price, how it works underneath, and how to do it three ways on Bazaar: in the application, with PostgreSQL's own `postgres_fdw` and partitioning, and with the Citus extension.
+
+<!-- toc:start -->
+**Contents**
+
+- [What you'll learn](#what-youll-learn)
+- [Before you start](#before-you-start)
+- [1. Do you need to shard?](#1-do-you-need-to-shard)
+  - [1.1 What one PostgreSQL server can do](#11-what-one-postgresql-server-can-do)
+  - [1.2 Try these first](#12-try-these-first)
+  - [1.3 Why Bazaar shards anyway](#13-why-bazaar-shards-anyway)
+- [2. Sharding vocabulary and architecture](#2-sharding-vocabulary-and-architecture)
+- [3. Choosing the shard key](#3-choosing-the-shard-key)
+  - [3.1 Candidates for Bazaar](#31-candidates-for-bazaar)
+  - [3.2 Co-location and the shape of keys](#32-co-location-and-the-shape-of-keys)
+  - [3.3 Tables that don't fit the key](#33-tables-that-dont-fit-the-key)
+- [4. Hot shards and skew](#4-hot-shards-and-skew)
+- [5. Hash, range and directory sharding](#5-hash-range-and-directory-sharding)
+- [6. Logical shards versus physical nodes](#6-logical-shards-versus-physical-nodes)
+- [7. Global IDs](#7-global-ids)
+- [8. Cross-shard queries](#8-cross-shard-queries)
+- [9. Cross-shard transactions](#9-cross-shard-transactions)
+  - [9.1 The atomicity problem](#91-the-atomicity-problem)
+  - [9.2 Two-phase commit (2PC)](#92-two-phase-commit-2pc)
+  - [9.3 Why prepared transactions are dangerous](#93-why-prepared-transactions-are-dangerous)
+  - [9.4 Sagas: avoiding distributed transactions](#94-sagas-avoiding-distributed-transactions)
+- [10. Approach 1: application-level sharding](#10-approach-1-application-level-sharding)
+- [11. Approach 2: `postgres_fdw` + partitioning](#11-approach-2-postgres_fdw--partitioning)
+  - [11.1 Building it](#111-building-it)
+  - [11.2 What gets pushed down](#112-what-gets-pushed-down)
+  - [11.3 Surprises](#113-surprises)
+  - [11.4 Statistics and estimates](#114-statistics-and-estimates)
+  - [11.5 Writes and transactions](#115-writes-and-transactions)
+  - [11.6 Seeing the atomicity hole](#116-seeing-the-atomicity-hole)
+  - [11.7 Where it breaks down](#117-where-it-breaks-down)
+- [12. Approach 3: Citus architecture](#12-approach-3-citus-architecture)
+- [13. Preparing Bazaar for Citus](#13-preparing-bazaar-for-citus)
+  - [13.1 What `2101_schema_shard_prep.sql` changes, and why](#131-what-2101_schema_shard_prepsql-changes-and-why)
+  - [13.2 Distributing the tables](#132-distributing-the-tables)
+  - [13.3 What broke on the way](#133-what-broke-on-the-way)
+- [14. Querying Citus](#14-querying-citus)
+  - [14.1 Router queries](#141-router-queries)
+  - [14.2 Multi-shard queries](#142-multi-shard-queries)
+  - [14.3 Reference tables join locally](#143-reference-tables-join-locally)
+  - [14.4 Joins that are not co-located](#144-joins-that-are-not-co-located)
+  - [14.5 SQL that needs rewriting](#145-sql-that-needs-rewriting)
+  - [14.6 Measuring: the seller dashboard and the global report](#146-measuring-the-seller-dashboard-and-the-global-report)
+- [15. Writes and distributed transactions in Citus](#15-writes-and-distributed-transactions-in-citus)
+  - [15.1 Checkout: what happens to `place_order()`](#151-checkout-what-happens-to-place_order)
+  - [15.2 Two-phase commit under the hood](#152-two-phase-commit-under-the-hood)
+  - [15.3 Delegating a whole function to a worker](#153-delegating-a-whole-function-to-a-worker)
+- [16. Growing the cluster: rebalancing and tenant isolation](#16-growing-the-cluster-rebalancing-and-tenant-isolation)
+  - [16.1 Adding a worker and rebalancing](#161-adding-a-worker-and-rebalancing)
+  - [16.2 Isolating a hot tenant](#162-isolating-a-hot-tenant)
+- [17. More Citus features](#17-more-citus-features)
+  - [17.1 Schema-based sharding](#171-schema-based-sharding)
+  - [17.2 Columnar storage](#172-columnar-storage)
+- [18. Limitations checklist](#18-limitations-checklist)
+- [19. The operational cost of sharding](#19-the-operational-cost-of-sharding)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## What you'll learn
 

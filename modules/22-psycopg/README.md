@@ -1,5 +1,10 @@
 # Module 22: psycopg 3
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 21 Sharding](../21-sharding/README.md) · [Course home](../../README.md) · [23 Async Python: psycopg async and asyncpg →](../23-async-python/README.md)
+<!-- nav:end -->
+
 Until now, every query in this course has been typed into psql. Bazaar's real users never see psql. They click "Buy", and a web process somewhere has to open a connection, send `SELECT place_order(...)` with *their* cart in it, turn the result (or an `insufficient stock` error) into something a program understands, and give the connection back for the next click, thousands of times a minute. That process is written in Python, and the library between Python and PostgreSQL is the **driver**. This module is about psycopg 3, the standard PostgreSQL driver for Python: how it connects, how it passes values safely, how transactions map onto Python blocks, how Postgres types become Python objects, how to move a million rows in and out quickly, and how to share a few connections among many requests. By the end you will have written the first layer of the Bazaar service: a small, tested data-access module in plain SQL.
 
 **What you'll learn**
@@ -38,6 +43,72 @@ The runnable scripts for this module are in [`examples/`](examples/). Run them f
 > **Note:** examples that *change* data either roll back or undo their change, so you can run them in any order. If you ever get the database into a strange state, `reset.sh 22` brings it back.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. From psql to Python: what a driver does](#1-from-psql-to-python-what-a-driver-does)
+  - [1.1 The DB-API in five objects](#11-the-db-api-in-five-objects)
+  - [1.2 What goes over the wire](#12-what-goes-over-the-wire)
+  - [1.3 psycopg 3 versus psycopg2](#13-psycopg-3-versus-psycopg2)
+  - [1.4 Installing: binary, C, or pure Python](#14-installing-binary-c-or-pure-python)
+- [2. Connecting](#2-connecting)
+  - [2.1 Three ways to say where](#21-three-ways-to-say-where)
+  - [2.2 The parameters that matter](#22-the-parameters-that-matter)
+  - [2.3 Environment variables and `.pgpass`](#23-environment-variables-and-pgpass)
+  - [2.4 A connection is a process](#24-a-connection-is-a-process)
+- [3. Connection lifecycle, `with`, and cursors](#3-connection-lifecycle-with-and-cursors)
+  - [3.1 Implicit transactions](#31-implicit-transactions)
+  - [3.2 What `with psycopg.connect(...) as conn:` does, exactly](#32-what-with-psycopgconnect-as-conn-does-exactly)
+  - [3.3 Cursors](#33-cursors)
+  - [3.4 "Idle in transaction": the classic bug](#34-idle-in-transaction-the-classic-bug)
+- [4. Passing values: parameters](#4-passing-values-parameters)
+  - [4.1 Placeholders](#41-placeholders)
+  - [4.2 Server-side binding and what it rules out](#42-server-side-binding-and-what-it-rules-out)
+  - [4.3 SQL injection, demonstrated](#43-sql-injection-demonstrated)
+  - [4.4 Identifiers and dynamic SQL: `psycopg.sql`](#44-identifiers-and-dynamic-sql-psycopgsql)
+  - [4.5 Client-side binding, when you really need it](#45-client-side-binding-when-you-really-need-it)
+  - [4.6 Many rows: `executemany()`](#46-many-rows-executemany)
+- [5. Transactions](#5-transactions)
+  - [5.1 Two styles](#51-two-styles)
+  - [5.2 Nested blocks are savepoints](#52-nested-blocks-are-savepoints)
+  - [5.3 Isolation levels and read-only transactions](#53-isolation-levels-and-read-only-transactions)
+- [6. Row factories: the shape of a row](#6-row-factories-the-shape-of-a-row)
+- [7. Type adaptation](#7-type-adaptation)
+  - [7.1 From Postgres to Python](#71-from-postgres-to-python)
+  - [7.2 From Python to Postgres](#72-from-python-to-postgres)
+  - [7.3 Enums, composites, and per-connection registration](#73-enums-composites-and-per-connection-registration)
+  - [7.4 Custom loaders and dumpers](#74-custom-loaders-and-dumpers)
+  - [7.5 Text and binary formats](#75-text-and-binary-formats)
+- [8. Errors](#8-errors)
+  - [8.1 The hierarchy](#81-the-hierarchy)
+  - [8.2 What the server tells you: `diag`](#82-what-the-server-tells-you-diag)
+  - [8.3 Bazaar's error codes, as Python exceptions](#83-bazaars-error-codes-as-python-exceptions)
+  - [8.4 The connection after an error](#84-the-connection-after-an-error)
+  - [8.5 Notices](#85-notices)
+- [9. COPY: moving many rows](#9-copy-moving-many-rows)
+  - [9.1 COPY FROM STDIN](#91-copy-from-stdin)
+  - [9.2 COPY TO STDOUT](#92-copy-to-stdout)
+  - [9.3 Binary COPY](#93-binary-copy)
+  - [9.4 Seven ways to load 100,000 rows](#94-seven-ways-to-load-100000-rows)
+- [10. Big results: server-side cursors and streaming](#10-big-results-server-side-cursors-and-streaming)
+- [11. Pipeline mode](#11-pipeline-mode)
+- [12. Prepared statements](#12-prepared-statements)
+- [13. LISTEN and NOTIFY](#13-listen-and-notify)
+- [14. Connection pools](#14-connection-pools)
+  - [14.1 Why and what](#141-why-and-what)
+  - [14.2 The knobs](#142-the-knobs)
+  - [14.3 When the pool is exhausted](#143-when-the-pool-is-exhausted)
+  - [14.4 Session state: `configure`, `reset`, and SET LOCAL](#144-session-state-configure-reset-and-set-local)
+  - [14.5 How big?](#145-how-big)
+  - [14.6 Threads, processes, and connections](#146-threads-processes-and-connections)
+- [15. Seeing what your program sends](#15-seeing-what-your-program-sends)
+- [16. The Bazaar data-access layer](#16-the-bazaar-data-access-layer)
+  - [Tests against the real database](#tests-against-the-real-database)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. From psql to Python: what a driver does
 

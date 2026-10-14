@@ -1,5 +1,10 @@
 # Module 04: Joins and Subqueries
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 03 Reading and Writing Data](../03-crud/README.md) · [Course home](../../README.md) · [05 Aggregation and Grouping →](../05-aggregation/README.md)
+<!-- nav:end -->
+
 The Bazaar support team gets a phone call: "I ordered a laptop in May, from TechTrove I think, and it never arrived." To answer, somebody has to find the caller in `users`, their orders in `orders`, the lines of those orders in `order_items`, the product titles in `products` and the shop name in `sellers`. Five tables, one question. Until now every query in this course has read a single table. Real questions almost never live in one table, because a well-designed database deliberately spreads facts across many of them. This module teaches you how to put them back together: joins, which combine tables side by side, and subqueries, which let one query ask questions of another. By the end you'll be able to answer questions like "which customers bought from every European shop?" or "which products have never sold?" in one statement, and you'll know the traps that make such queries quietly return wrong numbers.
 
 **What you'll learn**
@@ -31,6 +36,55 @@ You should be comfortable with `SELECT`, `WHERE`, `ORDER BY`, `LIMIT`, `CASE` an
 A handful of examples use `count(*)` or `sum(...)` to measure a result. `count(*)` counts the rows a query produces, and `sum(x)` adds up a column. That's all you need for now. [Module 05](../05-aggregation/) covers aggregates properly.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Why the data is split across tables](#1-why-the-data-is-split-across-tables)
+- [2. The Cartesian product: `CROSS JOIN`](#2-the-cartesian-product-cross-join)
+- [3. `INNER JOIN`: a filtered product](#3-inner-join-a-filtered-product)
+  - [3.1 Why the explicit `JOIN` syntax wins](#31-why-the-explicit-join-syntax-wins)
+  - [3.2 Ambiguous columns and qualified names](#32-ambiguous-columns-and-qualified-names)
+  - [3.3 Joining along the "many" side](#33-joining-along-the-many-side)
+  - [3.4 Join conditions that aren't foreign keys](#34-join-conditions-that-arent-foreign-keys)
+- [4. `ON` versus `USING` versus `NATURAL`](#4-on-versus-using-versus-natural)
+- [5. Outer joins: keeping the rows that found no partner](#5-outer-joins-keeping-the-rows-that-found-no-partner)
+  - [5.1 `LEFT JOIN`](#51-left-join)
+  - [5.2 Finding rows with no partner](#52-finding-rows-with-no-partner)
+  - [5.3 The classic pitfall: filtering the outer table in `WHERE`](#53-the-classic-pitfall-filtering-the-outer-table-in-where)
+  - [5.4 Chained outer joins: one inner join can undo them all](#54-chained-outer-joins-one-inner-join-can-undo-them-all)
+  - [5.5 `RIGHT JOIN`](#55-right-join)
+  - [5.6 `FULL JOIN`: reconciling two lists](#56-full-join-reconciling-two-lists)
+- [6. Self joins](#6-self-joins)
+  - [6.1 Walking the category tree](#61-walking-the-category-tree)
+  - [6.2 Two roles of one table: buyers and shop owners](#62-two-roles-of-one-table-buyers-and-shop-owners)
+  - [6.3 Comparing rows of the same table](#63-comparing-rows-of-the-same-table)
+- [7. Multi-table joins](#7-multi-table-joins)
+- [8. Join fan-out and double counting](#8-join-fan-out-and-double-counting)
+- [9. Semi-joins and anti-joins: `EXISTS`, `IN`, `NOT EXISTS`, `NOT IN`](#9-semi-joins-and-anti-joins-exists-in-not-exists-not-in)
+  - [9.1 `EXISTS`](#91-exists)
+  - [9.2 `IN (subquery)`](#92-in-subquery)
+  - [9.3 `NOT EXISTS`: the anti-join](#93-not-exists-the-anti-join)
+  - [9.4 `NOT IN` and the `NULL` trap](#94-not-in-and-the-null-trap)
+  - [9.5 Choosing between them](#95-choosing-between-them)
+- [10. Subqueries](#10-subqueries)
+  - [10.1 Scalar subqueries](#101-scalar-subqueries)
+  - [10.2 Correlated subqueries](#102-correlated-subqueries)
+  - [10.3 Derived tables: subqueries in `FROM`](#103-derived-tables-subqueries-in-from)
+- [11. `ANY` and `ALL`](#11-any-and-all)
+- [12. `LATERAL` joins](#12-lateral-joins)
+- [13. Set operations: `UNION`, `INTERSECT`, `EXCEPT`](#13-set-operations-union-intersect-except)
+  - [13.1 The rules](#131-the-rules)
+  - [13.2 `UNION` versus `UNION ALL`](#132-union-versus-union-all)
+- [14. Join-based modifications: `UPDATE ... FROM` and `DELETE ... USING`](#14-join-based-modifications-update--from-and-delete--using)
+- [15. Reading and debugging a multi-join query](#15-reading-and-debugging-a-multi-join-query)
+  - [15.1 The logical order of a `SELECT`](#151-the-logical-order-of-a-select)
+  - [15.2 Build it one join at a time](#152-build-it-one-join-at-a-time)
+  - [15.3 A debugging checklist](#153-a-debugging-checklist)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Why the data is split across tables
 

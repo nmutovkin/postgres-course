@@ -1,5 +1,10 @@
 # Module 17: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 16 Internals Deep Dive](../16-internals/README.md) · [Course home](../../README.md) · [18 Backup and Recovery →](../18-backup-recovery/README.md)
+<!-- nav:end -->
+
 **Starting state.** Unless an exercise says otherwise:
 
 ```bash
@@ -14,6 +19,24 @@ Several exercises change server-wide settings or table storage parameters. Each 
 Solutions: [solutions/README.md](solutions/README.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: What did someone change?](#exercise-1--what-did-someone-change)
+- [Exercise 2 ★: Who can change what](#exercise-2--who-can-change-what)
+- [Exercise 3 ★: Role settings and SET ROLE](#exercise-3--role-settings-and-set-role)
+- [Exercise 4 ★★: How much memory can this query take?](#exercise-4--how-much-memory-can-this-query-take)
+- [Exercise 5 ★★: Due for ANALYZE?](#exercise-5--due-for-analyze)
+- [Exercise 6 ★★: Estimated vs. exact bloat](#exercise-6--estimated-vs-exact-bloat)
+- [Exercise 7 ★★: Redundant indexes](#exercise-7--redundant-indexes)
+- [Exercise 8 ★★: Break the chain](#exercise-8--break-the-chain)
+- [Exercise 9 ★★: Find the query that spills](#exercise-9--find-the-query-that-spills)
+- [Exercise 10 ★★★: Full-page writes, measured](#exercise-10--full-page-writes-measured)
+- [Exercise 11 ★★★: Pool size vs. throughput (lab)](#exercise-11--pool-size-vs-throughput-lab)
+- [Exercise 12 ★★★: Make it transaction-pooling safe (lab)](#exercise-12--make-it-transaction-pooling-safe-lab)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: What did someone change?
 

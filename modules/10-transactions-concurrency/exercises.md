@@ -1,5 +1,10 @@
 # Module 10 exercises: Transactions and Concurrency
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 09 Views, Functions and Triggers](../09-views-functions-triggers/README.md) · [Course home](../../README.md) · [11 Indexes →](../11-indexes/README.md)
+<!-- nav:end -->
+
 Unless an exercise says otherwise, start from the state at the end of this module's milestone:
 
 ```bash
@@ -9,6 +14,25 @@ Unless an exercise says otherwise, start from the state at the end of this modul
 Many exercises need two or three sessions at once: open several terminals with `./project/bin/psql.sh`, or write the steps in a demo file and replay it with [`examples/sessions.py`](examples/sessions.py). Reset between exercises: most of them change data. Solutions are in [`solutions/README.md`](solutions/README.md), with runnable files in [`solutions/exercises/`](solutions/exercises/).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Savepoint bookkeeping](#exercise-1--savepoint-bookkeeping)
+- [Exercise 2 ★: Row-version forensics](#exercise-2--row-version-forensics)
+- [Exercise 3 ★: When is the snapshot taken?](#exercise-3--when-is-the-snapshot-taken)
+- [Exercise 4 ★★: Fix a lost-update bug](#exercise-4--fix-a-lost-update-bug)
+- [Exercise 5 ★★: Optimistic locking for product edits](#exercise-5--optimistic-locking-for-product-edits)
+- [Exercise 6 ★★★: A deadlock-free stock transfer](#exercise-6--a-deadlock-free-stock-transfer)
+- [Exercise 7 ★★: Diagnose a blocking chain](#exercise-7--diagnose-a-blocking-chain)
+- [Exercise 8 ★★: Write skew on the support rota](#exercise-8--write-skew-on-the-support-rota)
+- [Exercise 9 ★★: Predict the outcome](#exercise-9--predict-the-outcome)
+- [Exercise 10 ★★: Ship orders with `SKIP LOCKED`](#exercise-10--ship-orders-with-skip-locked)
+- [Exercise 11 ★★: A singleton report refresh](#exercise-11--a-singleton-report-refresh)
+- [Exercise 12 ★★★: A migration that cannot take the site down](#exercise-12--a-migration-that-cannot-take-the-site-down)
+- [Exercise 13 ★★★: Idempotent checkout](#exercise-13--idempotent-checkout)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Savepoint bookkeeping
 

@@ -1,6 +1,20 @@
 # Module 00: Project milestone — a working environment
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [Course home](../../README.md) · [01 psql and the Postgres Landscape →](../01-psql/README.md)
+<!-- nav:end -->
+
 **Goal.** Before anyone writes a line of Bazaar, the team needs an environment everybody can rebuild the same way: the same PostgreSQL version, the same configuration, the same way to connect. Your milestone is to have that environment running, and to have a place for your own project files.
+
+<!-- toc:start -->
+**Contents**
+
+- [Requirements](#requirements)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Requirements
 

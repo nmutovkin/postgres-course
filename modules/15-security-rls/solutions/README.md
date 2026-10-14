@@ -1,5 +1,10 @@
 # Module 15: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 14 Partitioning](../../14-partitioning/README.md) · [Course home](../../../README.md) · [16 Internals Deep Dive →](../../16-internals/README.md)
+<!-- nav:end -->
+
 All solutions were run on PostgreSQL 17 against the small dataset with the reference roles and RLS applied:
 
 ```bash
@@ -9,6 +14,27 @@ All solutions were run on PostgreSQL 17 against the small dataset with the refer
 (the same schema and roles as `./project/bin/reset.sh 16`, on the hand-readable small dataset). Exercise 10 uses the large dataset (`reset.sh 16`); exercises 11–12 use the TLS lab. Row counts and values below are real. Several solutions are also standalone, runnable scripts in this directory; each cleans up after itself so you can re-run them. To start completely clean, re-run `small15.sh --with-1501`.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 — a role report (ex01_role_report.sql)](#exercise-1--a-role-report-ex01_role_reportsql)
+- [Exercise 2 — a privilege matrix (ex02_privilege_matrix.sql)](#exercise-2--a-privilege-matrix-ex02_privilege_matrixsql)
+- [Exercise 3 — the append-only audit log](#exercise-3--the-append-only-audit-log)
+- [Exercise 4 — a read-only role, two ways](#exercise-4--a-read-only-role-two-ways)
+- [Exercise 5 — hide users.email (ex05_hide_email.sql)](#exercise-5--hide-usersemail-ex05_hide_emailsql)
+- [Exercise 6 — no modifying archived products (ex06_archived_products.sql)](#exercise-6--no-modifying-archived-products-ex06_archived_productssql)
+- [Exercise 7 — fix mis-owned objects (ex07_fix_ownership.sql)](#exercise-7--fix-mis-owned-objects-ex07_fix_ownershipsql)
+- [Exercise 8 — a support role (ex08_support_role.sql)](#exercise-8--a-support-role-ex08_support_rolesql)
+- [Exercise 9 — reviews per seller (ex09_reviews_rls.sql)](#exercise-9--reviews-per-seller-ex09_reviews_rlssql)
+- [Exercise 10 — measure RLS overhead (large data)](#exercise-10--measure-rls-overhead-large-data)
+- [Exercise 11 — sslmode in the lab](#exercise-11--sslmode-in-the-lab)
+- [Exercise 12 — harden pg_hba.conf, migrate off md5 (ex12/pg_hba.conf)](#exercise-12--harden-pg_hbaconf-migrate-off-md5-ex12pg_hbaconf)
+- [Exercise 13 — exploit and fix a search_path hole (ex13_search_path.sql)](#exercise-13--exploit-and-fix-a-search_path-hole-ex13_search_pathsql)
+- [Exercise 14 — close the sequence side channel](#exercise-14--close-the-sequence-side-channel)
+- [Exercise 15 — the FK existence leak (ex15_fk_leak.sql)](#exercise-15--the-fk-existence-leak-ex15_fk_leaksql)
+
+<!-- toc:end -->
 
 ## Exercise 1 — a role report ([ex01_role_report.sql](ex01_role_report.sql))
 

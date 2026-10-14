@@ -177,6 +177,10 @@ class Product(Base):
         ),
         deferred=True,
     )
+    # Module 26 (revisions 2602-2603): the products_set_slug() trigger fills it
+    # when an INSERT leaves it NULL; FetchedValue makes the ORM fetch it back
+    # (INSERT ... RETURNING) instead of sending NULL explicitly.
+    slug: Mapped[str] = mapped_column(server_default=sa.FetchedValue())
     # Optimistic concurrency without a schema change: PostgreSQL's system
     # column xmin changes with every new row version (module 16). Every ORM
     # UPDATE says "... WHERE id = :id AND xmin = :seen" and raises
@@ -268,6 +272,8 @@ class Order(Base):
         sa.ForeignKey("addresses.id"), index=True
     )
     updated_at: Mapped[datetime] = updated_at_column()
+    # Module 26 (revision 2604): set by an idempotent checkout, NULL otherwise.
+    idempotency_key: Mapped[str | None]
 
     user: Mapped[User] = relationship(back_populates="orders")
     seller: Mapped[Seller] = relationship(back_populates="orders")

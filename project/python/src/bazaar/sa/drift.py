@@ -61,7 +61,8 @@ def _compare_columns(
                 out.append(f"{name}.{col.name}: identity differs")
             if (col.computed is not None) != bool(db.get("computed")):
                 out.append(f"{name}.{col.name}: generated (computed) column differs")
-            has_default = col.server_default is not None and col.identity is None
+            # FetchedValue() (a trigger fills the column) is not a DEFAULT clause.
+            has_default = isinstance(col.server_default, sa.DefaultClause) and col.identity is None
             if not col.computed and has_default != (db["default"] is not None):
                 out.append(f"{name}.{col.name}: server default present in only one of them")
     out += [f"{name}.{c}: column not in metadata" for c in db_cols]
@@ -85,7 +86,8 @@ def compare(
     dialect = conn.dialect
     out: list[str] = []
 
-    db_tables = set(insp.get_table_names()) - _partitions(conn)
+    # alembic_version (module 26) is Alembic's bookkeeping, not part of the model.
+    db_tables = set(insp.get_table_names()) - _partitions(conn) - {"alembic_version"}
     meta_tables = set(metadata.tables)
     out += [f"{t}: table missing in database" for t in sorted(meta_tables - db_tables)]
     if not mapping_only:

@@ -1,5 +1,10 @@
 # Module 11: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 10 Transactions and Concurrency](../10-transactions-concurrency/README.md) · [Course home](../../README.md) · [12 Query Planning and Performance →](../12-query-performance/README.md)
+<!-- nav:end -->
+
 **Starting state.** Unless an exercise says otherwise, the exercises run on the database **after** this module's milestone: the large dataset plus the reference indexes.
 
 ```bash
@@ -14,6 +19,25 @@ Timings in the self-checks are only rough guides, since your machine differs. Ro
 Solutions: [solutions/README.md](solutions/README.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: An index inventory](#exercise-1--an-index-inventory)
+- [Exercise 2 ★: Predict the plan](#exercise-2--predict-the-plan)
+- [Exercise 3 ★: Leftmost prefix](#exercise-3--leftmost-prefix)
+- [Exercise 4 ★★: The fulfilment queue](#exercise-4--the-fulfilment-queue)
+- [Exercise 5 ★★: The seller's rating histogram](#exercise-5--the-sellers-rating-histogram)
+- [Exercise 6 ★★: Admin autocomplete](#exercise-6--admin-autocomplete)
+- [Exercise 7 ★★: Audit the foreign keys](#exercise-7--audit-the-foreign-keys)
+- [Exercise 8 ★★: BRIN for payments](#exercise-8--brin-for-payments)
+- [Exercise 9 ★★: Three slow queries](#exercise-9--three-slow-queries)
+- [Exercise 10 ★★: What can a jsonb index answer?](#exercise-10--what-can-a-jsonb-index-answer)
+- [Exercise 11 ★★★: Revenue without the heap](#exercise-11--revenue-without-the-heap)
+- [Exercise 12 ★★★: Redundant indexes](#exercise-12--redundant-indexes)
+- [Exercise 13 ★★★: An index build under load](#exercise-13--an-index-build-under-load)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: An index inventory
 

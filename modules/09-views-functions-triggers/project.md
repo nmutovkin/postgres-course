@@ -1,5 +1,10 @@
 # Module 09 project: logic next to the data
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 08 Beyond Scalars](../08-beyond-scalars/README.md) · [Course home](../../README.md) · [10 Transactions and Concurrency →](../10-transactions-concurrency/README.md)
+<!-- nav:end -->
+
 Bazaar's bookkeeping has been the application's job, and the application keeps forgetting. In this milestone you move the mechanical rules into the database, so that every writer (the API, the admin scripts, a psql session during an incident) gets them for free. You also give the storefront and the seller dashboard a shared read model. You write one migration, `0901_schema_logic.sql`, that does the five things below.
 
 **Starting state:** `./project/bin/reset.sh 09` (the v3 schema from module 08).
@@ -9,6 +14,15 @@ docker exec -i course-pg psql -X -U postgres -d bazaar -v ON_ERROR_STOP=1 < my_0
 ```
 
 The theory walks through each piece. The point of the milestone is to assemble them into one migration that runs atomically, in the right order, and passes the checks. Try to write each part from the requirements before looking back at the theory.
+
+<!-- toc:start -->
+**Contents**
+
+- [Requirements](#requirements)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Requirements
 

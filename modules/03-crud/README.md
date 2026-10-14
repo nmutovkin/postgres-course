@@ -1,5 +1,10 @@
 # Module 03: Reading and Writing Data
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 02 Data Types and Tables](../02-types-and-ddl/README.md) · [Course home](../../README.md) · [04 Joins and Subqueries →](../04-joins-subqueries/README.md)
+<!-- nav:end -->
+
 Bazaar's tables exist, and they're empty. Before launch, the team has to get the first users, shops and catalogue into the database, then answer questions about them: Which products cost less than 15 euros? Which orders are still waiting for payment? Who has never bought anything? And they have to change data safely: raise a seller's prices, ship an order, delete a mistake, and load a supplier's catalogue without creating duplicates. All of that is SQL's data manipulation language: `SELECT`, `INSERT`, `UPDATE` and `DELETE`, plus PostgreSQL's `COPY` for bulk loads and `ON CONFLICT` for upserts. This module covers all of them, along with the one idea that trips up more SQL users than any other: `NULL` and three-valued logic.
 
 **What you'll learn**
@@ -25,6 +30,57 @@ This is the state at the end of module 02: the seven core tables exist (from [`0
 The small dataset is described in [`project/db/NOTES.md`](../../project/db/NOTES.md): 30 users, 6 sellers, 23 categories, 62 products, 120 orders. "Today" in the data is 2025-06-30, and the examples use fixed dates rather than `now()` so that your results match. Results are shown with the session time zone at UTC, the container's default.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Getting data in](#1-getting-data-in)
+  - [1.1 `INSERT`](#11-insert)
+  - [1.2 Fixed ids: `OVERRIDING SYSTEM VALUE`](#12-fixed-ids-overriding-system-value)
+  - [1.3 `COPY` and `\copy`: loading files](#13-copy-and-copy-loading-files)
+  - [1.4 The canonical small dataset](#14-the-canonical-small-dataset)
+- [2. `SELECT` fundamentals](#2-select-fundamentals)
+  - [2.1 Columns, expressions and aliases](#21-columns-expressions-and-aliases)
+  - [2.2 Writing readable SQL](#22-writing-readable-sql)
+  - [2.3 The logical order of a query](#23-the-logical-order-of-a-query)
+- [3. Filtering with `WHERE`](#3-filtering-with-where)
+  - [3.1 Comparisons and boolean logic](#31-comparisons-and-boolean-logic)
+  - [3.2 `BETWEEN` and `IN`](#32-between-and-in)
+  - [3.3 Pattern matching: `LIKE`, `ILIKE` and regular expressions](#33-pattern-matching-like-ilike-and-regular-expressions)
+- [4. `NULL` and three-valued logic](#4-null-and-three-valued-logic)
+  - [4.1 True, false and unknown](#41-true-false-and-unknown)
+  - [4.2 Testing for `NULL`](#42-testing-for-null)
+  - [4.3 Negations lose `NULL` rows](#43-negations-lose-null-rows)
+  - [4.4 `IS DISTINCT FROM`](#44-is-distinct-from)
+  - [4.5 The `NOT IN` trap](#45-the-not-in-trap)
+  - [4.6 `COALESCE` and `NULLIF`](#46-coalesce-and-nullif)
+  - [4.7 `NULL` in expressions](#47-null-in-expressions)
+- [5. Sorting with `ORDER BY`](#5-sorting-with-order-by)
+  - [5.1 Several sort keys](#51-several-sort-keys)
+  - [5.2 Where do `NULL`s go?](#52-where-do-nulls-go)
+  - [5.3 Collations: how text sorts](#53-collations-how-text-sorts)
+- [6. `LIMIT`, `OFFSET` and `FETCH FIRST`](#6-limit-offset-and-fetch-first)
+- [7. `DISTINCT`](#7-distinct)
+- [8. Operators and functions](#8-operators-and-functions)
+  - [8.1 Text](#81-text)
+  - [8.2 Numbers](#82-numbers)
+  - [8.3 Dates and times](#83-dates-and-times)
+  - [8.4 Casting](#84-casting)
+  - [8.5 `CASE`](#85-case)
+  - [8.6 `GREATEST` and `LEAST`](#86-greatest-and-least)
+- [9. A safety net: transactions](#9-a-safety-net-transactions)
+- [10. Changing data](#10-changing-data)
+  - [10.1 `INSERT ... RETURNING` and `INSERT ... SELECT`](#101-insert--returning-and-insert--select)
+  - [10.2 `UPDATE`](#102-update)
+  - [10.3 `DELETE`](#103-delete)
+  - [10.4 `TRUNCATE` versus `DELETE`](#104-truncate-versus-delete)
+- [11. Upserts: `INSERT ... ON CONFLICT`](#11-upserts-insert--on-conflict)
+  - [11.1 `DO NOTHING`](#111-do-nothing)
+  - [11.2 `DO UPDATE` and `EXCLUDED`](#112-do-update-and-excluded)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Getting data in
 

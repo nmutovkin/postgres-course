@@ -1,5 +1,10 @@
 # Module 05: Aggregation and Grouping
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 04 Joins and Subqueries](../04-joins-subqueries/README.md) · [Course home](../../README.md) · [06 Advanced SQL →](../06-advanced-sql/README.md)
+<!-- nav:end -->
+
 At the end of every month, each Bazaar shop owner gets the same email: how many orders they received, how much they sold, how much was refunded, and what they'll be paid. The finance team wants the same numbers for all shops at once, with a subtotal per shop and a grand total at the bottom. The marketing team wants to know what share of customers come back for a second order. None of these questions asks for rows. They ask for **summaries** of rows: counts, sums, averages, medians, per shop, per month, per category. This module teaches SQL's machinery for turning many rows into a few meaningful numbers, and the traps (double counting, missing zero months, `NULL`s that silently vanish) that make reports wrong without anyone noticing.
 
 **What you'll learn**
@@ -31,6 +36,47 @@ You need joins, subqueries and `LATERAL` from [module 04](../04-joins-subqueries
 - **Months** are calendar months of `orders.created_at` in UTC, the server's time zone in the course container. Section 10 explains why that matters.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Aggregate functions](#1-aggregate-functions)
+  - [1.1 `count(*)`, `count(col)` and `count(DISTINCT col)`](#11-count-countcol-and-countdistinct-col)
+  - [1.2 Aggregates ignore `NULL`s](#12-aggregates-ignore-nulls)
+  - [1.3 Empty input](#13-empty-input)
+- [2. `GROUP BY`](#2-group-by)
+  - [2.1 What can appear in the `SELECT` list](#21-what-can-appear-in-the-select-list)
+  - [2.2 Functional dependency: grouping by the primary key](#22-functional-dependency-grouping-by-the-primary-key)
+  - [2.3 Counting through an outer join: `count(*)` versus `count(col)`](#23-counting-through-an-outer-join-count-versus-countcol)
+- [3. `HAVING` versus `WHERE`](#3-having-versus-where)
+  - [3.1 The logical order of a `SELECT`, complete](#31-the-logical-order-of-a-select-complete)
+- [4. `FILTER` and conditional aggregation: pivot-style reports](#4-filter-and-conditional-aggregation-pivot-style-reports)
+  - [4.1 Ratios and shares](#41-ratios-and-shares)
+- [5. Collecting values: `array_agg`, `string_agg`, `jsonb_agg`](#5-collecting-values-array_agg-string_agg-jsonb_agg)
+- [6. `bool_and` and `bool_or`](#6-bool_and-and-bool_or)
+- [7. Ordered-set aggregates: medians, percentiles and the mode](#7-ordered-set-aggregates-medians-percentiles-and-the-mode)
+- [8. `DISTINCT ON`: the first row of each group](#8-distinct-on-the-first-row-of-each-group)
+  - [8.1 Three ways to get "the latest row per group"](#81-three-ways-to-get-the-latest-row-per-group)
+- [9. Subtotals: `GROUPING SETS`, `ROLLUP` and `CUBE`](#9-subtotals-grouping-sets-rollup-and-cube)
+  - [9.1 `GROUPING SETS`](#91-grouping-sets)
+  - [9.2 `ROLLUP` and `CUBE`](#92-rollup-and-cube)
+  - [9.3 `GROUPING()`: telling subtotal `NULL`s from data `NULL`s](#93-grouping-telling-subtotal-nulls-from-data-nulls)
+- [10. Time series: bucketing by date and filling the gaps](#10-time-series-bucketing-by-date-and-filling-the-gaps)
+  - [10.1 Bucketing with `date_trunc`](#101-bucketing-with-date_trunc)
+  - [10.2 Missing buckets vanish](#102-missing-buckets-vanish)
+  - [10.3 `generate_series`: the calendar table](#103-generate_series-the-calendar-table)
+  - [10.4 One series per seller: `CROSS JOIN` the calendar](#104-one-series-per-seller-cross-join-the-calendar)
+  - [10.5 Aggregating before joining the grid](#105-aggregating-before-joining-the-grid)
+- [11. Fan-out: the double-counting bug, and how to fix it](#11-fan-out-the-double-counting-bug-and-how-to-fix-it)
+  - [11.1 The bug](#111-the-bug)
+  - [11.2 Band-aids that don't work](#112-band-aids-that-dont-work)
+  - [11.3 The fix: aggregate each table at its own grain, then join](#113-the-fix-aggregate-each-table-at-its-own-grain-then-join)
+  - [11.4 The two-children version](#114-the-two-children-version)
+- [12. Performance intuition: how PostgreSQL groups](#12-performance-intuition-how-postgresql-groups)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Aggregate functions
 

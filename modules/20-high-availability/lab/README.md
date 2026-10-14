@@ -13,6 +13,16 @@ A three-node PostgreSQL 17 cluster managed by Patroni, with a three-member etcd 
            m20-client                      psql, Python 3, psycopg 3: runs the client scripts
 ```
 
+<!-- toc:start -->
+**Contents**
+
+- [Quick start](#quick-start)
+- [Files](#files)
+- [Scripts](#scripts)
+- [Why three etcd members?](#why-three-etcd-members)
+
+<!-- toc:end -->
+
 ## Quick start
 
 ```bash

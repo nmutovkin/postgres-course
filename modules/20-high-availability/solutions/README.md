@@ -1,5 +1,10 @@
 # Module 20 Solutions: High Availability
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 19 Replication](../../19-replication/README.md) · [Course home](../../../README.md) · [21 Sharding →](../../21-sharding/README.md)
+<!-- nav:end -->
+
 All outputs below come from the module's lab (3 etcd 3.5.17 + 3 Patroni 4.1.5 / PostgreSQL 17.11 + HAProxy 3.0) on a 4-CPU Linux machine, with Bazaar loaded at reset state 11. Node names, timelines, LSNs, and IP addresses will differ in your run. Timings will be similar, but not identical.
 
 Files in this directory:
@@ -8,6 +13,24 @@ Files in this directory:
 - [`milestone_check.sh`](milestone_check.sh): the milestone's acceptance check B.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: The cluster's identity card](#exercise-1--the-clusters-identity-card)
+- [Exercise 2 ★: Keep a replica out of the read pool](#exercise-2--keep-a-replica-out-of-the-read-pool)
+- [Exercise 3 ★: What maintenance mode really means](#exercise-3--what-maintenance-mode-really-means)
+- [Exercise 4 ★★: Diagnose the incident](#exercise-4--diagnose-the-incident)
+- [Exercise 5 ★★: Tune the failover timings, and measure](#exercise-5--tune-the-failover-timings-and-measure)
+- [Exercise 6 ★★: Network partitions](#exercise-6--network-partitions)
+- [Exercise 7 ★★: Synchronous mode under fire](#exercise-7--synchronous-mode-under-fire)
+- [Exercise 8 ★★: Connection strings that find the primary](#exercise-8--connection-strings-that-find-the-primary)
+- [Exercise 9 ★★: A restart that nobody notices](#exercise-9--a-restart-that-nobody-notices)
+- [Exercise 10 ★★★: Losing the DCS](#exercise-10--losing-the-dcs)
+- [Exercise 11 ★★★: Make an asynchronous failover lose data, then make Patroni refuse](#exercise-11--make-an-asynchronous-failover-lose-data-then-make-patroni-refuse)
+- [Exercise 12 ★★★: Where the pooler helps, and where it hurts](#exercise-12--where-the-pooler-helps-and-where-it-hurts)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: The cluster's identity card
 

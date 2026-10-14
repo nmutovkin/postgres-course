@@ -1,5 +1,10 @@
 # Module 18 exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 17 Configuration, Maintenance and Monitoring](../17-operations/README.md) · [Course home](../../README.md) · [19 Replication →](../19-replication/README.md)
+<!-- nav:end -->
+
 Exercises 1, 4, 5 and 8 use the **course database** (`course-pg`) at the Module 16 state with the large dataset (`./project/bin/reset.sh 16`). All the others use the **lab server** `m18-primary` with the small dataset (`COURSE_PG_CONTAINER=m18-primary ../../../project/bin/reset.sh 11` from `modules/18-backup-recovery/lab`), with at least one base backup taken by `scripts/nightly-backup.sh`. Run shell commands from the lab directory unless stated otherwise. Inside the course container, put dump files under `/tmp/dumps`.
 
 Solutions are in [`solutions/README.md`](solutions/README.md).

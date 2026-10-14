@@ -1,5 +1,10 @@
 # Module 12: Query Planning and Performance
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 11 Indexes](../11-indexes/README.md) · [Course home](../../README.md) · [13 Full-Text and Fuzzy Search →](../13-full-text-search/README.md)
+<!-- nav:end -->
+
 Module 11 gave Bazaar its indexes, and the hot queries of the storefront now run in milliseconds. Then the back office starts using the system. The fraud team's report takes a minute. A seller with 70,000 orders clicks to page 3,000 of her order list and waits; a "how many customers never ordered?" query never comes back at all; and a marketing report about Berlin customers gets *slower* after someone fixes its row estimates. Indexes don't fix any of this. What fixes it is understanding how PostgreSQL decides to run a query, reading the plan it chose, and knowing which of its assumptions failed.
 
 This module teaches you to read execution plans fluently, to understand the planner's cost model and statistics well enough to predict its choices, to find the queries worth fixing with `pg_stat_statements`, and to recognise the anti-patterns behind most slow queries.
@@ -38,6 +43,28 @@ SET max_parallel_workers_per_gather = 0;
 ```
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. From SQL to a plan](#1-from-sql-to-a-plan)
+- [2. The EXPLAIN family](#2-the-explain-family)
+- [3. Reading a plan](#3-reading-a-plan)
+- [4. Scan nodes](#4-scan-nodes)
+- [5. Join algorithms](#5-join-algorithms)
+- [6. Aggregation, sorting and other nodes](#6-aggregation-sorting-and-other-nodes)
+- [7. The cost model](#7-the-cost-model)
+- [8. Statistics](#8-statistics)
+- [9. When estimates go wrong](#9-when-estimates-go-wrong)
+- [10. pg_stat_statements: finding the queries that matter](#10-pg_stat_statements-finding-the-queries-that-matter)
+- [11. auto_explain: catching plans in the act](#11-auto_explain-catching-plans-in-the-act)
+- [12. Anti-patterns and their fixes](#12-anti-patterns-and-their-fixes)
+- [13. A method for performance investigations](#13-a-method-for-performance-investigations)
+- [14. pg_hint_plan, the last resort](#14-pg_hint_plan-the-last-resort)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. From SQL to a plan
 

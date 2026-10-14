@@ -1,8 +1,72 @@
 # Module 20: High Availability
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 19 Replication](../19-replication/README.md) · [Course home](../../README.md) · [21 Sharding →](../21-sharding/README.md)
+<!-- nav:end -->
+
 It is 03:12 on the Saturday of Bazaar's biggest sale of the year. The primary database server's NVMe drive stops answering. Thanks to Module 19, two streaming replicas hold an up-to-date copy of every order, and promoting one takes a single `SELECT pg_promote()`. But nobody is awake to run it. The pager fires at 03:15, the on-call engineer opens a laptop at 03:31, spends ten minutes making sure the old primary is *really* dead and not just unreachable, picks the replica with the most WAL, promotes it, edits the application's connection string, and redeploys. Checkout is back at 03:52: forty minutes of lost sales. And this was the *easy* case, because the old primary stayed dead. Had it come back at 03:40 while the replica was being promoted, Bazaar would have had two primaries taking orders at once.
 
 High availability (HA) is the engineering that turns those forty minutes into about thirty seconds, with no human involved, and that makes "two primaries" impossible by construction. This module explains why that is harder than it looks, how Patroni solves it on top of the streaming replication you already know, and how applications have to behave so that a failover is a short blip rather than lost or duplicated orders.
+
+<!-- toc:start -->
+**Contents**
+
+- [What you'll learn](#what-youll-learn)
+- [Before you start](#before-you-start)
+- [1. What "highly available" means](#1-what-highly-available-means)
+  - [1.1 Availability in numbers](#11-availability-in-numbers)
+  - [1.2 RPO and RTO, revisited](#12-rpo-and-rto-revisited)
+  - [1.3 Planned and unplanned downtime](#13-planned-and-unplanned-downtime)
+- [2. How a database cluster fails](#2-how-a-database-cluster-fails)
+- [3. Why manual failover doesn't scale](#3-why-manual-failover-doesnt-scale)
+- [4. The hard problems](#4-the-hard-problems)
+  - [4.1 Failure detection](#41-failure-detection)
+  - [4.2 Leader election and consensus](#42-leader-election-and-consensus)
+  - [4.3 Split-brain](#43-split-brain)
+  - [4.4 Fencing and STONITH](#44-fencing-and-stonith)
+  - [4.5 The lease: putting it together](#45-the-lease-putting-it-together)
+- [5. Patroni architecture](#5-patroni-architecture)
+  - [5.1 The components](#51-the-components)
+  - [5.2 What lives in the DCS](#52-what-lives-in-the-dcs)
+  - [5.3 The HA loop](#53-the-ha-loop)
+  - [5.4 The three timing knobs](#54-the-three-timing-knobs)
+- [6. Bootstrap: how a Patroni cluster is born](#6-bootstrap-how-a-patroni-cluster-is-born)
+- [7. Configuring Patroni](#7-configuring-patroni)
+  - [7.1 Three layers of configuration](#71-three-layers-of-configuration)
+  - [7.2 The lab's configuration, walked through](#72-the-labs-configuration-walked-through)
+  - [7.3 What Patroni writes into the data directory](#73-what-patroni-writes-into-the-data-directory)
+  - [7.4 Tags](#74-tags)
+- [8. The REST API](#8-the-rest-api)
+- [9. `patronictl`: operating the cluster](#9-patronictl-operating-the-cluster)
+- [10. Synchronous mode: trading latency for RPO = 0](#10-synchronous-mode-trading-latency-for-rpo--0)
+- [11. How Patroni decides: failover rules and edge cases](#11-how-patroni-decides-failover-rules-and-edge-cases)
+  - [11.1 Who may become the leader](#111-who-may-become-the-leader)
+  - [11.2 Primary process crash: restart in place, not failover](#112-primary-process-crash-restart-in-place-not-failover)
+  - [11.3 Network partition: the old primary fences itself](#113-network-partition-the-old-primary-fences-itself)
+  - [11.4 When the DCS itself fails](#114-when-the-dcs-itself-fails)
+  - [11.5 Rejoining: `pg_rewind`, or clone again](#115-rejoining-pg_rewind-or-clone-again)
+  - [11.6 The watchdog](#116-the-watchdog)
+- [12. The lab: measuring failover](#12-the-lab-measuring-failover)
+- [13. Routing clients to the primary](#13-routing-clients-to-the-primary)
+  - [13.1 HAProxy with Patroni health checks](#131-haproxy-with-patroni-health-checks)
+  - [13.2 libpq multi-host connection strings](#132-libpq-multi-host-connection-strings)
+  - [13.3 PgBouncer: where to put the pooler](#133-pgbouncer-where-to-put-the-pooler)
+  - [13.4 DNS and virtual IPs](#134-dns-and-virtual-ips)
+- [14. Client behaviour during failover](#14-client-behaviour-during-failover)
+  - [14.1 What clients see](#141-what-clients-see)
+  - [14.2 In-flight transactions](#142-in-flight-transactions)
+  - [14.3 Retries with idempotency keys](#143-retries-with-idempotency-keys)
+  - [14.4 Connection pools and timeouts](#144-connection-pools-and-timeouts)
+- [15. Alternatives to Patroni](#15-alternatives-to-patroni)
+- [16. Operating an HA cluster](#16-operating-an-ha-cluster)
+  - [16.1 Failure drills](#161-failure-drills)
+  - [16.2 What to monitor](#162-what-to-monitor)
+  - [16.3 Upgrades](#163-upgrades)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## What you'll learn
 

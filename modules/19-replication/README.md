@@ -1,6 +1,35 @@
 # Module 19: Replication
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 18 Backup and Recovery](../18-backup-recovery/README.md) · [Course home](../../README.md) · [20 High Availability →](../20-high-availability/README.md)
+<!-- nav:end -->
+
 Bazaar is growing up. The seller dashboard runs heavy aggregate queries all day, and they compete with checkout for CPU and I/O on the one database server. The finance team wants to run its own reporting tool directly against order data without being able to touch production. The CTO keeps asking what happens if the database server dies at 3 a.m., and next year you will have to upgrade from PostgreSQL 17 to 18 without taking the shop offline for hours. All four problems have the same root answer: **keep more than one copy of the database, and keep the copies continuously up to date.** That is replication, and PostgreSQL has two very different kinds built in. This module builds both, on a four-server lab, and teaches you how each one works, how to monitor it, and how it fails.
+
+<!-- toc:start -->
+**Contents**
+
+- [What you'll learn](#what-youll-learn)
+- [Before you start](#before-you-start)
+- [1. Why replicate, and which kind](#1-why-replicate-and-which-kind)
+- [2. How streaming replication works](#2-how-streaming-replication-works)
+- [3. Building a standby](#3-building-a-standby)
+- [4. Replication slots](#4-replication-slots)
+- [5. Hot standby: queries on replicas](#5-hot-standby-queries-on-replicas)
+- [6. Monitoring replication](#6-monitoring-replication)
+- [7. Synchronous replication](#7-synchronous-replication)
+- [8. Cascading and delayed standbys](#8-cascading-and-delayed-standbys)
+- [9. Read/write splitting and the read-your-writes problem](#9-readwrite-splitting-and-the-read-your-writes-problem)
+- [10. Logical replication](#10-logical-replication)
+- [11. Logical replication in operation](#11-logical-replication-in-operation)
+- [12. Failover by hand: promotion and `pg_rewind`](#12-failover-by-hand-promotion-and-pg_rewind)
+- [13. Major-version upgrades with logical replication](#13-major-version-upgrades-with-logical-replication)
+- [14. Logical decoding and change data capture](#14-logical-decoding-and-change-data-capture)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## What you'll learn
 

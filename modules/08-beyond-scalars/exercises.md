@@ -1,5 +1,10 @@
 # Module 08: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 07 Data Modeling](../07-data-modeling/README.md) · [Course home](../../README.md) · [09 Views, Functions and Triggers →](../09-views-functions-triggers/README.md)
+<!-- nav:end -->
+
 **Starting state.** Unless an exercise says otherwise, start from the reference state that includes this module's milestone:
 
 ```bash
@@ -12,6 +17,25 @@ That's the state at the end of this module: enums, `email_address`, `products.at
 "Today" in the small dataset is 2025-06-30, and all timestamps are UTC. Solutions: [solutions/README.md](solutions/README.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Laptops with at least 16 GB, three ways](#exercise-1--laptops-with-at-least-16-gb-three-ways)
+- [Exercise 2 ★: "You might also like"](#exercise-2--you-might-also-like)
+- [Exercise 3 ★: A new order status](#exercise-3--a-new-order-status)
+- [Exercise 4 ★★: What's actually in `attributes`?](#exercise-4--whats-actually-in-attributes)
+- [Exercise 5 ★★: Tags that travel together](#exercise-5--tags-that-travel-together)
+- [Exercise 6 ★★: Monitor spec sheet with `JSON_TABLE`](#exercise-6--monitor-spec-sheet-with-json_table)
+- [Exercise 7 ★★: A `country_code` domain](#exercise-7--a-country_code-domain)
+- [Exercise 8 ★★: Will this batch of promotions fit?](#exercise-8--will-this-batch-of-promotions-fit)
+- [Exercise 9 ★★: Promotion calendar for June 2025](#exercise-9--promotion-calendar-for-june-2025)
+- [Exercise 10 ★★: Sale prices at a given moment](#exercise-10--sale-prices-at-a-given-moment)
+- [Exercise 11 ★★★: Did customers get their discount?](#exercise-11--did-customers-get-their-discount)
+- [Exercise 12 ★★★: Taking a status back](#exercise-12--taking-a-status-back)
+- [Exercise 13 ★★★: Gaps between promotions](#exercise-13--gaps-between-promotions)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Laptops with at least 16 GB, three ways
 

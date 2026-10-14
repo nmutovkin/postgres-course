@@ -1,5 +1,10 @@
 # Module 08 project: Bazaar schema v3
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 07 Data Modeling](../07-data-modeling/README.md) · [Course home](../../README.md) · [09 Views, Functions and Triggers →](../09-views-functions-triggers/README.md)
+<!-- nav:end -->
+
 Bazaar's catalog team wants richer product pages and a promotions calendar, and engineering wants the status columns to stop accepting typos. In this milestone you write the **v3 migration**: you convert the status columns to enums, add an e-mail domain with case-insensitive uniqueness, give products semi-structured attributes and tags, and create a promotions table in which overlapping promotions for the same product are impossible. Then you write the seed that fills the new columns for the small dataset.
 
 **Starting state:** `./project/bin/reset.sh 08` (schema v2 with the small dataset).
@@ -10,6 +15,17 @@ You write two files, in the same spirit as the reference: a schema migration (`0
 docker exec -i course-pg psql -X -U postgres -d bazaar -v ON_ERROR_STOP=1 < my_0801_schema_types.sql
 docker exec -i course-pg psql -X -U postgres -d bazaar -v ON_ERROR_STOP=1 < my_0802_seed_types.sql
 ```
+
+<!-- toc:start -->
+**Contents**
+
+- [Requirements](#requirements)
+  - [Migration (one transaction)](#migration-one-transaction)
+  - [Seed](#seed)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Requirements
 

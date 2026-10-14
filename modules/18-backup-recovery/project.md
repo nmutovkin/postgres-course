@@ -1,5 +1,25 @@
 # Module 18 milestone: Bazaar can be restored, and you can prove it
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 17 Configuration, Maintenance and Monitoring](../17-operations/README.md) · [Course home](../../README.md) · [19 Replication →](../19-replication/README.md)
+<!-- nav:end -->
+
+<!-- toc:start -->
+**Contents**
+
+- [Goal](#goal)
+- [Requirements](#requirements)
+  - [1. Continuous WAL archiving](#1-continuous-wal-archiving)
+  - [2. Nightly base backup script](#2-nightly-base-backup-script)
+  - [3. Freshness check](#3-freshness-check)
+  - [4. Scripted PITR drill](#4-scripted-pitr-drill)
+  - [5. Runbook](#5-runbook)
+- [Reference solution](#reference-solution)
+- [Acceptance checks](#acceptance-checks)
+
+<!-- toc:end -->
+
 ## Goal
 
 Bazaar takes money. The business has agreed on two numbers: at most **one minute** of committed orders may be lost in a disaster (RPO), and the shop must be back within **one hour** (RTO). Today nothing guarantees either. In this milestone you put backups in place that meet those numbers, write the runbook that the on-call engineer will follow at 3 a.m., and automate a restore drill that proves, every week, that the backups actually restore.

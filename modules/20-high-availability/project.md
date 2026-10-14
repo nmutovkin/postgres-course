@@ -1,5 +1,23 @@
 # Module 20 Milestone: Bazaar survives a failover
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 19 Replication](../19-replication/README.md) · [Course home](../../README.md) · [21 Sharding →](../21-sharding/README.md)
+<!-- nav:end -->
+
+<!-- toc:start -->
+**Contents**
+
+- [The goal](#the-goal)
+- [Requirements](#requirements)
+  - [1. Bazaar on the HA cluster](#1-bazaar-on-the-ha-cluster)
+  - [2. Synchronous mode](#2-synchronous-mode)
+  - [3. A checkout client that survives failover](#3-a-checkout-client-that-survives-failover)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
+
 ## The goal
 
 Bazaar's checkout must keep working when the primary database disappears, and it must **never lose an order the customer was told about, or place one twice**. At the end of this milestone Bazaar runs on the three-node Patroni cluster from the lab, with synchronous replication. A checkout client rides through a switchover and a crash of the primary, and the numbers prove that nothing was lost or duplicated.

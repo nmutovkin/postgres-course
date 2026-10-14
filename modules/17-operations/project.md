@@ -1,8 +1,24 @@
 # Module 17 project: the ops toolkit
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 16 Internals Deep Dive](../16-internals/README.md) · [Course home](../../README.md) · [18 Backup and Recovery →](../18-backup-recovery/README.md)
+<!-- nav:end -->
+
 Bazaar is in production. When something goes wrong at 3 a.m., the on-call engineer should not be writing recursive CTEs over `pg_locks` from memory. In this milestone you build an **ops toolkit**: a schema of monitoring views that answer the standard questions in one `SELECT`, plus tuned autovacuum settings for Bazaar's two hottest tables and per-role guardrails, applied and verified.
 
 **Starting state:** `./project/bin/reset.sh 17`. The schema of Bazaar's tables doesn't change (modules 16 to 20 work *on* the database); you add a separate `ops` schema and storage parameters.
+
+<!-- toc:start -->
+**Contents**
+
+- [Part 1: monitoring views](#part-1-monitoring-views)
+- [Part 2: autovacuum for the hot tables](#part-2-autovacuum-for-the-hot-tables)
+- [Part 3: guardrails per role](#part-3-guardrails-per-role)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Part 1: monitoring views
 

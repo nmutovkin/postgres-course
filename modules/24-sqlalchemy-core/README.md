@@ -1,5 +1,10 @@
 # Module 24: SQLAlchemy Core
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 23 Async Python: psycopg async and asyncpg](../23-async-python/README.md) · [Course home](../../README.md) · [25 SQLAlchemy ORM →](../25-sqlalchemy-orm/README.md)
+<!-- nav:end -->
+
 Bazaar's data-access layer from Module 22 is honest, fast, plain SQL. It is also starting to strain. The search function glues optional `AND` clauses together with `psycopg.sql`; the order list repeats the same column list in three places; the finance team wants a seller statement and a category revenue roll-up with five optional filters each, and every new filter means another string fragment that nobody can test in isolation. SQLAlchemy Core is the layer that keeps the SQL (you still decide every join and every `GROUP BY`) but lets you build it out of Python objects: tables you describe once, expressions you can pass around and combine, and a compiler that turns them into correct, parameterized PostgreSQL. This module covers Core on its own: engines and pools, connections and transactions in SQLAlchemy 2.0 style, describing the Bazaar schema as `Table` metadata, reflection, the SQL expression language from `SELECT` to recursive CTEs and window functions, the PostgreSQL-specific constructs (`ON CONFLICT`, JSONB, arrays, full-text search, `DISTINCT ON`, `SKIP LOCKED`), bulk loading, async engines, and custom types. Module 25 builds the ORM on top of it.
 
 **What you'll learn**
@@ -30,6 +35,26 @@ python -c "import sqlalchemy; print(sqlalchemy.__version__)"
 The package now depends on `sqlalchemy[asyncio]` (the `[asyncio]` extra installs `greenlet`, which the async engine needs). The outputs in this module come from **SQLAlchemy 2.1.4** with psycopg 3.3.6 and asyncpg 0.32.0, against PostgreSQL 17.11 in a 4-vCPU container reached through Docker's port forwarding (a `SELECT 1` round trip takes about 130–250 µs). Everything uses the **2.0-style API**, which 2.1 keeps; the few places where 2.1 differs from 2.0 are marked. The scripts are in [`examples/`](examples/); run them from `project/python` with the virtual environment active, for example `python ../../modules/24-sqlalchemy-core/examples/01_engine_and_transactions.py`.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Why SQLAlchemy, and which part](#1-why-sqlalchemy-and-which-part)
+- [2. Engines](#2-engines)
+- [3. Connections and transactions](#3-connections-and-transactions)
+- [4. Describing the schema: `MetaData`, `Table`, `Column`](#4-describing-the-schema-metadata-table-column)
+- [5. Reflection](#5-reflection)
+- [6. The SQL expression language](#6-the-sql-expression-language)
+- [7. Writing data](#7-writing-data)
+- [8. PostgreSQL-specific constructs](#8-postgresql-specific-constructs)
+- [9. Seeing the SQL](#9-seeing-the-sql)
+- [10. Async Core](#10-async-core)
+- [11. Custom types with `TypeDecorator`](#11-custom-types-with-typedecorator)
+- [12. The Bazaar Core layer](#12-the-bazaar-core-layer)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Why SQLAlchemy, and which part
 

@@ -1,8 +1,29 @@
 # Module 03: Project milestone — the catalogue importer
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 02 Data Types and Tables](../02-types-and-ddl/README.md) · [Course home](../../README.md) · [04 Joins and Subqueries →](../04-joins-subqueries/README.md)
+<!-- nav:end -->
+
 **Goal.** Sakura Gadgets (seller 6) opened its shop in May 2025 but hasn't listed anything yet. Like most sellers, it keeps its catalogue in a spreadsheet and sends Bazaar a CSV export. Your job is the **catalogue importer**: a psql script that loads a seller's CSV into `products` and `inventory`. It must be safe to run again whenever the seller sends an updated file, and it must never let a bad line corrupt the catalogue. Instead, it reports every rejected line and the reason, so the seller can fix the spreadsheet.
 
 This is how real data loads are built: **load into a staging table, validate with SQL, then upsert into the real tables, all in one transaction.** You'll write your own version in `workspace/03/load_catalog.sql`.
+
+<!-- toc:start -->
+**Contents**
+
+- [The input](#the-input)
+- [Requirements](#requirements)
+- [How to run it](#how-to-run-it)
+- [Acceptance checks](#acceptance-checks)
+  - [1. The first upload](#1-the-first-upload)
+  - [2. Idempotence](#2-idempotence)
+  - [3. The corrected file](#3-the-corrected-file)
+  - [4. All or nothing](#4-all-or-nothing)
+- [Reference solution](#reference-solution)
+- [Going further (optional)](#going-further-optional)
+
+<!-- toc:end -->
 
 ## The input
 

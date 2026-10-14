@@ -76,6 +76,10 @@ class DuplicateReview(BazaarError):
     """The user has already reviewed this product (reviews_product_id_user_id_key)."""
 
 
+class IdempotencyConflict(BazaarError):
+    """An idempotency key was reused for a different request (module 27)."""
+
+
 _SIMPLE = {
     "22023": InvalidOrder,
     "BZ002": ProductUnavailable,
@@ -93,6 +97,26 @@ def _message_and_detail(exc: BaseException) -> tuple[str, str | None]:
         return diag.message_primary or str(exc), diag.message_detail
     # asyncpg: PostgresMessage attributes
     return getattr(exc, "message", None) or str(exc), getattr(exc, "detail", None)
+
+
+def constraint_name(exc: BaseException) -> str | None:
+    """The violated constraint of an integrity error, whatever the driver.
+
+    psycopg: exc.diag.constraint_name. asyncpg: exc.constraint_name. SQLAlchemy
+    wraps both (exc.orig); its asyncpg adapter wraps once more (__cause__).
+    """
+    for e in (
+        exc,
+        getattr(exc, "orig", None),
+        getattr(getattr(exc, "orig", None), "__cause__", None),
+    ):
+        if e is None:
+            continue
+        diag = getattr(e, "diag", None)
+        name = getattr(diag, "constraint_name", None) or getattr(e, "constraint_name", None)
+        if name:
+            return name
+    return None
 
 
 def translate(exc: BaseException) -> BaseException:

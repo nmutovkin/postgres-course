@@ -40,9 +40,11 @@ def connect_kwargs(settings: Settings | None = None) -> dict[str, Any]:
         "application_name": s.app_name,
         "connect_timeout": 5,
     }
-    if s.statement_timeout_ms:
-        # Startup option: applies to the whole session, set once at connect time.
-        kwargs["options"] = f"-c statement_timeout={s.statement_timeout_ms}"
+    options = s.libpq_options()
+    if options:
+        # Startup options (statement_timeout, lock_timeout, idle_in_transaction_session_timeout):
+        # they apply to the whole session and are set once, at connect time.
+        kwargs["options"] = options
     return kwargs
 
 
@@ -82,6 +84,7 @@ def create_pool(
         "max_size": s.pool_max_size,
         "configure": configure,
         "check": ConnectionPool.check_connection,  # cheap liveness check on checkout
+        "timeout": s.pool_timeout_s,  # wait this long for a connection, then PoolTimeout
         "name": "bazaar",
     }
     params.update(overrides)  # e.g. create_pool(max_size=20, timeout=5)

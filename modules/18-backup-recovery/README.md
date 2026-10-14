@@ -1,6 +1,76 @@
 # Module 18: Backup and Recovery
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 17 Configuration, Maintenance and Monitoring](../17-operations/README.md) · [Course home](../../README.md) · [19 Replication →](../19-replication/README.md)
+<!-- nav:end -->
+
 It is 14:07 on a Tuesday. A support engineer, trying to clean up a few test orders in production, runs `DELETE FROM orders WHERE created_at > '2025-01-01'` in the wrong psql tab. The statement finishes in 300 ms. Thousands of real orders, their items and their payments are gone, the checkout keeps taking new orders on top of the hole, and every replica you built for high availability has faithfully deleted them too. What happens next depends entirely on decisions made months earlier: what you back up, how often, where you keep it, and whether anybody has ever practised a restore. This module is about making those decisions well, and about the PostgreSQL machinery (dumps, base backups, WAL archiving and point-in-time recovery) that lets you answer "bring Bazaar back to 14:06:59" with a calm "give me twenty minutes".
+
+<!-- toc:start -->
+**Contents**
+
+- [What you'll learn](#what-youll-learn)
+- [Before you start](#before-you-start)
+- [1. What can go wrong, and what a backup must achieve](#1-what-can-go-wrong-and-what-a-backup-must-achieve)
+  - [1.1 Failure modes](#11-failure-modes)
+  - [1.2 RPO and RTO](#12-rpo-and-rto)
+  - [1.3 The three families of backup](#13-the-three-families-of-backup)
+- [2. Logical backups with `pg_dump`](#2-logical-backups-with-pg_dump)
+  - [2.1 What `pg_dump` does](#21-what-pg_dump-does)
+  - [2.2 The four formats](#22-the-four-formats)
+  - [2.3 What a dump contains, and what it does not](#23-what-a-dump-contains-and-what-it-does-not)
+  - [2.4 Version compatibility](#24-version-compatibility)
+- [3. Restoring logical backups](#3-restoring-logical-backups)
+  - [3.1 Plain dumps: `psql`](#31-plain-dumps-psql)
+  - [3.2 Archive formats: `pg_restore`](#32-archive-formats-pg_restore)
+  - [3.3 Sections, and why restores are ordered the way they are](#33-sections-and-why-restores-are-ordered-the-way-they-are)
+  - [3.4 Restoring into a different database or a different server](#34-restoring-into-a-different-database-or-a-different-server)
+  - [3.5 Selective restores: getting one table back](#35-selective-restores-getting-one-table-back)
+- [4. Physical backups with `pg_basebackup`](#4-physical-backups-with-pg_basebackup)
+  - [4.1 The idea: copy the files, then replay WAL](#41-the-idea-copy-the-files-then-replay-wal)
+  - [4.2 Taking one](#42-taking-one)
+  - [4.3 What is inside](#43-what-is-inside)
+  - [4.4 Verifying a backup: `pg_verifybackup`](#44-verifying-a-backup-pg_verifybackup)
+  - [4.5 Formats and compression, measured](#45-formats-and-compression-measured)
+  - [4.6 Tablespaces](#46-tablespaces)
+- [5. Continuous archiving](#5-continuous-archiving)
+  - [5.1 From "a backup" to "any moment"](#51-from-a-backup-to-any-moment)
+  - [5.2 `archive_mode` and `archive_command`](#52-archive_mode-and-archive_command)
+  - [5.3 Monitoring the archiver, and what happens when it fails](#53-monitoring-the-archiver-and-what-happens-when-it-fails)
+  - [5.4 `pg_receivewal`: streaming instead of shipping](#54-pg_receivewal-streaming-instead-of-shipping)
+  - [5.5 `restore_command`: the way back](#55-restore_command-the-way-back)
+- [6. Point-in-time recovery](#6-point-in-time-recovery)
+  - [6.1 How a server knows it should recover](#61-how-a-server-knows-it-should-recover)
+  - [6.2 Choosing the target](#62-choosing-the-target)
+  - [6.3 Restoring: the procedure](#63-restoring-the-procedure)
+  - [6.4 Timelines](#64-timelines)
+- [7. Lab: recovering from an accidental DELETE](#7-lab-recovering-from-an-accidental-delete)
+  - [7.1 Base backup, activity, the mistake](#71-base-backup-activity-the-mistake)
+  - [7.2 Finding the exact moment with `pg_waldump`](#72-finding-the-exact-moment-with-pg_waldump)
+  - [7.3 Restore into a separate server](#73-restore-into-a-separate-server)
+  - [7.4 Verify, then promote](#74-verify-then-promote)
+  - [7.5 Getting the data back into production](#75-getting-the-data-back-into-production)
+- [8. pgBackRest](#8-pgbackrest)
+  - [8.1 Why a dedicated tool](#81-why-a-dedicated-tool)
+  - [8.2 Concepts: repository and stanza](#82-concepts-repository-and-stanza)
+  - [8.3 Setting up: stanza-create and check](#83-setting-up-stanza-create-and-check)
+  - [8.4 Full, differential and incremental backups](#84-full-differential-and-incremental-backups)
+  - [8.5 Retention and expire](#85-retention-and-expire)
+  - [8.6 `verify`](#86-verify)
+  - [8.7 Point-in-time restore with `--delta`](#87-point-in-time-restore-with---delta)
+- [9. Incremental backups in PostgreSQL 17](#9-incremental-backups-in-postgresql-17)
+  - [9.1 WAL summaries](#91-wal-summaries)
+  - [9.2 Taking an incremental chain](#92-taking-an-incremental-chain)
+  - [9.3 Restoring: `pg_combinebackup`](#93-restoring-pg_combinebackup)
+- [10. Testing restores and monitoring backups](#10-testing-restores-and-monitoring-backups)
+  - [10.1 A backup you have not restored is a hope](#101-a-backup-you-have-not-restored-is-a-hope)
+  - [10.2 Monitoring freshness](#102-monitoring-freshness)
+- [11. A backup strategy for Bazaar, and the checklist](#11-a-backup-strategy-for-bazaar-and-the-checklist)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## What you'll learn
 

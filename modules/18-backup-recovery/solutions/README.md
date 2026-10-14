@@ -1,5 +1,10 @@
 # Module 18 solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 17 Configuration, Maintenance and Monitoring](../../17-operations/README.md) · [Course home](../../../README.md) · [19 Replication →](../../19-replication/README.md)
+<!-- nav:end -->
+
 All results below come from runs on PostgreSQL 17.11: exercises 1, 4, 5 and 8 against the large dataset (state 16), the others against the lab server `m18-primary` with the small dataset (state 11). Times and LSNs will differ on your machine; counts should not, except where the lab's random activity script is involved.
 
 Runnable files in this directory:
@@ -14,6 +19,24 @@ Runnable files in this directory:
 The milestone's reference solution (runbook and scripts) is in [`../lab/`](../lab/): see [`../project.md`](../project.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1: Read a dump's table of contents](#exercise-1-read-a-dumps-table-of-contents)
+- [Exercise 2: An archiver health query](#exercise-2-an-archiver-health-query)
+- [Exercise 3: Anatomy of a nightly backup](#exercise-3-anatomy-of-a-nightly-backup)
+- [Exercise 4: A lean developer copy](#exercise-4-a-lean-developer-copy)
+- [Exercise 5: Undo a bad bulk update from last night's dump](#exercise-5-undo-a-bad-bulk-update-from-last-nights-dump)
+- [Exercise 6: How far back can we go?](#exercise-6-how-far-back-can-we-go)
+- [Exercise 7: Test a pgBackRest backup without touching production](#exercise-7-test-a-pgbackrest-backup-without-touching-production)
+- [Exercise 8: How much does `-j` help?](#exercise-8-how-much-does--j-help)
+- [Exercise 9: Break an incremental chain](#exercise-9-break-an-incremental-chain)
+- [Exercise 10: Compressed archiving](#exercise-10-compressed-archiving)
+- [Exercise 11: Detect gaps in the archive](#exercise-11-detect-gaps-in-the-archive)
+- [Exercise 12: Recover a dropped table by LSN](#exercise-12-recover-a-dropped-table-by-lsn)
+
+<!-- toc:end -->
 
 ## Exercise 1: Read a dump's table of contents
 

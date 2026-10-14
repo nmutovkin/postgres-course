@@ -1,5 +1,10 @@
 # Module 19 solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 18 Backup and Recovery](../../18-backup-recovery/README.md) · [Course home](../../../README.md) · [20 High Availability →](../../20-high-availability/README.md)
+<!-- nav:end -->
+
 All results below come from runs on the module's lab (PostgreSQL 17.11, Bazaar state 11). LSNs, PIDs, IP addresses and timings differ on your machine; counts should not.
 
 Runnable files in this directory:
@@ -17,6 +22,24 @@ Runnable files in this directory:
 The milestone's reference solution is in [`../lab/scripts/`](../lab/scripts/): `setup-analytics.sql`, `analytics-schema.sql` and `lag.sql` (see [`../project.md`](../project.md)).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1: Draw the topology from SQL alone](#exercise-1-draw-the-topology-from-sql-alone)
+- [Exercise 2: What did `pg_basebackup` copy?](#exercise-2-what-did-pg_basebackup-copy)
+- [Exercise 3: Rename a standby](#exercise-3-rename-a-standby)
+- [Exercise 4: An honest lag measurement](#exercise-4-an-honest-lag-measurement)
+- [Exercise 5: Slot early warning](#exercise-5-slot-early-warning)
+- [Exercise 6: Quorums and the delayed standby](#exercise-6-quorums-and-the-delayed-standby)
+- [Exercise 7: Read-your-writes in one psql script](#exercise-7-read-your-writes-in-one-psql-script)
+- [Exercise 8: Which tables are not ready for logical replication?](#exercise-8-which-tables-are-not-ready-for-logical-replication)
+- [Exercise 9: Complaints for the analytics team](#exercise-9-complaints-for-the-analytics-team)
+- [Exercise 10: Undo a `DROP TABLE` with the delayed standby](#exercise-10-undo-a-drop-table-with-the-delayed-standby)
+- [Exercise 11: Rehearse a zero-downtime migration](#exercise-11-rehearse-a-zero-downtime-migration)
+- [Exercise 12: Skip a transaction, then repair](#exercise-12-skip-a-transaction-then-repair)
+
+<!-- toc:end -->
 
 ## Exercise 1: Draw the topology from SQL alone
 

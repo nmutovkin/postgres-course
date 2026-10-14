@@ -31,14 +31,17 @@ from sqlalchemy.orm.exc import StaleDataError
 from bazaar.errors import (
     ConcurrentUpdate,
     DuplicateReview,
+    IdempotencyConflict,
     InvalidReview,
     NotFound,
     ReviewNotAllowed,
+    constraint_name,
     translate,
 )
 from bazaar.models import OrderStatus, ProductStatus
 from bazaar.orm.models import Inventory, Order, OrderItem, Product, Review
 from bazaar.orm.session import SELLER_KEY
+from bazaar.sa.tables import outbox as outbox_table
 
 
 def _reraise_translated(e: DBAPIError) -> None:
@@ -50,12 +53,97 @@ def _reraise_translated(e: DBAPIError) -> None:
 
 # --- checkout ----------------------------------------------------------------------------
 
+IDEMPOTENCY_INDEX = "orders_idempotency_key_idx"  # unique (user_id, idempotency_key, seller_id)
+
+
+def _place_order_call(
+    user_id: int, items: Sequence[tuple[int, int]], shipping_address_id: int | None
+) -> sa.Select:
+    payload = [{"product_id": pid, "quantity": qty} for pid, qty in items]
+    return sa.select(
+        sa.func.place_order(
+            sa.bindparam("user_id", user_id, type_=sa.BigInteger),
+            sa.bindparam("items", payload, type_=JSONB),
+            sa.bindparam("address_id", shipping_address_id, type_=sa.BigInteger),
+        )
+    )
+
+
+def _orders_query(*where: Any) -> sa.Select[tuple[Order]]:
+    return (
+        sa.select(Order)
+        .where(*where)
+        .order_by(Order.id)
+        .options(selectinload(Order.items), raiseload("*"))
+    )
+
+
+def _keyed_orders(user_id: int, key: str) -> sa.Select[tuple[Order]]:
+    return _orders_query(Order.user_id == user_id, Order.idempotency_key == key)
+
+
+def _tag_and_record(order_ids: list[int], idempotency_key: str | None, events: bool) -> list:
+    """Statements that run in the checkout's savepoint after place_order()."""
+    stmts: list = []
+    if idempotency_key is not None:
+        stmts.append(
+            sa.update(Order.__table__)
+            .where(Order.__table__.c.id.in_(order_ids))
+            .values(idempotency_key=idempotency_key)
+        )
+    if events:
+        o = Order.__table__
+        stmts.append(
+            sa.insert(outbox_table).from_select(
+                ["topic", "aggregate_type", "aggregate_id", "payload"],
+                sa.select(
+                    sa.literal("order.placed"),
+                    sa.literal("order"),
+                    sa.cast(o.c.id, sa.Text),
+                    sa.func.jsonb_build_object(
+                        "order_id",
+                        o.c.id,
+                        "user_id",
+                        o.c.user_id,
+                        "seller_id",
+                        o.c.seller_id,
+                        "total",
+                        sa.cast(o.c.total, sa.Text),
+                    ),
+                )
+                .where(o.c.id.in_(order_ids))
+                .order_by(o.c.id),
+            )
+        )
+    return stmts
+
+
+def _same_items(orders: Sequence[Order], items: Sequence[tuple[int, int]]) -> bool:
+    wanted: dict[int, int] = {}
+    for pid, qty in items:  # place_order() sums duplicate lines
+        wanted[pid] = wanted.get(pid, 0) + qty
+    have = {i.product_id: i.quantity for o in orders for i in o.items}
+    return have == wanted
+
+
+def _is_key_conflict(e: IntegrityError) -> bool:
+    return constraint_name(e) == IDEMPOTENCY_INDEX  # psycopg and asyncpg alike
+
+
+def _replay(orders: list[Order], items: Sequence[tuple[int, int]], key: str) -> list[Order]:
+    if not _same_items(orders, items):
+        raise IdempotencyConflict(f"idempotency key {key!r} was used for a different cart")
+    return orders
+
 
 def checkout(
     session: Session,
     user_id: int,
     items: Sequence[tuple[int, int]],
     shipping_address_id: int | None = None,
+    *,
+    idempotency_key: str | None = None,
+    emit_events: bool = True,
 ) -> list[Order]:
     """Place an order through the database function place_order() (module 10).
 
@@ -63,27 +151,67 @@ def checkout(
     returns the new order ids; we then load the orders with their items.
     Raises InsufficientStock, ProductUnavailable, UserInactive, AddressMismatch
     or InvalidOrder; on error nothing is changed.
+
+    Module 27 additions, both in the same savepoint as the orders:
+    * idempotency_key (8-200 characters, chosen by the client per checkout):
+      a repeated call with the same key returns the orders of the first call
+      instead of ordering again, also when the two calls race (the unique
+      index orders_idempotency_key_idx decides; the loser re-reads). Reusing
+      a key for a different cart raises IdempotencyConflict.
+    * emit_events: one "order.placed" message per order in the outbox, so the
+      events exist if and only if the orders do (bazaar.outbox relays them).
     """
-    payload = [{"product_id": pid, "quantity": qty} for pid, qty in items]
-    call = sa.select(
-        sa.func.place_order(
-            sa.bindparam("user_id", user_id, type_=sa.BigInteger),
-            sa.bindparam("items", payload, type_=JSONB),
-            sa.bindparam("address_id", shipping_address_id, type_=sa.BigInteger),
-        )
-    )
+    if idempotency_key is not None:
+        existing = list(session.scalars(_keyed_orders(user_id, idempotency_key)))
+        if existing:
+            return _replay(existing, items, idempotency_key)
     try:
         with session.begin_nested():
-            order_ids = list(session.scalars(call))
+            order_ids = list(
+                session.scalars(_place_order_call(user_id, items, shipping_address_id))
+            )
+            for stmt in _tag_and_record(order_ids, idempotency_key, emit_events):
+                session.execute(stmt)
+    except IntegrityError as e:
+        if idempotency_key is None or not _is_key_conflict(e):
+            raise
+        # A concurrent request with the same key committed first.
+        existing = list(session.scalars(_keyed_orders(user_id, idempotency_key)))
+        return _replay(existing, items, idempotency_key)
     except DBAPIError as e:
         _reraise_translated(e)
-    stmt = (
-        sa.select(Order)
-        .where(Order.id.in_(order_ids))
-        .order_by(Order.id)
-        .options(selectinload(Order.items), raiseload("*"))
-    )
-    return list(session.scalars(stmt))
+    return list(session.scalars(_orders_query(Order.id.in_(order_ids))))
+
+
+async def checkout_async(
+    session: AsyncSession,
+    user_id: int,
+    items: Sequence[tuple[int, int]],
+    shipping_address_id: int | None = None,
+    *,
+    idempotency_key: str | None = None,
+    emit_events: bool = True,
+) -> list[Order]:
+    """checkout() for an AsyncSession (the module 28 service): same statements."""
+    if idempotency_key is not None:
+        existing = list(await session.scalars(_keyed_orders(user_id, idempotency_key)))
+        if existing:
+            return _replay(existing, items, idempotency_key)
+    try:
+        async with session.begin_nested():
+            order_ids = list(
+                await session.scalars(_place_order_call(user_id, items, shipping_address_id))
+            )
+            for stmt in _tag_and_record(order_ids, idempotency_key, emit_events):
+                await session.execute(stmt)
+    except IntegrityError as e:
+        if idempotency_key is None or not _is_key_conflict(e):
+            raise
+        existing = list(await session.scalars(_keyed_orders(user_id, idempotency_key)))
+        return _replay(existing, items, idempotency_key)
+    except DBAPIError as e:
+        _reraise_translated(e)
+    return list(await session.scalars(_orders_query(Order.id.in_(order_ids))))
 
 
 # --- reading orders without N+1 -----------------------------------------------------------
@@ -265,8 +393,7 @@ def submit_review(
         with session.begin_nested():
             session.add(review)
     except IntegrityError as e:
-        constraint = getattr(getattr(e.orig, "diag", None), "constraint_name", None)
-        if constraint == "reviews_product_id_user_id_key":
+        if constraint_name(e) == "reviews_product_id_user_id_key":
             raise DuplicateReview(f"user {user_id} already reviewed product {product_id}") from e
         raise
     return review

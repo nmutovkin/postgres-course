@@ -1,5 +1,10 @@
 # Module 14: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 13 Full-Text and Fuzzy Search](../../13-full-text-search/README.md) · [Course home](../../../README.md) · [15 Security and Row-Level Security →](../../15-security-rls/README.md)
+<!-- nav:end -->
+
 All solutions were run on PostgreSQL 17 against `./project/bin/reset.sh 15` (the large dataset with the partitioned `events` table), with [`partition_maintenance.sql`](partition_maintenance.sql) applied where noted. Timings come from a 4-vCPU container with a warm cache; yours will differ, the counts won't. "Today" for `now()` and `current_date` was 2026-10-14 when these ran.
 
 Runnable files in this directory:
@@ -14,6 +19,24 @@ Runnable files in this directory:
 | [`merge_quarter.sql`](merge_quarter.sql) | Exercise 11 |
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Pruning puzzles](#exercise-1--pruning-puzzles)
+- [Exercise 2 ★: Where are the rows?](#exercise-2--where-are-the-rows)
+- [Exercise 3 ★: The BETWEEN bug](#exercise-3--the-between-bug)
+- [Exercise 4 ★★: The funnel, month by month](#exercise-4--the-funnel-month-by-month)
+- [Exercise 5 ★★: LIST partitioning by event type](#exercise-5--list-partitioning-by-event-type)
+- [Exercise 6 ★★: Hash-partitioning cart_items: worth it?](#exercise-6--hash-partitioning-cart_items-worth-it)
+- [Exercise 7 ★★: Rescue the default partition](#exercise-7--rescue-the-default-partition)
+- [Exercise 8 ★★: Archive a month, then bring it back](#exercise-8--archive-a-month-then-bring-it-back)
+- [Exercise 9 ★★: Make old months maintenance-free](#exercise-9--make-old-months-maintenance-free)
+- [Exercise 10 ★★★: Find an event by id, fast](#exercise-10--find-an-event-by-id-fast)
+- [Exercise 11 ★★★: Merge three months into a quarter](#exercise-11--merge-three-months-into-a-quarter)
+- [Exercise 12 ★★★: Funnel by session start](#exercise-12--funnel-by-session-start)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Pruning puzzles
 

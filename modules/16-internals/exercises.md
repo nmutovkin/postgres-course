@@ -1,5 +1,10 @@
 # Module 16: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 15 Security and Row-Level Security](../15-security-rls/README.md) · [Course home](../../README.md) · [17 Configuration, Maintenance and Monitoring →](../17-operations/README.md)
+<!-- nav:end -->
+
 **Starting state.** Unless an exercise says otherwise:
 
 ```bash
@@ -14,6 +19,25 @@ Some values (transaction IDs, OIDs, LSNs, sample-based statistics) differ on eve
 Solutions: [solutions/README.md](solutions/README.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Every file of a table](#exercise-1--every-file-of-a-table)
+- [Exercise 2 ★: Page arithmetic](#exercise-2--page-arithmetic)
+- [Exercise 3 ★: The tuple behind order 250000](#exercise-3--the-tuple-behind-order-250000)
+- [Exercise 4 ★★: Does the events column order cost disk?](#exercise-4--does-the-events-column-order-cost-disk)
+- [Exercise 5 ★★: The index that killed HOT](#exercise-5--the-index-that-killed-hot)
+- [Exercise 6 ★★: Visibility on paper](#exercise-6--visibility-on-paper)
+- [Exercise 7 ★★: Find the TOAST threshold](#exercise-7--find-the-toast-threshold)
+- [Exercise 8 ★★: What an index costs in WAL](#exercise-8--what-an-index-costs-in-wal)
+- [Exercise 9 ★★: Make a multixact](#exercise-9--make-a-multixact)
+- [Exercise 10 ★★: Freeze a table and unfreeze one page](#exercise-10--freeze-a-table-and-unfreeze-one-page)
+- [Exercise 11 ★★★: Estimate a conjunction by hand](#exercise-11--estimate-a-conjunction-by-hand)
+- [Exercise 12 ★★★: Bloat with and without VACUUM](#exercise-12--bloat-with-and-without-vacuum)
+- [Exercise 13 ★★★: Walk a HOT chain](#exercise-13--walk-a-hot-chain)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Every file of a table
 

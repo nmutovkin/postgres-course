@@ -1,5 +1,10 @@
 # Module 23: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 22 psycopg 3](../../22-psycopg/README.md) · [Course home](../../../README.md) · [24 SQLAlchemy Core →](../../24-sqlalchemy-core/README.md)
+<!-- nav:end -->
+
 Every solution is a runnable script in this directory, run against `./project/bin/reset.sh 23` plus `project/python/sql/2301_notify.sql`, with Python 3.13, psycopg 3.3.6, asyncpg 0.32.0 and PostgreSQL 17.11. The outputs below come from those runs. Run them from `project/python` with the venv active:
 
 ```bash
@@ -8,6 +13,24 @@ python ../../modules/23-async-python/solutions/ex03_bounded.py
 ```
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Unblock the loop](#exercise-1--unblock-the-loop)
+- [Exercise 2 ★: Port to asyncpg](#exercise-2--port-to-asyncpg)
+- [Exercise 3 ★: A ceiling on concurrency](#exercise-3--a-ceiling-on-concurrency)
+- [Exercise 4 ★★: The operations dashboard](#exercise-4--the-operations-dashboard)
+- [Exercise 5 ★★: A deadline the server enforces](#exercise-5--a-deadline-the-server-enforces)
+- [Exercise 6 ★★: Async retries, proven](#exercise-6--async-retries-proven)
+- [Exercise 7 ★★: Load a day of clickstream](#exercise-7--load-a-day-of-clickstream)
+- [Exercise 8 ★★: A live order counter](#exercise-8--a-live-order-counter)
+- [Exercise 9 ★★: Async export with constant memory](#exercise-9--async-export-with-constant-memory)
+- [Exercise 10 ★★★: An idempotent job handler](#exercise-10--an-idempotent-job-handler)
+- [Exercise 11 ★★★: What is a prepared statement worth?](#exercise-11--what-is-a-prepared-statement-worth)
+- [Exercise 12 ★★★: A parallel export from one snapshot](#exercise-12--a-parallel-export-from-one-snapshot)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Unblock the loop
 

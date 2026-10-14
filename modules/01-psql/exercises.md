@@ -1,5 +1,10 @@
 # Module 01: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 00 Setup](../00-setup/README.md) · [Course home](../../README.md) · [02 Data Types and Tables →](../02-types-and-ddl/README.md)
+<!-- nav:end -->
+
 **Starting state.** Unless an exercise says otherwise, start from:
 
 ```bash
@@ -14,6 +19,24 @@ Exercise 11 uses the Bazaar tables from module 02 (`./project/bin/reset.sh 03`).
 Solutions: [solutions/README.md](solutions/README.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Where am I?](#exercise-1--where-am-i)
+- [Exercise 2 ★: Pattern hunt](#exercise-2--pattern-hunt)
+- [Exercise 3 ★: Two CSV exports and a trap](#exercise-3--two-csv-exports-and-a-trap)
+- [Exercise 4 ★★: `search_path` detective](#exercise-4--search_path-detective)
+- [Exercise 5 ★★: The widest catalogs](#exercise-5--the-widest-catalogs)
+- [Exercise 6 ★★: Twelve tables, one query](#exercise-6--twelve-tables-one-query)
+- [Exercise 7 ★★: Reverse-engineer `\du`](#exercise-7--reverse-engineer-du)
+- [Exercise 8 ★★: Predict the transaction](#exercise-8--predict-the-transaction)
+- [Exercise 9 ★★: Settings to a file, from the shell](#exercise-9--settings-to-a-file-from-the-shell)
+- [Exercise 10 ★★★: An environment check with an exit code](#exercise-10--an-environment-check-with-an-exit-code)
+- [Exercise 11 ★★★: Build your own `\d`](#exercise-11--build-your-own-d)
+- [Exercise 12 ★★★: A census of the whole cluster](#exercise-12--a-census-of-the-whole-cluster)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Where am I?
 

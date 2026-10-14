@@ -1,5 +1,10 @@
 # Module 25: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 24 SQLAlchemy Core](../24-sqlalchemy-core/README.md) · [Course home](../../README.md) · [26 Migrations with Alembic →](../26-migrations/README.md)
+<!-- nav:end -->
+
 **Starting state.** `./project/bin/reset.sh 25` plus `project/python/sql/2301_notify.sql`, and the `bazaar` package with Modules 24 and 25 (`bazaar.sa`, `bazaar.orm`) in `project/python/.venv`. Run solutions from `project/python`:
 
 ```bash
@@ -13,6 +18,24 @@ Use the mapped classes of `bazaar.orm.models`, `bazaar.orm.session`, and `bazaar
 Solutions: [solutions/README.md](solutions/README.md), with runnable files in [solutions/](solutions/).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Trace a session](#exercise-1--trace-a-session)
+- [Exercise 2 ★: Map the price history](#exercise-2--map-the-price-history)
+- [Exercise 3 ★: Objects that outlive their session](#exercise-3--objects-that-outlive-their-session)
+- [Exercise 4 ★★: Find and fix the N+1](#exercise-4--find-and-fix-the-n1)
+- [Exercise 5 ★★: Soft delete with a global filter](#exercise-5--soft-delete-with-a-global-filter)
+- [Exercise 6 ★★: Lost updates, measured](#exercise-6--lost-updates-measured)
+- [Exercise 7 ★★: Async fan-out without lazy loads](#exercise-7--async-fan-out-without-lazy-loads)
+- [Exercise 8 ★★: Black Friday repricing](#exercise-8--black-friday-repricing)
+- [Exercise 9 ★★: Discounts as hybrids](#exercise-9--discounts-as-hybrids)
+- [Exercise 10 ★★★: Ship an order as the seller](#exercise-10--ship-an-order-as-the-seller)
+- [Exercise 11 ★★★: Test code that commits](#exercise-11--test-code-that-commits)
+- [Exercise 12 ★★★: RLS, async, and a leaking pool](#exercise-12--rls-async-and-a-leaking-pool)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Trace a session
 

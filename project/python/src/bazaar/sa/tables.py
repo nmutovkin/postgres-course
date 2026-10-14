@@ -1,7 +1,10 @@
 """The Bazaar schema as SQLAlchemy Core metadata (state of the database from module 24 on).
 
-This file *describes* tables that the SQL files in project/db/ create; it does
-not own them (until module 26, where Alembic takes over). Two consequences:
+This file *describes* the tables; the database schema itself is created by
+SQL: project/db/ up to module 25, then Alembic revisions (project/python/
+migrations/, module 26). The revisions are written and reviewed by hand;
+autogenerate compares this metadata with the database to draft them, and
+tests/test_migrations.py checks that both agree. Two consequences:
 
 * The Postgres enum types and the email_address domain already exist, so their
   SQLAlchemy types say create_type=False: metadata.create_all() (used only for
@@ -136,6 +139,9 @@ products = sa.Table(
             persisted=True,
         ),
     ),
+    # module 26 (revisions 2602-2603): filled by the products_set_slug() trigger
+    # when an INSERT leaves it NULL, hence FetchedValue ("the server provides it").
+    sa.Column("slug", sa.Text, nullable=False, server_default=sa.FetchedValue()),
     sa.UniqueConstraint("seller_id", "sku"),
     sa.CheckConstraint("price >= 0", name="price_nonnegative"),
     sa.CheckConstraint("jsonb_typeof(attributes) = 'object'", name="attributes_is_object"),
@@ -154,6 +160,7 @@ products = sa.Table(
     ),
     sa.Index("products_tags_idx", "tags", postgresql_using="gin"),
     sa.Index("products_search_vector_idx", "search_vector", postgresql_using="gin"),
+    sa.Index("products_slug_key", "slug", unique=True),
     sa.Index(
         "products_title_trgm_idx",
         "title",
@@ -193,8 +200,19 @@ orders = sa.Table(
     sa.Column("delivered_at", TSTZ),
     sa.Column("shipping_address_id", sa.BigInteger, sa.ForeignKey("addresses.id"), index=True),
     sa.Column("updated_at", TSTZ, nullable=False, server_default=sa.func.now()),
+    # module 26 (revision 2604): one checkout = one key, on each of its per-seller orders
+    sa.Column("idempotency_key", sa.Text),
+    sa.CheckConstraint("length(idempotency_key) BETWEEN 8 AND 200", name="idempotency_key_length"),
     sa.Index("orders_user_id_created_at_idx", "user_id", sa.text("created_at DESC")),
     sa.Index("orders_seller_id_created_at_idx", "seller_id", sa.text("created_at DESC")),
+    sa.Index(
+        "orders_idempotency_key_idx",
+        "user_id",
+        "idempotency_key",
+        "seller_id",
+        unique=True,
+        postgresql_where=sa.text("idempotency_key IS NOT NULL"),
+    ),
 )
 
 order_items = sa.Table(
@@ -400,6 +418,33 @@ events = sa.Table(
     sa.Index("events_occurred_at_idx", "occurred_at"),
     sa.Index("events_product_id_idx", "product_id"),
     postgresql_partition_by="RANGE (occurred_at)",  # partitions are managed in SQL (module 14)
+)
+
+# --- module 27: the transactional outbox (revision 2701) ---------------------------------
+
+outbox = sa.Table(
+    "outbox",
+    metadata,
+    _id(),
+    sa.Column("topic", sa.Text, nullable=False),  # "order.placed"
+    sa.Column("aggregate_type", sa.Text, nullable=False),  # "order"
+    sa.Column("aggregate_id", sa.Text, nullable=False),  # "123456"
+    sa.Column("payload", pg.JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")),
+    sa.Column("headers", pg.JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")),
+    _created_at(),
+    sa.Column("published_at", TSTZ),
+    sa.Column("attempts", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("last_error", sa.Text),
+    sa.CheckConstraint("attempts >= 0", name="attempts_nonnegative"),
+    sa.Index("outbox_unpublished_idx", "id", postgresql_where=sa.text("published_at IS NULL")),
+)
+
+processed_messages = sa.Table(
+    "processed_messages",
+    metadata,
+    sa.Column("consumer", sa.Text, primary_key=True),
+    sa.Column("message_id", sa.BigInteger, primary_key=True),
+    sa.Column("processed_at", TSTZ, nullable=False, server_default=sa.func.now()),
 )
 
 # --- views: a separate MetaData, so create_all() never turns them into tables -----------

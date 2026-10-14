@@ -1,5 +1,10 @@
 # Module 07: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 06 Advanced SQL](../../06-advanced-sql/README.md) · [Course home](../../../README.md) · [08 Beyond Scalars →](../../08-beyond-scalars/README.md)
+<!-- nav:end -->
+
 Every solution was run on PostgreSQL 17 against `./project/bin/reset.sh 08` (the reference schema v2 with its data), with [`purchase_sheet.sql`](purchase_sheet.sql) loaded for exercises 4 and 11. Solutions that change the schema or data run inside `BEGIN ... ROLLBACK`, except the exercise 11 migration, which is meant to be committed.
 
 Files in this directory:
@@ -14,6 +19,24 @@ Files in this directory:
 The reference solution of the milestone itself is [`project/db/0701_schema_modeling.sql`](../../../project/db/0701_schema_modeling.sql) (schema) and [`project/db/0702_seed_modeling.sql`](../../../project/db/0702_seed_modeling.sql) (data).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Keys the data can't prove](#exercise-1--keys-the-data-cant-prove)
+- [Exercise 2 ★: What happened to prices?](#exercise-2--what-happened-to-prices)
+- [Exercise 3 ★: Review this design](#exercise-3--review-this-design)
+- [Exercise 4 ★★: Dissect a spreadsheet](#exercise-4--dissect-a-spreadsheet)
+- [Exercise 5 ★★: The catalogue on New Year's Eve](#exercise-5--the-catalogue-on-new-years-eve)
+- [Exercise 6 ★★: Did the price change hurt sales?](#exercise-6--did-the-price-change-hurt-sales)
+- [Exercise 7 ★★: Four tables, many problems](#exercise-7--four-tables-many-problems)
+- [Exercise 8 ★★: Soft-delete users, keep emails reusable](#exercise-8--soft-delete-users-keep-emails-reusable)
+- [Exercise 9 ★★: The address must belong to the buyer](#exercise-9--the-address-must-belong-to-the-buyer)
+- [Exercise 10 ★★: Reconcile the payments ledger](#exercise-10--reconcile-the-payments-ledger)
+- [Exercise 11 ★★★: Normalize the spreadsheet](#exercise-11--normalize-the-spreadsheet)
+- [Exercise 12 ★★★: A closure table for the category tree](#exercise-12--a-closure-table-for-the-category-tree)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Keys the data can't prove
 

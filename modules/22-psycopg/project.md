@@ -1,5 +1,10 @@
 # Module 22 project: the Bazaar data-access layer
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 21 Sharding](../21-sharding/README.md) · [Course home](../../README.md) · [23 Async Python: psycopg async and asyncpg →](../23-async-python/README.md)
+<!-- nav:end -->
+
 Bazaar is about to get its first piece of Python. Before anyone writes web handlers, the team wants one module through which **all** database access goes: plain SQL, parameterized, typed results, business errors as Python exceptions, and tests that run against the real database. This is that module. Modules 23 to 28 build on it: an async twin and a job worker (23), SQLAlchemy (24–25), Alembic migrations (26), production hardening (27), and the FastAPI service (28).
 
 **Starting state:** `./project/bin/reset.sh 22`, and the virtual environment from the module's *Before you start* section.

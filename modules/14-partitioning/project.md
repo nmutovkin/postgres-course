@@ -1,8 +1,27 @@
 # Module 14 project: partitioned events, their upkeep, and a live migration
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 13 Full-Text and Fuzzy Search](../13-full-text-search/README.md) · [Course home](../../README.md) · [15 Security and Row-Level Security →](../15-security-rls/README.md)
+<!-- nav:end -->
+
 Bazaar's analytics team is about to start collecting clickstream events: page views, product views, cart changes, checkouts, searches. That is millions of rows a month, queried by month, and kept for 12 months. This milestone builds the `events` table partitioned by month, the maintenance that keeps it healthy month after month, and then applies the same technique to a table that already exists and is being written to: `audit_log`.
 
 **Starting state:** `./project/bin/reset.sh 14` (the large dataset, with full-text search; no `events` table yet).
+
+<!-- toc:start -->
+**Contents**
+
+- [Part 1: the partitioned `events` table](#part-1-the-partitioned-events-table)
+- [Part 2: the maintenance procedure](#part-2-the-maintenance-procedure)
+- [Part 3: migrate `audit_log` to partitioning, live](#part-3-migrate-audit_log-to-partitioning-live)
+- [Acceptance checks](#acceptance-checks)
+  - [Part 1](#part-1)
+  - [Part 2](#part-2)
+  - [Part 3](#part-3)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Part 1: the partitioned `events` table
 

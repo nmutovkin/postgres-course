@@ -1,8 +1,25 @@
 # Module 01: Project milestone — set up the Bazaar environment
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 00 Setup](../00-setup/README.md) · [Course home](../../README.md) · [02 Data Types and Tables →](../02-types-and-ddl/README.md)
+<!-- nav:end -->
+
 **Goal.** Until now, `reset.sh` has created the Bazaar database for you. In real life, somebody writes that setup, and it has to be repeatable: a new developer, a CI job and a fresh staging server must all end up with exactly the same structure. In this milestone you take over that job. You create the `bazaar` database and schema yourself, with a script that's safe to run twice. You configure psql for comfortable daily work. And you write a small report script the team can run against any environment to see what's there.
 
 Keep all your files in `workspace/01/` (and your `.psqlrc` in your home directory).
+
+<!-- toc:start -->
+**Contents**
+
+- [Requirements](#requirements)
+  - [1. `workspace/01/setup_bazaar.sql`: database, schema, search path](#1-workspace01setup_bazaarsql-database-schema-search-path)
+  - [2. `~/.psqlrc`: a comfortable psql](#2-psqlrc-a-comfortable-psql)
+  - [3. `workspace/01/db_report.sql`: the database report](#3-workspace01db_reportsql-the-database-report)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Requirements
 

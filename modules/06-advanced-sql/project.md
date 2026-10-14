@@ -1,5 +1,10 @@
 # Module 06: Project milestone — category toolkit and seller leaderboard
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 05 Aggregation and Grouping](../05-aggregation/README.md) · [Course home](../../README.md) · [07 Data Modeling →](../07-data-modeling/README.md)
+<!-- nav:end -->
+
 **Goal.** Bazaar's storefront and its seller dashboard both need answers that plain joins can't give. The storefront needs the category tree: menus show a department's whole subtree, product pages show a breadcrumb, and the merchandising team wants revenue per category *including everything below it*, so "Electronics" means Electronics plus Computers plus Laptops and so on. The seller dashboard gets a monthly leaderboard showing where each shop ranks and whether it moved up or down since last month.
 
 This milestone adds no tables. You write reusable, parameterised SQL scripts that the team can run with psql (and that the Python service will reuse in Part IV). Keep your files in `workspace/06/`.
@@ -9,6 +14,17 @@ Start from:
 ```bash
 ./project/bin/reset.sh 06
 ```
+
+<!-- toc:start -->
+**Contents**
+
+- [Requirements](#requirements)
+  - [1. `workspace/06/category_tree.sql`: the category toolkit](#1-workspace06category_treesql-the-category-toolkit)
+  - [2. `workspace/06/leaderboard.sql`: the seller leaderboard](#2-workspace06leaderboardsql-the-seller-leaderboard)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
 
 ## Requirements
 

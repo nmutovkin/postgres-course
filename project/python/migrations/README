@@ -1,0 +1,8 @@
+Bazaar migrations (Alembic). See modules/26-migrations/README.md.
+
+  env.py            connection, SET ROLE bazaar_owner, lock_timeout + retries, autogenerate filters
+  script.py.mako    template for new revisions
+  baseline/         schema.sql: the reference schema at the start of module 26 (pg_dump --schema-only,
+                    cleaned by make_baseline.sh); executed by revision 2600 on an empty database
+  versions/         the revisions: 2600 baseline, 2601 notify triggers, 2602-2603 products.slug,
+                    2604 orders.idempotency_key, 2701 outbox (module 27)

@@ -2,6 +2,16 @@
 
 Bazaar is a multi-seller online marketplace, similar in spirit to Etsy. Throughout the course you design, build, tune, secure, scale, and finally wrap it in a Python service.
 
+<!-- toc:start -->
+**Contents**
+
+- [The business in one paragraph](#the-business-in-one-paragraph)
+- [How the reference implementation is organized](#how-the-reference-implementation-is-organized)
+- [Conventions](#conventions)
+- [Schema evolution](#schema-evolution)
+
+<!-- toc:end -->
+
 ## The business in one paragraph
 
 **Users** browse **products** organised in a **category tree**. Each product is listed by exactly one **seller** (a seller is a user who has opened a shop). A shopper fills a **cart** with products from several sellers. At checkout, the cart is **split into one order per seller**, because each seller ships independently. An order has **order items**, a **shipping address**, and one or more **payments**. Stock is tracked in **inventory**. When an order is placed, stock is *reserved*; when the order ships, it is consumed. Shoppers leave **reviews**, and sellers run time-boxed **promotions**. Every click and view lands in a high-volume **events** stream used for analytics.

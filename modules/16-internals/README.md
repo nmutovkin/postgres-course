@@ -1,5 +1,10 @@
 # Module 16: Internals Deep Dive
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 15 Security and Row-Level Security](../15-security-rls/README.md) · [Course home](../../README.md) · [17 Configuration, Maintenance and Monitoring →](../17-operations/README.md)
+<!-- nav:end -->
+
 Bazaar's `inventory` table has about 200,000 rows, and each row is a handful of integers. Yet after a busy sale weekend the table takes several times more disk than it did on Friday, an `UPDATE` that touched one column wrote whole 8 KB pages to the WAL, and a monitoring graph shows a number called "transaction ID age" creeping towards two billion. None of this makes sense if you think of a table as a spreadsheet that PostgreSQL edits in place. It makes perfect sense once you know what PostgreSQL actually does with your rows. This module opens the hood. You will look at real pages with `pageinspect`, watch tuple headers change as transactions commit, follow an `UPDATE` through the heap and the WAL, crash the server on purpose and watch it recover, and read the statistics the planner uses to guess row counts.
 
 Everything here is practical knowledge. Module 17 (configuration, maintenance and monitoring) tunes the machinery you meet in this module, and every operational decision there (how big `shared_buffers` should be, why autovacuum falls behind, what bloat is) is explained by the mechanisms here.
@@ -43,6 +48,27 @@ CREATE SCHEMA IF NOT EXISTS lab;
 Most examples need superuser rights (the inspection functions read raw files and shared memory). The course container's `postgres` user is a superuser. Some outputs below, such as transaction IDs, LSNs, OIDs and process IDs, will be different on your machine. The *shapes* and the reasoning are what matter.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. The process model](#1-the-process-model)
+- [2. Shared memory and the buffer pool](#2-shared-memory-and-the-buffer-pool)
+- [3. Where the data lives on disk](#3-where-the-data-lives-on-disk)
+- [4. Inside an 8 KB page](#4-inside-an-8-kb-page)
+- [5. The tuple header and alignment](#5-the-tuple-header-and-alignment)
+- [6. MVCC, precisely](#6-mvcc-precisely)
+- [7. UPDATE on disk, and HOT updates](#7-update-on-disk-and-hot-updates)
+- [8. TOAST: storing large values](#8-toast-storing-large-values)
+- [9. The write-ahead log](#9-the-write-ahead-log)
+- [10. VACUUM in detail](#10-vacuum-in-detail)
+- [11. Freezing and transaction ID wraparound](#11-freezing-and-transaction-id-wraparound)
+- [12. The cumulative statistics system](#12-the-cumulative-statistics-system)
+- [13. The planner's statistics](#13-the-planners-statistics)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. The process model
 

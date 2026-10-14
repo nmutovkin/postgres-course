@@ -1,10 +1,34 @@
 # Module 15 project: lock down Bazaar
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 14 Partitioning](../14-partitioning/README.md) · [Course home](../../README.md) · [16 Internals Deep Dive →](../16-internals/README.md)
+<!-- nav:end -->
+
 Bazaar has been running as `postgres`, a superuser, with one password shared by everyone. In this milestone you replace that with a real least-privilege security layout: a set of roles, each able to do exactly its job; row-level security so a seller sees only its own data; and the controlled-escalation and column-privilege details that make it safe. This is the single most security-critical milestone in the course, and it is the design you will connect a Python application to in Part IV.
 
 **Starting state:** `./project/bin/reset.sh 15` (large data) or `./modules/15-security-rls/lab/small15.sh` (small data). Both give you the module-15 schema *without* any roles or RLS — you build those. The reference solution is [`project/db/1501_schema_security.sql`](../../project/db/1501_schema_security.sql); build your own first, then compare.
 
 > **Roles are cluster-wide.** If you have run `small15.sh --with-1501` or `reset.sh 16`, the reference roles already exist. To start truly clean, drop them first (see [`lab/README.md`](lab/README.md)): `DROP DATABASE bazaar WITH (FORCE)` then `DROP ROLE bazaar_seller, bazaar_analyst, bazaar_app, bazaar_readonly, bazaar_owner;`, and rebuild with `reset.sh 15`.
+
+<!-- toc:start -->
+**Contents**
+
+- [Goal, in business terms](#goal-in-business-terms)
+- [Requirements](#requirements)
+  - [1. Roles](#1-roles)
+  - [2. Ownership](#2-ownership)
+  - [3. Privileges on existing objects](#3-privileges-on-existing-objects)
+  - [4. Default privileges](#4-default-privileges)
+  - [5. Hide users.email](#5-hide-usersemail)
+  - [6. Append-only audit log](#6-append-only-audit-log)
+  - [7. SECURITY DEFINER hardening](#7-security-definer-hardening)
+  - [8. Row-level security](#8-row-level-security)
+- [Acceptance checks](#acceptance-checks)
+- [Reference solution](#reference-solution)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## Goal, in business terms
 

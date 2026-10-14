@@ -9,6 +9,19 @@ A complete, self-contained PostgreSQL course. It starts with your first `psql` s
 
 ---
 
+<!-- toc:start -->
+**Contents**
+
+- [How the course is organized](#how-the-course-is-organized)
+- [Curriculum](#curriculum)
+  - [Part I: SQL Foundations](#part-i-sql-foundations)
+  - [Part II: PostgreSQL Power Features](#part-ii-postgresql-power-features)
+  - [Part III: Administration, Internals and Scaling](#part-iii-administration-internals-and-scaling)
+  - [Part IV: PostgreSQL from Python](#part-iv-postgresql-from-python)
+- [Quick start](#quick-start)
+
+<!-- toc:end -->
+
 ## How the course is organized
 
 Every module lives in `modules/NN-topic/` and contains:

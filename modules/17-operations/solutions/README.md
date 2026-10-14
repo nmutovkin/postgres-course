@@ -1,5 +1,10 @@
 # Module 17: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 16 Internals Deep Dive](../../16-internals/README.md) · [Course home](../../../README.md) · [18 Backup and Recovery →](../../18-backup-recovery/README.md)
+<!-- nav:end -->
+
 All solutions were run on PostgreSQL 17 against `./project/bin/reset.sh 17` (exercises 1 to 10) and in the [PgBouncer lab](../lab/) (exercises 11 and 12). Timings, PIDs and LSNs differ on every machine.
 
 ```sql
@@ -7,6 +12,24 @@ CREATE EXTENSION IF NOT EXISTS pgstattuple;
 ```
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: What did someone change?](#exercise-1--what-did-someone-change)
+- [Exercise 2 ★: Who can change what](#exercise-2--who-can-change-what)
+- [Exercise 3 ★: Role settings and SET ROLE](#exercise-3--role-settings-and-set-role)
+- [Exercise 4 ★★: How much memory can this query take?](#exercise-4--how-much-memory-can-this-query-take)
+- [Exercise 5 ★★: Due for ANALYZE?](#exercise-5--due-for-analyze)
+- [Exercise 6 ★★: Estimated vs. exact bloat](#exercise-6--estimated-vs-exact-bloat)
+- [Exercise 7 ★★: Redundant indexes](#exercise-7--redundant-indexes)
+- [Exercise 8 ★★: Break the chain](#exercise-8--break-the-chain)
+- [Exercise 9 ★★: Find the query that spills](#exercise-9--find-the-query-that-spills)
+- [Exercise 10 ★★★: Full-page writes, measured](#exercise-10--full-page-writes-measured)
+- [Exercise 11 ★★★: Pool size vs. throughput (lab)](#exercise-11--pool-size-vs-throughput-lab)
+- [Exercise 12 ★★★: Make it transaction-pooling safe (lab)](#exercise-12--make-it-transaction-pooling-safe-lab)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: What did someone change?
 

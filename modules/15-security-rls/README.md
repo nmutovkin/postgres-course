@@ -1,5 +1,10 @@
 # Module 15: Security and Row-Level Security
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 14 Partitioning](../14-partitioning/README.md) · [Course home](../../README.md) · [16 Internals Deep Dive →](../16-internals/README.md)
+<!-- nav:end -->
+
 Bazaar has grown up. Until now there has been one role, `postgres`, a superuser that can do anything, and every connection string in the company has carried its password. That is fine on a laptop and a disaster in production. Now there is a web application, a team of analysts who run SQL against the live database, a BI tool, a seller portal that lets 2,000 independent shops see and edit *their own* products and orders, and, eventually, auditors. Each of these should be able to do exactly what its job requires and nothing more. An analyst who copies the wrong `WHERE` clause should get an error, not a `TRUNCATE`. A compromised application credential should not be able to read every customer's e-mail or drop a table. A seller must never see another seller's orders, even if their code has a bug.
 
 This module is about building that. We start with the threat model (who connects, what they can do, how much damage a mistake or a breach can cause), then work through PostgreSQL's two layers of access control: the **privilege system** (roles, ownership, `GRANT`/`REVOKE`, default privileges) decides *whether* you may touch an object at all, and **row-level security** (RLS) decides *which rows* of a table you may see and change. We then look at the controlled-escalation tool, `SECURITY DEFINER` functions, and the classic attack against them. Finally we drop below SQL to **authentication**: `pg_hba.conf`, SCRAM, and TLS, with a hands-on lab where you generate certificates and connect with full verification.
@@ -37,6 +42,60 @@ If you prefer the real thing, `./project/bin/reset.sh 15` builds the same schema
 You have met pieces of this before: roles and the `public` schema in [Module 01](../01-psql/#4-roles-briefly), the `SECURITY DEFINER` / `search_path` teaser in [Module 01 §3.4](../01-psql/), views in [Module 09](../09-views-functions-triggers/), SCRAM's cost in [Module 16](../16-internals/), and per-role settings and `pg_hba.conf` reloads in [Module 17](../17-operations/). This module makes all of it precise.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. A threat model for a database](#1-a-threat-model-for-a-database)
+- [2. Roles](#2-roles)
+  - [2.1 Role attributes](#21-role-attributes)
+  - [2.2 Users and groups: membership](#22-users-and-groups-membership)
+  - [2.3 INHERIT vs. NOINHERIT, and SET ROLE](#23-inherit-vs-noinherit-and-set-role)
+  - [2.4 PG 16: the three options on a role grant](#24-pg-16-the-three-options-on-a-role-grant)
+  - [2.5 PG 16: CREATEROLE is no longer a near-superuser](#25-pg-16-createrole-is-no-longer-a-near-superuser)
+- [3. Predefined roles](#3-predefined-roles)
+- [4. Ownership, and why the app owns nothing](#4-ownership-and-why-the-app-owns-nothing)
+- [5. The privilege system](#5-the-privilege-system)
+  - [5.1 Database privileges](#51-database-privileges)
+  - [5.2 Schema privileges](#52-schema-privileges)
+  - [5.3 Table privileges](#53-table-privileges)
+  - [5.4 Default privileges and the "for role" trap](#54-default-privileges-and-the-for-role-trap)
+  - [5.5 Column-level privileges: hiding users.email](#55-column-level-privileges-hiding-usersemail)
+  - [5.6 Sequence and function privileges](#56-sequence-and-function-privileges)
+  - [5.7 The PUBLIC pseudo-role and the PG 15 public-schema change](#57-the-public-pseudo-role-and-the-pg-15-public-schema-change)
+  - [5.8 Reading privileges: \dp, aclexplode, has_*_privilege](#58-reading-privileges-dp-aclexplode-has__privilege)
+- [6. The Bazaar least-privilege layout](#6-the-bazaar-least-privilege-layout)
+- [7. SECURITY DEFINER: controlled privilege escalation](#7-security-definer-controlled-privilege-escalation)
+  - [8. The search_path hijack, and the fix](#8-the-search_path-hijack-and-the-fix)
+- [9. Views as a security boundary](#9-views-as-a-security-boundary)
+  - [9.1 security_barrier](#91-security_barrier)
+  - [9.2 security_invoker (PG 15+)](#92-security_invoker-pg-15)
+- [10. Row-level security](#10-row-level-security)
+  - [10.1 Enabling RLS, and the fail-closed default](#101-enabling-rls-and-the-fail-closed-default)
+  - [10.2 Anatomy of a policy](#102-anatomy-of-a-policy)
+  - [10.3 The multi-tenant pattern: current_setting + SET LOCAL](#103-the-multi-tenant-pattern-current_setting--set-local)
+  - [10.4 Policies on a table without the tenant key](#104-policies-on-a-table-without-the-tenant-key)
+  - [10.5 How policies combine: PERMISSIVE and RESTRICTIVE](#105-how-policies-combine-permissive-and-restrictive)
+  - [10.6 The owner bypass and FORCE ROW LEVEL SECURITY](#106-the-owner-bypass-and-force-row-level-security)
+- [11. (Covered above) — tenant scoping and pooling](#11-covered-above--tenant-scoping-and-pooling)
+- [12. RLS and performance, and the pitfalls](#12-rls-and-performance-and-the-pitfalls)
+  - [12.1 The policy predicate is added to every query](#121-the-policy-predicate-is-added-to-every-query)
+  - [12.2 Leakproof functions and the information leak](#122-leakproof-functions-and-the-information-leak)
+  - [12.3 Pitfalls: FK checks, unique leaks, side channels](#123-pitfalls-fk-checks-unique-leaks-side-channels)
+- [13. Authentication: who gets in, and how](#13-authentication-who-gets-in-and-how)
+  - [13.1 pg_hba.conf, line by line](#131-pg_hbaconf-line-by-line)
+  - [13.2 First match wins](#132-first-match-wins)
+  - [13.3 The methods](#133-the-methods)
+  - [13.4 password_encryption, and migrating md5 → scram](#134-password_encryption-and-migrating-md5--scram)
+- [14. SSL/TLS: encrypting the channel and authenticating the server](#14-ssltls-encrypting-the-channel-and-authenticating-the-server)
+  - [14.1 Server side: ssl = on](#141-server-side-ssl--on)
+  - [14.2 Client side: sslmode, and why verify-full matters](#142-client-side-sslmode-and-why-verify-full-matters)
+- [15. The TLS lab: do it for real](#15-the-tls-lab-do-it-for-real)
+- [16. The operational perimeter (briefly)](#16-the-operational-perimeter-briefly)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. A threat model for a database
 

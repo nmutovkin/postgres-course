@@ -1,5 +1,10 @@
 # Module 04: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 03 Reading and Writing Data](../../03-crud/README.md) · [Course home](../../../README.md) · [05 Aggregation and Grouping →](../../05-aggregation/README.md)
+<!-- nav:end -->
+
 Every solution was run on PostgreSQL 17 against `./project/bin/reset.sh 04` (the small dataset). Outputs show `NULL` as `∅`. Exercises 9 and 12 change data inside a transaction that ends with `ROLLBACK`, so the database stays as NOTES.md describes it.
 
 Files in this directory:
@@ -9,6 +14,25 @@ Files in this directory:
 | [`queries.sql`](queries.sql) | Project milestone: the saved business questions, with their expected answers. |
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Customers to win back](#exercise-1--customers-to-win-back)
+- [Exercise 2 ★: The unsold catalog](#exercise-2--the-unsold-catalog)
+- [Exercise 3 ★: Orders at an old price](#exercise-3--orders-at-an-old-price)
+- [Exercise 4 ★★: Shops without a sale](#exercise-4--shops-without-a-sale)
+- [Exercise 5 ★★: Empty corners of the catalog](#exercise-5--empty-corners-of-the-catalog)
+- [Exercise 6 ★★: Loyal to Europe](#exercise-6--loyal-to-europe)
+- [Exercise 7 ★★: Each shop's biggest orders](#exercise-7--each-shops-biggest-orders)
+- [Exercise 8 ★★: TechTrove's lapsed customers](#exercise-8--techtroves-lapsed-customers)
+- [Exercise 9 ★★: Retiring the T-shirt line](#exercise-9--retiring-the-t-shirt-line)
+- [Exercise 10 ★★: Repeat purchases](#exercise-10--repeat-purchases)
+- [Exercise 11 ★★★: Cookware-only orders](#exercise-11--cookware-only-orders)
+- [Exercise 12 ★★★: Debug the June report](#exercise-12--debug-the-june-report)
+- [Exercise 13 ★★★: Prices only ever went up](#exercise-13--prices-only-ever-went-up)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Customers to win back
 

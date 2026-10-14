@@ -1,5 +1,10 @@
 # Module 19 exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 18 Backup and Recovery](../18-backup-recovery/README.md) · [Course home](../../README.md) · [20 High Availability →](../20-high-availability/README.md)
+<!-- nav:end -->
+
 All exercises use the module's lab (`modules/19-replication/lab`), freshly built and loaded, unless an exercise says otherwise:
 
 ```bash

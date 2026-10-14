@@ -1,6 +1,6 @@
 [project]
 name = "bazaar"
-version = "0.25.0"
+version = "0.27.0"
 description = "Bazaar marketplace: the Python side of the PostgreSQL course (modules 22-28)"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,6 +12,16 @@ dependencies = [
     "psycopg[binary,pool]>=3.2",
     "asyncpg>=0.30",
     "sqlalchemy[asyncio]>=2.0.30",  # modules 24-25; [asyncio] pulls in greenlet
+    "alembic>=1.13",  # module 26
+]
+
+[project.optional-dependencies]
+# module 27: OpenTelemetry tracing (bazaar.observability.setup_tracing)
+otel = [
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-instrumentation-sqlalchemy>=0.48b0",
+    "opentelemetry-instrumentation-psycopg>=0.48b0",
+    "opentelemetry-instrumentation-asyncpg>=0.48b0",
 ]
 
 [dependency-groups]
@@ -20,6 +30,9 @@ dev = [
     "pytest-asyncio>=0.24",
     "ruff>=0.6",
     "pydantic>=2",  # only for the row-factory examples of module 22
+    "pytest-xdist>=3.6",  # module 27: pytest -n 4
+    "testcontainers[postgres]>=4.8",  # module 27: tests/test_containers.py (opt-in)
+    "bazaar[otel]",  # module 27: the tracing test
 ]
 
 [project.scripts]
@@ -38,6 +51,7 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 markers = [
     "slow: takes more than a couple of seconds (deselect with -m 'not slow')",
+    "docker: starts a PostgreSQL container with testcontainers (BAZAAR_TEST_DOCKER=1)",
 ]
 
 [tool.ruff]
@@ -46,3 +60,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "S608"]
+
+[tool.ruff.lint.per-file-ignores]
+# DDL helpers and revisions compose SQL from identifiers written in the revision
+# files themselves (never from user input), and DDL cannot take bind parameters.
+"src/bazaar/migrate.py" = ["S608"]
+"migrations/**" = ["S608"]

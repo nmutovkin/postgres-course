@@ -1,5 +1,10 @@
 # Module 23: Async Python: psycopg async and asyncpg
 
+<!-- nav:start -->
+> **Theory** · [Exercises](exercises.md) · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 22 psycopg 3](../22-psycopg/README.md) · [Course home](../../README.md) · [24 SQLAlchemy Core →](../24-sqlalchemy-core/README.md)
+<!-- nav:end -->
+
 On Black Friday, Bazaar's product pages are requested a few thousand times a second. Each page needs five or six small queries, and each query spends most of its life *waiting*: for the network, for the server, for a disk page. In Module 22's synchronous code, a thread that waits can do nothing else, so serving many pages at once means many threads. **asyncio** takes the opposite approach: one thread, an event loop, and code that says explicitly where it waits (`await`), so the loop can run something else meanwhile. This module teaches asyncio from the angle of database work, then the two async drivers for PostgreSQL: psycopg's async API (the same driver you know, with `await`) and asyncpg (a different design built for speed). It closes with three things async code is good at: fanning out queries concurrently, consuming `LISTEN`/`NOTIFY` events, and running a pool of background job workers. Along the way, a benchmark compares the drivers with real numbers.
 
 **What you'll learn**
@@ -27,6 +32,51 @@ You need Module 22: this module assumes you know psycopg's connections, transact
 The outputs come from Python 3.13, psycopg 3.3.6, asyncpg 0.32.0 and PostgreSQL 17.11, with client and server on the same 4-vCPU machine (the server in Docker, reached through port forwarding with a round trip of about 0.2 ms).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Why async, and when not](#1-why-async-and-when-not)
+  - [1.1 Waiting is the job](#11-waiting-is-the-job)
+  - [1.2 What async does not do](#12-what-async-does-not-do)
+- [2. asyncio for database code](#2-asyncio-for-database-code)
+  - [2.1 Coroutines, `await`, and the loop](#21-coroutines-await-and-the-loop)
+  - [2.2 Blocking the loop](#22-blocking-the-loop)
+  - [2.3 Running things concurrently: tasks, `gather`, and `TaskGroup`](#23-running-things-concurrently-tasks-gather-and-taskgroup)
+  - [2.4 Bounding concurrency](#24-bounding-concurrency)
+  - [2.5 Timeouts](#25-timeouts)
+  - [2.6 Cancellation, precisely](#26-cancellation-precisely)
+- [3. psycopg async](#3-psycopg-async)
+  - [3.1 The same API with `await`](#31-the-same-api-with-await)
+  - [3.2 `AsyncConnectionPool`](#32-asyncconnectionpool)
+  - [3.3 Notifications and COPY](#33-notifications-and-copy)
+  - [3.4 What cancellation does to a running query](#34-what-cancellation-does-to-a-running-query)
+- [4. asyncpg](#4-asyncpg)
+  - [4.1 A different design](#41-a-different-design)
+  - [4.2 The API](#42-the-api)
+  - [4.3 Types: strict on the way in, binary on the way out](#43-types-strict-on-the-way-in-binary-on-the-way-out)
+  - [4.4 Transactions](#44-transactions)
+  - [4.5 Prepared statements and the statement cache](#45-prepared-statements-and-the-statement-cache)
+  - [4.6 COPY and cursors](#46-copy-and-cursors)
+  - [4.7 Pools: `init`, `setup` and `reset`](#47-pools-init-setup-and-reset)
+  - [4.8 asyncpg, psycopg and PgBouncer](#48-asyncpg-psycopg-and-pgbouncer)
+  - [4.9 psycopg async or asyncpg?](#49-psycopg-async-or-asyncpg)
+- [5. Concurrency correctness](#5-concurrency-correctness)
+  - [5.1 One connection, one query at a time](#51-one-connection-one-query-at-a-time)
+  - [5.2 Pools, processes and event loops](#52-pools-processes-and-event-loops)
+  - [5.3 Transactions across `await`](#53-transactions-across-await)
+- [6. Fan-out: independent queries at the same time](#6-fan-out-independent-queries-at-the-same-time)
+- [7. LISTEN/NOTIFY, asynchronously](#7-listennotify-asynchronously)
+- [8. An async job worker](#8-an-async-job-worker)
+  - [8.1 Design](#81-design)
+  - [8.2 Running it](#82-running-it)
+  - [8.3 Scaling and operating it](#83-scaling-and-operating-it)
+- [9. Benchmarking the drivers](#9-benchmarking-the-drivers)
+- [10. The Bazaar async layer](#10-the-bazaar-async-layer)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Why async, and when not
 

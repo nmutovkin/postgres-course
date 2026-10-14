@@ -63,6 +63,7 @@ async def create_pool(
         "max_size": s.pool_max_size,
         "configure": configure,
         "check": AsyncConnectionPool.check_connection,  # cheap liveness check on checkout
+        "timeout": s.pool_timeout_s,  # wait this long for a connection, then PoolTimeout
         "name": "bazaar-async",
     }
     params.update(overrides)  # e.g. create_pool(max_size=20, timeout=5)
@@ -99,10 +100,7 @@ async def init_asyncpg_connection(conn: asyncpg.Connection) -> None:
 
 
 def asyncpg_server_settings(s: Settings) -> dict[str, str]:
-    settings = {"application_name": s.app_name}
-    if s.statement_timeout_ms:
-        settings["statement_timeout"] = str(s.statement_timeout_ms)
-    return settings
+    return s.session_settings()
 
 
 async def asyncpg_connect(settings: Settings | None = None, **overrides: Any) -> asyncpg.Connection:

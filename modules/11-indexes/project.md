@@ -1,5 +1,27 @@
 # Module 11 milestone: indexes for the Bazaar workload
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 10 Transactions and Concurrency](../10-transactions-concurrency/README.md) · [Course home](../../README.md) · [12 Query Planning and Performance →](../12-query-performance/README.md)
+<!-- nav:end -->
+
+<!-- toc:start -->
+**Contents**
+
+- [The goal](#the-goal)
+- [Requirements](#requirements)
+  - [1. Load the large dataset](#1-load-the-large-dataset)
+  - [2. Measure the baseline](#2-measure-the-baseline)
+  - [3. Index every foreign key](#3-index-every-foreign-key)
+  - [4. Make the hot queries fast](#4-make-the-hot-queries-fast)
+  - [5. Write it as a migration](#5-write-it-as-a-migration)
+  - [6. Document before and after](#6-document-before-and-after)
+- [Acceptance checks](#acceptance-checks)
+- [Hints](#hints)
+- [Reference solution](#reference-solution)
+
+<!-- toc:end -->
+
 ## The goal
 
 Bazaar is about to open to real traffic, and the product team has handed you the list of the queries the application runs most. On the large dataset, most of them read entire tables: "my orders" scans half a million orders, a category page reads 80 MB of products, and deleting a draft product scans every order line. Your job is to load the large dataset and design the **smallest set of indexes** that makes every hot query fast, and to **prove** it with before-and-after measurements.

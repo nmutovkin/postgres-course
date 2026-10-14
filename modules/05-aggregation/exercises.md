@@ -1,5 +1,10 @@
 # Module 05: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 04 Joins and Subqueries](../04-joins-subqueries/README.md) · [Course home](../../README.md) · [06 Advanced SQL →](../06-advanced-sql/README.md)
+<!-- nav:end -->
+
 **Starting state.** Every exercise runs against the small dataset:
 
 ```bash
@@ -11,6 +16,25 @@ The milestone adds no schema, so the exercises don't depend on it. None of them 
 Solutions: [solutions/README.md](solutions/README.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Status breakdown](#exercise-1--status-breakdown)
+- [Exercise 2 ★: Catalog size per category](#exercise-2--catalog-size-per-category)
+- [Exercise 3 ★: Average basket](#exercise-3--average-basket)
+- [Exercise 4 ★★: Monthly revenue per seller, zero-filled](#exercise-4--monthly-revenue-per-seller-zero-filled)
+- [Exercise 5 ★★: Monthly status pivot](#exercise-5--monthly-status-pivot)
+- [Exercise 6 ★★: Repeat-customer rate](#exercise-6--repeat-customer-rate)
+- [Exercise 7 ★★: Top category per country](#exercise-7--top-category-per-country)
+- [Exercise 8 ★★: Perfect customers](#exercise-8--perfect-customers)
+- [Exercise 9 ★★: Typical order value per year](#exercise-9--typical-order-value-per-year)
+- [Exercise 10 ★★: Units by category, with subtotals](#exercise-10--units-by-category-with-subtotals)
+- [Exercise 11 ★★★: Fix the customer leaderboard](#exercise-11--fix-the-customer-leaderboard)
+- [Exercise 12 ★★★: Who slipped in May?](#exercise-12--who-slipped-in-may)
+- [Exercise 13 ★★★: Signup cohorts](#exercise-13--signup-cohorts)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Status breakdown
 

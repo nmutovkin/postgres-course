@@ -1,5 +1,10 @@
 # Module 04: Exercises
 
+<!-- nav:start -->
+> [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
+> [← 03 Reading and Writing Data](../03-crud/README.md) · [Course home](../../README.md) · [05 Aggregation and Grouping →](../05-aggregation/README.md)
+<!-- nav:end -->
+
 **Starting state.** Every exercise runs against the small dataset:
 
 ```bash
@@ -11,6 +16,25 @@ Nothing in this module's milestone changes the schema or the data, so the exerci
 Solutions: [solutions/README.md](solutions/README.md).
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Customers to win back](#exercise-1--customers-to-win-back)
+- [Exercise 2 ★: The unsold catalog](#exercise-2--the-unsold-catalog)
+- [Exercise 3 ★: Orders at an old price](#exercise-3--orders-at-an-old-price)
+- [Exercise 4 ★★: Shops without a sale](#exercise-4--shops-without-a-sale)
+- [Exercise 5 ★★: Empty corners of the catalog](#exercise-5--empty-corners-of-the-catalog)
+- [Exercise 6 ★★: Loyal to Europe](#exercise-6--loyal-to-europe)
+- [Exercise 7 ★★: Each shop's biggest orders](#exercise-7--each-shops-biggest-orders)
+- [Exercise 8 ★★: TechTrove's lapsed customers](#exercise-8--techtroves-lapsed-customers)
+- [Exercise 9 ★★: Retiring the T-shirt line](#exercise-9--retiring-the-t-shirt-line)
+- [Exercise 10 ★★: Repeat purchases](#exercise-10--repeat-purchases)
+- [Exercise 11 ★★★: Cookware-only orders](#exercise-11--cookware-only-orders)
+- [Exercise 12 ★★★: Debug the June report](#exercise-12--debug-the-june-report)
+- [Exercise 13 ★★★: Prices only ever went up](#exercise-13--prices-only-ever-went-up)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Customers to win back
 

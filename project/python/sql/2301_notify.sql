@@ -20,7 +20,9 @@
 --
 -- Idempotent (CREATE OR REPLACE), applied on top of `reset.sh 22` / `reset.sh 23`:
 --     ./project/bin/psql.sh < project/python/sql/2301_notify.sql
--- From module 26 on, Alembic owns schema changes and this file becomes a migration.
+-- From module 26 on, Alembic owns schema changes and this file became revision
+-- 2601 (migrations/versions/2601_notify_triggers.py). It is kept for modules
+-- 23-25; the tests no longer apply it, and no new file goes into sql/.
 -- =============================================================================
 
 SET search_path = bazaar, public;

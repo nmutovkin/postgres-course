@@ -1,8 +1,30 @@
 # Module 02: Project milestone — the Bazaar core schema
 
+<!-- nav:start -->
+> [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
+> [← 01 psql and the Postgres Landscape](../01-psql/README.md) · [Course home](../../README.md) · [03 Reading and Writing Data →](../03-crud/README.md)
+<!-- nav:end -->
+
 **Goal.** Bazaar needs a home for its data before the first shopper arrives. In this milestone you write the **core schema**: the seven tables that every later module builds on. You write it the way real teams do, as a migration file that's applied once, in a single transaction, to an empty schema. The tables must enforce the business rules themselves, so that no application bug, bulk import or late-night `UPDATE` can store a negative price, an order without a buyer, or more reserved stock than there is on the shelf.
 
 Write one file: **`workspace/02/0201_schema_core.sql`**. It's your version of the reference file [`project/db/0201_schema_core.sql`](../../project/db/0201_schema_core.sql). Try not to look at the reference until your file passes the acceptance checks, or until you're truly stuck.
+
+<!-- toc:start -->
+**Contents**
+
+- [Requirements](#requirements)
+  - [The file](#the-file)
+  - [The design rules (from the theory, section 2)](#the-design-rules-from-the-theory-section-2)
+  - [The tables](#the-tables)
+- [How to run it](#how-to-run-it)
+- [Acceptance checks](#acceptance-checks)
+  - [1. The structure matches the reference](#1-the-structure-matches-the-reference)
+  - [2. The schema rejects bad data](#2-the-schema-rejects-bad-data)
+  - [3. It's a single, clean transaction](#3-its-a-single-clean-transaction)
+- [Reference solution](#reference-solution)
+- [Going further (optional)](#going-further-optional)
+
+<!-- toc:end -->
 
 ## Requirements
 

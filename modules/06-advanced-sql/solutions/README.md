@@ -1,5 +1,10 @@
 # Module 06: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 05 Aggregation and Grouping](../../05-aggregation/README.md) · [Course home](../../../README.md) · [07 Data Modeling →](../../07-data-modeling/README.md)
+<!-- nav:end -->
+
 Every solution was run on PostgreSQL 17 against `./project/bin/reset.sh 06`. Solutions that change data run inside `BEGIN ... ROLLBACK`.
 
 Files in this directory:
@@ -10,6 +15,25 @@ Files in this directory:
 | [`milestone_leaderboard.sql`](milestone_leaderboard.sql) | Project milestone, part 2: seller leaderboard with month-over-month rank change. |
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Better than average](#exercise-1--better-than-average)
+- [Exercise 2 ★: A customer's lifetime, row by row](#exercise-2--a-customers-lifetime-row-by-row)
+- [Exercise 3 ★: A weekly calendar, recursively](#exercise-3--a-weekly-calendar-recursively)
+- [Exercise 4 ★★: Products in the wrong place](#exercise-4--products-in-the-wrong-place)
+- [Exercise 5 ★★: Expire stale pending orders, in one statement](#exercise-5--expire-stale-pending-orders-in-one-statement)
+- [Exercise 6 ★★: The longest silence](#exercise-6--the-longest-silence)
+- [Exercise 7 ★★: Unusually large orders](#exercise-7--unusually-large-orders)
+- [Exercise 8 ★★: Bestsellers per department](#exercise-8--bestsellers-per-department)
+- [Exercise 9 ★★: Selling streaks and dry spells](#exercise-9--selling-streaks-and-dry-spells)
+- [Exercise 10 ★★: Sync a seller's catalog with MERGE](#exercise-10--sync-a-sellers-catalog-with-merge)
+- [Exercise 11 ★★★: Move a category without breaking the tree](#exercise-11--move-a-category-without-breaking-the-tree)
+- [Exercise 12 ★★★: Top 3 and "Other"](#exercise-12--top-3-and-other)
+- [Exercise 13 ★★★: The best 30 days](#exercise-13--the-best-30-days)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Better than average
 

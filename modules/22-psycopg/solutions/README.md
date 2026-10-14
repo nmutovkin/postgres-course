@@ -1,5 +1,10 @@
 # Module 22: Solutions
 
+<!-- nav:start -->
+> [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
+> [← 21 Sharding](../../21-sharding/README.md) · [Course home](../../../README.md) · [23 Async Python: psycopg async and asyncpg →](../../23-async-python/README.md)
+<!-- nav:end -->
+
 Every solution is a runnable script in this directory. All were run against `./project/bin/reset.sh 22` with psycopg 3.3.6 on PostgreSQL 17.11; the outputs below are from those runs. Run them from `project/python` with the venv active:
 
 ```bash
@@ -10,6 +15,25 @@ python ../../modules/22-psycopg/solutions/ex01_connection_report.py
 Timings depend on your machine and on the round-trip time to the database. Counts don't.
 
 ---
+
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Connection report](#exercise-1--connection-report)
+- [Exercise 2 ★: The biggest shops, as objects](#exercise-2--the-biggest-shops-as-objects)
+- [Exercise 3 ★: Fix the calls](#exercise-3--fix-the-calls)
+- [Exercise 4 ★★: A safe dynamic filter builder](#exercise-4--a-safe-dynamic-filter-builder)
+- [Exercise 5 ★★: CSV price importer with COPY and validation](#exercise-5--csv-price-importer-with-copy-and-validation)
+- [Exercise 6 ★★: Retry on serialization failure, proven](#exercise-6--retry-on-serialization-failure-proven)
+- [Exercise 7 ★★: Export 1.27 million rows with constant memory](#exercise-7--export-127-million-rows-with-constant-memory)
+- [Exercise 8 ★★: Turn constraint violations into domain errors](#exercise-8--turn-constraint-violations-into-domain-errors)
+- [Exercise 9 ★★: Where does the time go?](#exercise-9--where-does-the-time-go)
+- [Exercise 10 ★★★: A pooled seller portal under RLS, without leaks](#exercise-10--a-pooled-seller-portal-under-rls-without-leaks)
+- [Exercise 11 ★★: One query, nested objects](#exercise-11--one-query-nested-objects)
+- [Exercise 12 ★★★: A price cache invalidated by NOTIFY](#exercise-12--a-price-cache-invalidated-by-notify)
+- [Exercise 13 ★★★: Upsert with honest counts](#exercise-13--upsert-with-honest-counts)
+
+<!-- toc:end -->
 
 ## Exercise 1 ★: Connection report
 
