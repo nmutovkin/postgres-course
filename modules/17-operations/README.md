@@ -450,6 +450,8 @@ FROM pg_stat_checkpointer;
 (1 row)
 ```
 
+The counters are cluster-wide and count from `stats_reset` (here, when the container was created). Most of the requested checkpoints so far were forced by the bulk loads in `reset.sh`: loading a gigabyte of data writes far more WAL than `max_wal_size`. `write_time` and `sync_time` are in milliseconds, `buffers_written` in 8 kB pages.
+
 Let's see a requested checkpoint happen. We shrink `max_wal_size` to its minimum and write some WAL by updating every row of `users` (100,000 rows, no triggers):
 
 ```sql
@@ -1161,6 +1163,7 @@ How to read it:
 - `context = normal` is I/O through the shared buffer pool; `bulkread`, `bulkwrite` and `vacuum` are the ring buffers from Module 16 (section 2.4). `reuses` counts ring buffers reused, `evictions` buffers evicted from the shared pool.
 - **`writes` by `client backend` in context `normal`** means backends had to write dirty buffers themselves to free space, which slows queries down. Ideally the checkpointer and background writer do almost all writes. If client backends write a lot, the buffer pool is too small or the background writer too timid (`bgwriter_lru_maxpages`, `bgwriter_lru_multiplier`).
 - `extends` are writes that grow files (inserts into new pages).
+- On the course database, `client backend` dominates every column, including `writes` in context `normal`: those are the bulk loads of `reset.sh`, where a single session wrote a gigabyte of new data much faster than the background writer could keep up. On a production OLTP server you'd expect the `checkpointer` and `background writer` rows to carry most of the writes.
 - With `track_io_timing = on`, `read_time` and `write_time` say how long it took.
 
 ### 8.5 pg_stat_statements, operationally
