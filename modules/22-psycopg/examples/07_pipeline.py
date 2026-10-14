@@ -15,7 +15,7 @@ LOOKUP = "SELECT quantity - reserved FROM inventory WHERE product_id = %s"
 IDS = list(range(1, 200_001, 100))  # 2,000 products
 
 with psycopg.connect(DSN, autocommit=True) as conn:
-    for attempt in range(2):  # second round = warm cache
+    for _ in range(2):  # second round = warm cache
         t = time.perf_counter()
         one_by_one = [conn.execute(LOOKUP, (pid,)).fetchone()[0] for pid in IDS]
         t1 = time.perf_counter() - t

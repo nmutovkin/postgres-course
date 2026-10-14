@@ -1042,7 +1042,7 @@ COPY 180
 COPY 180
 ```
 
-(The `WHERE` clause repeats the mistaken `DELETE`'s condition, evaluated at the moment of the mistake. `\copy` must be on one line in an interactive psql session; it is split here for readability.)
+(The `WHERE` clause repeats the mistaken `DELETE`'s condition, evaluated at the moment of the mistake. Passed with `psql -c`, a `\copy` may span lines as shown; typed interactively in psql, it must be on one line.)
 
 The first time this lab was written, the obvious `INSERT ... SELECT` into `orders` and then into `order_items` produced 180 orders whose `total` was **doubled** for 176 of them. Remember Module 09: `orders.total` is maintained by a statement-level trigger on `order_items` that *adds* each inserted item to its order's total. The restored orders already carried their correct totals, and inserting their items added them again. Restoring rows into a live schema runs its triggers; think about each one. The correct version resets the totals before inserting the items, inside one transaction:
 
