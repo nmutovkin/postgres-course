@@ -202,7 +202,7 @@ The prompt must stay `*` (not `!`) after the typo. And `psql -X -Atc 'SELECT 1'`
 
 ## Reference solution
 
-- [`solutions/setup_bazaar.sql`](solutions/setup_bazaar.sql): idempotent database creation with `\gexec`, schema, and `ALTER DATABASE ... SET search_path`.
+- [`solutions/setup_bazaar.sql`](solutions/setup_bazaar.sql): idempotent database creation with `\gset` and `\if`, schema, and `ALTER DATABASE ... SET search_path`.
 - [`solutions/psqlrc`](solutions/psqlrc): the recommended `.psqlrc`, explained line by line in section 13.2 of the theory.
 - [`solutions/db_report.sql`](solutions/db_report.sql): the report, using `\gset`, `:{?var}` defaults, `\if` and `\warn`.
 
