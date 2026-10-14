@@ -18,9 +18,12 @@ in transaction mode, Module 17), pass `poolclass=NullPool`.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy import event
 from sqlalchemy.engine import URL, Engine, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio import create_async_engine as _create_async_engine
@@ -28,7 +31,13 @@ from sqlalchemy.pool import NullPool
 
 from bazaar.config import Settings, get_settings
 
-__all__ = ["NullPool", "create_async_engine", "create_engine", "sa_url"]
+__all__ = [
+    "NullPool",
+    "count_statements",
+    "create_async_engine",
+    "create_engine",
+    "sa_url",
+]
 
 
 def sa_url(dsn: str, driver: str = "psycopg") -> URL:
@@ -92,3 +101,28 @@ def create_async_engine(
         for k in ("pool_size", "max_overflow", "pool_timeout"):
             params.pop(k, None)
     return _create_async_engine(sa_url(s.dsn, driver), **params)
+
+
+@contextmanager
+def count_statements(engine: Engine | AsyncEngine) -> Iterator[list[str]]:
+    """Record every SQL statement sent through `engine` inside the block.
+
+        with count_statements(engine) as stmts:
+            do_something(session)
+        assert len(stmts) <= 3        # an N+1 guard
+
+    It listens to before_cursor_execute, the last hook before the driver, so
+    it sees exactly what goes to the server (lazy loads, autoflushes, ...).
+    An executemany batch counts once.
+    """
+    target = engine.sync_engine if isinstance(engine, AsyncEngine) else engine
+    seen: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:  # noqa: ANN001
+        seen.append(statement)
+
+    event.listen(target, "before_cursor_execute", record)
+    try:
+        yield seen
+    finally:
+        event.remove(target, "before_cursor_execute", record)

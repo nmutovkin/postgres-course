@@ -42,6 +42,8 @@ def _compare_columns(
     out: list[str] = []
     db_cols = {c["name"]: c for c in reflected}
     for col in table.columns:
+        if col.system:  # xmin & co. exist on every table but are never reflected
+            continue
         db = db_cols.pop(col.name, None)
         if db is None:
             out.append(f"{name}.{col.name}: column missing in database")
@@ -66,8 +68,19 @@ def _compare_columns(
     return out
 
 
-def compare(conn: Connection, metadata: sa.MetaData, view_metadata: sa.MetaData | None = None):
-    """Return a list of human-readable differences (empty = no drift)."""
+def compare(
+    conn: Connection,
+    metadata: sa.MetaData,
+    view_metadata: sa.MetaData | None = None,
+    *,
+    mapping_only: bool = False,
+) -> list[str]:
+    """Return a list of human-readable differences (empty = no drift).
+
+    mapping_only=True checks only what an ORM mapping relies on: the mapped
+    tables exist, with the same columns, types, nullability, primary and
+    foreign keys. Unmapped tables, indexes and CHECK constraints are ignored.
+    """
     insp = sa.inspect(conn)
     dialect = conn.dialect
     out: list[str] = []
@@ -75,7 +88,8 @@ def compare(conn: Connection, metadata: sa.MetaData, view_metadata: sa.MetaData 
     db_tables = set(insp.get_table_names()) - _partitions(conn)
     meta_tables = set(metadata.tables)
     out += [f"{t}: table missing in database" for t in sorted(meta_tables - db_tables)]
-    out += [f"{t}: table not in metadata" for t in sorted(db_tables - meta_tables)]
+    if not mapping_only:
+        out += [f"{t}: table not in metadata" for t in sorted(db_tables - meta_tables)]
 
     for name in sorted(meta_tables & db_tables):
         table = metadata.tables[name]
@@ -112,14 +126,15 @@ def compare(conn: Connection, metadata: sa.MetaData, view_metadata: sa.MetaData 
         out += [f"{name}: foreign key {fk} only in metadata" for fk in sorted(mine_fks - db_fks)]
         out += [f"{name}: foreign key {fk} only in database" for fk in sorted(db_fks - mine_fks)]
 
+        if mapping_only:
+            continue
+
         mine_uq = {
             (c.name, tuple(col.name for col in c.columns))
             for c in table.constraints
             if isinstance(c, sa.UniqueConstraint)
         }
-        db_uq = {
-            (u["name"], tuple(u["column_names"])) for u in insp.get_unique_constraints(name)
-        }
+        db_uq = {(u["name"], tuple(u["column_names"])) for u in insp.get_unique_constraints(name)}
         out += [f"{name}: unique constraint {u} only in metadata" for u in sorted(mine_uq - db_uq)]
         out += [f"{name}: unique constraint {u} only in database" for u in sorted(db_uq - mine_uq)]
 

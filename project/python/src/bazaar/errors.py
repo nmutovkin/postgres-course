@@ -56,6 +56,26 @@ class AddressMismatch(BazaarError):
     """The shipping address belongs to someone else (SQLSTATE BZ004)."""
 
 
+class NotFound(BazaarError):
+    """The object does not exist, or the caller may not see it (RLS)."""
+
+
+class ConcurrentUpdate(BazaarError):
+    """Optimistic locking: someone else changed the row since it was read."""
+
+
+class InvalidReview(BazaarError):
+    """A review failed validation (rating out of range, text too long, ...)."""
+
+
+class ReviewNotAllowed(BazaarError):
+    """Only buyers with a delivered order containing the product may review it."""
+
+
+class DuplicateReview(BazaarError):
+    """The user has already reviewed this product (reviews_product_id_user_id_key)."""
+
+
 _SIMPLE = {
     "22023": InvalidOrder,
     "BZ002": ProductUnavailable,

@@ -41,22 +41,30 @@ def _values(enum_cls: type) -> list[str]:
 
 
 # Existing database types: never CREATE/DROP them from Python.
-order_status = pg.ENUM(
-    OrderStatus, name="order_status", create_type=False, values_callable=_values
-)
+order_status = pg.ENUM(OrderStatus, name="order_status", create_type=False, values_callable=_values)
 product_status = pg.ENUM(
     ProductStatus, name="product_status", create_type=False, values_callable=_values
 )
 payment_status = pg.ENUM(
     PaymentStatus, name="payment_status", create_type=False, values_callable=_values
 )
-email_address = pg.DOMAIN("email_address", sa.Text(), create_type=False)
+
+
+class _TextDomain(pg.DOMAIN):
+    """A domain over text compares like text. (SQLAlchemy 2.1's DOMAIN declares no
+    operator classes and emits a deprecation warning on every comparison.)"""
+
+    if hasattr(sa.Text, "operator_classes"):  # SQLAlchemy 2.1+
+        operator_classes = sa.Text.operator_classes
+
+
+email_address = _TextDomain("email_address", sa.Text(), create_type=False)
 
 Money = sa.Numeric(12, 2)  # numeric(12,2) <-> decimal.Decimal
 TSTZ = sa.DateTime(timezone=True)  # timestamptz <-> aware datetime
 
 
-def _id(type_: sa.types.TypeEngine = sa.BigInteger()) -> sa.Column:
+def _id(type_: type[sa.types.TypeEngine] = sa.BigInteger) -> sa.Column:
     return sa.Column("id", type_, sa.Identity(always=True), primary_key=True)
 
 
@@ -92,7 +100,7 @@ sellers = sa.Table(
 categories = sa.Table(
     "categories",
     metadata,
-    _id(sa.Integer()),
+    _id(sa.Integer),
     sa.Column("parent_id", sa.Integer, sa.ForeignKey("categories.id"), index=True),
     sa.Column("name", sa.Text, nullable=False),
     sa.Column("slug", sa.Text, nullable=False, unique=True),
@@ -116,9 +124,7 @@ products = sa.Table(
     _created_at(),
     sa.Column("updated_at", TSTZ, nullable=False, server_default=sa.func.now()),
     sa.Column("attributes", pg.JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")),
-    sa.Column(
-        "tags", pg.ARRAY(sa.Text), nullable=False, server_default=sa.text("'{}'::text[]")
-    ),
+    sa.Column("tags", pg.ARRAY(sa.Text), nullable=False, server_default=sa.text("'{}'::text[]")),
     # module 13: a stored generated column; never written by the application
     sa.Column(
         "search_vector",

@@ -70,19 +70,24 @@ class SellerStatement:
 
 
 def seller_statement_query(seller_id: int, start: date, end: date) -> sa.Select:
-    """One row per order of the seller created in [start, end), oldest first."""
+    """One row per order of the seller created in [start, end), oldest first.
+
+    Items and payments are aggregated per order in LATERAL subqueries: each
+    runs for one order at a time (an index lookup), and aggregating before
+    joining keeps the two one-to-many joins from multiplying each other's
+    rows. (A plain GROUP BY subquery over all of order_items would aggregate
+    1.3 million rows to report on a few hundred orders: Postgres does not push
+    the join condition into an aggregated subquery.)
+    """
     lo, hi = utc_bounds(start, end)
-    # Aggregate items and payments per order *before* joining, so the two
-    # one-to-many joins cannot multiply each other's rows.
     items = (
-        sa.select(order_items.c.order_id, sa.func.sum(order_items.c.quantity).label("units"))
-        .group_by(order_items.c.order_id)
-        .subquery("items")
+        sa.select(sa.func.coalesce(sa.func.sum(order_items.c.quantity), 0).label("units"))
+        .where(order_items.c.order_id == orders.c.id)
+        .lateral("items")
     )
     ok = payments.c.status == "succeeded"
     pays = (
         sa.select(
-            payments.c.order_id,
             sa.func.coalesce(
                 sa.func.sum(payments.c.amount).filter(ok, payments.c.amount > 0), 0
             ).label("paid"),
@@ -90,22 +95,22 @@ def seller_statement_query(seller_id: int, start: date, end: date) -> sa.Select:
                 -sa.func.sum(payments.c.amount).filter(ok, payments.c.amount < 0), 0
             ).label("refunded"),
         )
-        .group_by(payments.c.order_id)
-        .subquery("pays")
+        .where(payments.c.order_id == orders.c.id)
+        .lateral("pays")
     )
     return (
         sa.select(
             orders.c.id.label("order_id"),
             orders.c.created_at,
             orders.c.status,
-            sa.func.coalesce(items.c.units, 0).cast(sa.Integer).label("items"),
+            items.c.units.cast(sa.Integer).label("items"),
             orders.c.total,
-            sa.func.coalesce(pays.c.paid, 0).label("paid"),
-            sa.func.coalesce(pays.c.refunded, 0).label("refunded"),
+            pays.c.paid,
+            pays.c.refunded,
         )
         .select_from(orders)
-        .outerjoin(items, items.c.order_id == orders.c.id)
-        .outerjoin(pays, pays.c.order_id == orders.c.id)
+        .join(items, sa.true())
+        .join(pays, sa.true())
         .where(
             orders.c.seller_id == seller_id,
             orders.c.created_at >= lo,
@@ -237,6 +242,5 @@ def category_revenue_rollup(conn: Connection, start: date, end: date) -> list[Ca
     result reads like an indented tree.
     """
     return [
-        CategoryRevenue(**row._asdict())
-        for row in conn.execute(category_revenue_query(start, end))
+        CategoryRevenue(**row._asdict()) for row in conn.execute(category_revenue_query(start, end))
     ]

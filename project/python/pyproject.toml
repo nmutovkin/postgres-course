@@ -1,6 +1,6 @@
 [project]
 name = "bazaar"
-version = "0.23.0"
+version = "0.25.0"
 description = "Bazaar marketplace: the Python side of the PostgreSQL course (modules 22-28)"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "psycopg[binary,pool]>=3.2",
     "asyncpg>=0.30",
+    "sqlalchemy[asyncio]>=2.0.30",  # modules 24-25; [asyncio] pulls in greenlet
 ]
 
 [dependency-groups]
