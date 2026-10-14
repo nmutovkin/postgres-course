@@ -254,7 +254,7 @@ VACUUM ANALYZE order_items;
 ALTER POLICY order_items_seller_select ON order_items USING (seller_id = current_seller_id());
 ```
 
-Now `SELECT count(*) FROM order_items` as a seller is an `Index Only Scan`: ~22 ms for seller 1, ~0.05 ms for seller 2000. The general rule: in a multi-tenant RLS schema, carry the tenant key on every policy-protected table and index it — the storage is cheaper than the full scans RLS otherwise forces. (A real migration keeps the column in sync with a trigger or a generated value; the one-off backfill here is enough to measure. This is the `seller_id`-on-child-tables idea that [Module 21](../21-sharding/)'s shard prep makes permanent.)
+Now `SELECT count(*) FROM order_items` as a seller is an `Index Only Scan`: ~22 ms for seller 1, ~0.05 ms for seller 2000. The general rule: in a multi-tenant RLS schema, carry the tenant key on every policy-protected table and index it — the storage is cheaper than the full scans RLS otherwise forces. (A real migration keeps the column in sync with a trigger or a generated value; the one-off backfill here is enough to measure. This is the `seller_id`-on-child-tables idea that [Module 21](../../21-sharding/)'s shard prep makes permanent.)
 
 ---
 
