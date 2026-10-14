@@ -33,6 +33,11 @@ SOURCE_DSN = os.environ.get("SOURCE_DSN", "host=m21-fdw-coord user=postgres dbna
 
 # Logical shard -> node. Rebalancing = changing entries here (after moving data).
 SHARD_MAP = {s: ("shard1" if s < 8 else "shard2") for s in range(N_LOGICAL)}
+# Moved shards, e.g. SHARD_MOVES="5:shard2" after copying schema s05 to shard2.
+# (A real system keeps this map in a small config database or service.)
+for move in filter(None, os.environ.get("SHARD_MOVES", "").split(",")):
+    shard, node = move.split(":")
+    SHARD_MAP[int(shard)] = node
 
 # Directory overrides: sellers placed explicitly (e.g. a huge seller isolated
 # on a logical shard of its own). Empty in the lab; exercise 12 uses it.

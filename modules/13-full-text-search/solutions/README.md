@@ -1,6 +1,6 @@
 # Module 13: Solutions
 
-All solutions were run on PostgreSQL 17 against `./project/bin/reset.sh 14` (the large dataset plus `1301_schema_search.sql`). Exercises 7, 9, 10 and 11 also use the milestone, applied with [`search_products.sql`](search_products.sql). Timings come from a 4-vCPU container with a warm cache; yours will differ, the counts won't.
+All solutions were run on PostgreSQL 17 against `./project/bin/reset.sh 14` (the large dataset plus `1301_schema_search.sql`). Exercises 7, 9 and 10 also use the milestone, applied with [`search_products.sql`](search_products.sql). Timings come from a 4-vCPU container with a warm cache; yours will differ, the counts won't.
 
 Runnable files in this directory:
 

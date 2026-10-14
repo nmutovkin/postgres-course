@@ -684,6 +684,8 @@ SELECT create_events_partition('2027-01-15');   -- any day of the month
 (1 row)
 ```
 
+(Drop it again with `DROP TABLE events_y2027m01;`, so that the exercises find the reference layout of 25 partitions.)
+
 It computes the month's bounds in UTC, builds the name `events_yYYYYmMM`, and runs `CREATE TABLE ... PARTITION OF` through `EXECUTE format(...)` only if `to_regclass` says the table doesn't exist yet. Because it is idempotent, a scheduler can call it every day for "next month" and "the month after"; the milestone builds a full maintenance procedure around the same idea. Always keep a margin of several months: if the job breaks, you want weeks of warning, not hours.
 
 > **Pitfall:** `CREATE TABLE ... PARTITION OF` takes an `ACCESS EXCLUSIVE` lock on the parent, briefly, but it has to wait for every running query on `events` to finish, and every new query queues behind it. One long analytics query can turn "create next month's partition" into a stall of all event inserts. Run maintenance with `SET lock_timeout = '5s'` and retry later on failure. The alternative is to create the partition as a standalone table and then `ATTACH` it, which needs only a `SHARE UPDATE EXCLUSIVE` lock on the parent (next section).
@@ -853,7 +855,7 @@ Both must be installed on the server (and allowed by your hosting provider). Wit
  before                        prepare (online)                         switch (one short transaction)
  ──────                        ────────────────                         ──────────────────────────────
  audit_log (1.5M rows)         CREATE UNIQUE INDEX CONCURRENTLY         LOCK audit_log
-   PK (id)                       (id, changed_at)          0.6 s        swap the PK to (id, changed_at)
+   PK (id)                       (id, changed_at)          ~1 s         swap the PK to (id, changed_at)
                                ADD CHECK (changed_at < cut-over)        DROP IDENTITY on the old table
                                  NOT VALID; VALIDATE       0.2 s        rename audit_log -> audit_log_legacy
                                CREATE TABLE audit_log_p                 rename audit_log_p -> audit_log

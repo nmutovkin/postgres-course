@@ -7,7 +7,7 @@
 ./project/bin/psql.sh
 ```
 
-Exercises 7, 9, 10 and 11 also need this module's milestone, the reference version of which you can apply with:
+Exercises 7, 9 and 10 also need this module's milestone, the reference version of which you can apply with:
 
 ```bash
 docker exec -i course-pg psql -U postgres -d bazaar < modules/13-full-text-search/solutions/search_products.sql

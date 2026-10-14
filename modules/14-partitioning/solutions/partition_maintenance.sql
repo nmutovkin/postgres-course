@@ -7,17 +7,22 @@
 --
 --   partition_bounds(partition)              its FROM / TO bounds as timestamptz
 --   create_monthly_partition(parent, month)  create one month (idempotent)
---   CALL maintain_monthly_partitions(parent, months_ahead, retention, today, archive_schema)
+--   CALL maintain_monthly_partitions(parent, months_ahead, retention, today, archive_schema, max_remove)
 --       1. creates the partitions from the current month to months_ahead ahead;
 --       2. detaches every partition whose upper bound is not after
 --          (start of the current month - retention), then drops it, or moves
 --          it to archive_schema when one is given;
---       3. warns when the DEFAULT partition holds rows (section 6 of the theory).
+--       3. warns when the DEFAULT partition holds rows (theory, sections 2.3 and 9.2).
+--   It refuses to remove more than max_remove partitions in one run.
 --
 -- Bounds are always UTC month starts, independent of the session's TimeZone.
 --
 --   CALL maintain_monthly_partitions('events', 3, interval '12 months');
 --   CALL maintain_monthly_partitions('events', 3, interval '10 months', date '2025-12-31');
+--
+-- Careful in this course: "today" in the data is 2025-12-31, but current_date
+-- is your real clock. Called with the defaults, the procedure would consider
+-- most of 2025 expired; the max_remove safety valve stops it.
 --
 -- The procedure COMMITs after each detached partition so that it never holds
 -- more than one partition's ACCESS EXCLUSIVE lock at a time; therefore it
@@ -96,7 +101,8 @@ CREATE OR REPLACE PROCEDURE maintain_monthly_partitions(
     p_months_ahead    int      DEFAULT 3,
     p_retention       interval DEFAULT interval '12 months',
     p_today           date     DEFAULT current_date,
-    p_archive_schema  text     DEFAULT NULL       -- NULL = drop old partitions
+    p_archive_schema  text     DEFAULT NULL,      -- NULL = drop old partitions
+    p_max_remove      int      DEFAULT 2          -- safety valve, see below
 )
 LANGUAGE plpgsql
 AS $$
@@ -107,10 +113,27 @@ DECLARE
     v_default regclass;
     v_rows    bigint;
     v_saved_lock_timeout text := current_setting('lock_timeout');
+    v_to_remove int;
 BEGIN
+    -- 0. Safety valve, checked before anything is changed. A monthly job
+    --    normally removes one partition. If it would remove more than
+    --    p_max_remove (a wrong p_today or p_retention, a clock jump, the first
+    --    run after a long outage), refuse and let a human decide, instead of
+    --    silently dropping a year of data.
+    SELECT count(*) INTO v_to_remove
+    FROM pg_inherits i
+    CROSS JOIN LATERAL partition_bounds(i.inhrelid::regclass) b
+    WHERE i.inhparent = p_parent AND b.upper_bound <= v_cutoff;
+    IF v_to_remove > p_max_remove THEN
+        RAISE EXCEPTION '% partitions of % are older than %, more than p_max_remove (%): nothing removed',
+            v_to_remove, p_parent, v_cutoff, p_max_remove
+            USING HINT = 'Check p_today and p_retention, or call again with a larger p_max_remove.';
+    END IF;
+
     -- Never queue behind a long-running query (and block everyone else behind
     -- us) for long: fail fast instead and let the next run retry.
-    -- (A procedure that COMMITs can't have a SET clause, hence set_config.)
+    -- (A procedure that COMMITs can't have a SET clause, hence set_config.
+    -- If the procedure fails half-way, the session keeps the 5s setting.)
     PERFORM set_config('lock_timeout', '5s', false);
 
     -- 1. future partitions (the current month included)
@@ -161,5 +184,5 @@ BEGIN
 END;
 $$;
 
-COMMENT ON PROCEDURE maintain_monthly_partitions(regclass, int, interval, date, text) IS
+COMMENT ON PROCEDURE maintain_monthly_partitions(regclass, int, interval, date, text, int) IS
     'Creates monthly partitions ahead and detaches/drops (or archives) those older than the retention.';

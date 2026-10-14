@@ -124,3 +124,4 @@ Row counts at state 07 (0201+0301 only): users 30, sellers 6, categories 23, pro
 ## Pointers added later
 
 - Releasing reserved stock: nothing in `project/db` releases or consumes reservations. Module 10's solutions define `cancel_order()` (`modules/10-transactions-concurrency/solutions/cancel_order.sql`, error `BZ005`) and an exercise-level `ship_next_order`, as learner extensions. Custom SQLSTATEs used in modules: `BZ001`–`BZ004` (place_order), `BZ005`–`BZ007` (module 10 solutions), `BZ010`/`BZ020`/`BZ030` (module 09 examples).
+- `audit_log` is empty in the large dataset, because triggers are disabled during the bulk load. Module 14 fills it with `modules/14-partitioning/solutions/audit_log_seed.sql` (1.5M synthetic rows) for the partitioning migration.
