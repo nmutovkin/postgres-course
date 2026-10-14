@@ -1,0 +1,23 @@
+# =============================================================================
+# Local settings for node pg3, mounted as /etc/patroni/10-node.yml.
+# Patroni reads every *.yml in /etc/patroni in name order and merges them, so
+# this file adds to (and overrides) 00-common.yml (= patroni.yml).
+# After editing it, restart the container: docker restart m20-pg3
+# =============================================================================
+name: pg3                     # unique member name in the cluster
+
+restapi:
+  connect_address: m20-pg3:8008   # how OTHER nodes and HAProxy reach this REST API
+
+postgresql:
+  connect_address: m20-pg3:5432   # how replicas and clients reach this Postgres
+
+# Tags change how the rest of the cluster treats this node. None are set in
+# the lab by default. To try one, write e.g. `tags: {nofailover: true}`
+# and restart the container.
+tags: {}
+#  nofailover: true        # never promote this node (e.g. a reporting replica)
+#  failover_priority: 2    # higher wins among equally up-to-date candidates (0 = never)
+#  noloadbalance: true     # GET /replica returns 503: keep it out of the read pool
+#  clonefrom: true         # preferred source when a new replica is cloned
+#  nosync: true            # never chosen as the synchronous standby

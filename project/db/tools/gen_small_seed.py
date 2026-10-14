@@ -564,8 +564,22 @@ CITIES = {
     "NO": [("Oslo", "0150")],
     "NG": [("Lagos", "101233")],
 }
-STREETS = ["Market St", "Oak Avenue", "High Street", "Via Roma", "Hauptstraße", "Rue de Rivoli",
-           "Elm Road", "Calle Mayor", "Mill Lane", "Harbour Road", "Station Road", "Lindenweg"]
+STREETS = {
+    "US": ["Market St", "Oak Avenue", "Elm Road", "Main Street"],
+    "GB": ["High Street", "Mill Lane", "Station Road", "Harbour Road"],
+    "IE": ["Harbour Road", "Main Street"],
+    "IT": ["Via Roma", "Via Garibaldi"],
+    "DE": ["Hauptstraße", "Lindenweg", "Bahnhofstraße"],
+    "AT": ["Hauptstraße", "Ringstraße"],
+    "FR": ["Rue de Rivoli", "Rue Victor Hugo"],
+    "ES": ["Calle Mayor", "Gran Vía"],
+    "PT": ["Rua Augusta"],
+    "CZ": ["Národní"],
+    "DK": ["Strøget"],
+    "NO": ["Karl Johans gate"],
+    "CA": ["Queen Street", "Rue Sainte-Catherine"],
+}
+DEFAULT_STREETS = ["Market Street", "Station Road", "Park Avenue"]
 
 user_info = {u[0]: u for u in USERS}
 NO_ADDRESS = {24, 28, 29, 30}       # users without any address
@@ -584,7 +598,7 @@ for uid, name, _email, cc, _a in USERS:
         aid += 1
         city, postal = rng.choice(CITIES[cc])
         label = "Home" if k == 0 else "Work"
-        line1 = f"{rng.randint(1, 250)} {rng.choice(STREETS)}"
+        line1 = f"{rng.randint(1, 250)} {rng.choice(STREETS.get(cc, DEFAULT_STREETS))}"
         line2 = rng.choice([None, None, None, f"Apt {rng.randint(1, 40)}", f"Floor {rng.randint(1, 9)}"])
         if k == 1:
             line2 = "c/o Reception"

@@ -109,8 +109,11 @@ BEGIN
     INTO v_pk
     FROM unnest(TG_ARGV) AS col;
 
-    INSERT INTO audit_log (table_name, operation, row_pk, old_row, new_row)
-    VALUES (TG_TABLE_NAME, TG_OP, v_pk, v_old, v_new);
+    -- changed_by = session_user (the role that logged in) rather than the
+    -- column default current_user: module 15 makes this function SECURITY
+    -- DEFINER, and inside such a function current_user is the function's owner.
+    INSERT INTO audit_log (table_name, operation, row_pk, old_row, new_row, changed_by)
+    VALUES (TG_TABLE_NAME, TG_OP, v_pk, v_old, v_new, session_user);
 
     RETURN NULL;  -- the return value of an AFTER row trigger is ignored
 END;

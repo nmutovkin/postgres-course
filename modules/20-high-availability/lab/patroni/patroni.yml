@@ -1,15 +1,15 @@
 # =============================================================================
-# patroni.yml -- shared by m20-pg1, m20-pg2, m20-pg3.
+# patroni.yml -- the settings SHARED by m20-pg1, m20-pg2 and m20-pg3.
 #
-# The per-node values (name and the addresses other nodes use to reach this
-# one) come from environment variables set in compose.yml:
-#   PATRONI_NAME, PATRONI_RESTAPI_CONNECT_ADDRESS, PATRONI_POSTGRESQL_CONNECT_ADDRESS
-# Environment variables override the matching keys in this file.
+# Each container sees this file as /etc/patroni/00-common.yml and its own
+# pgN.yml as /etc/patroni/10-node.yml. Patroni is started with the DIRECTORY
+# (`patroni /etc/patroni`), reads all *.yml files in name order, and merges
+# them: the per-node file adds name, connect addresses and tags.
 # =============================================================================
 
 scope: bazaar-ha          # cluster name: every key in etcd lives under /service/bazaar-ha/
 namespace: /service/      # etcd key prefix (the default)
-# name: set by PATRONI_NAME (pg1, pg2, pg3) -- must be unique in the cluster
+# name: pg1 / pg2 / pg3  -> in the per-node file
 
 log:
   level: INFO
@@ -17,7 +17,7 @@ log:
 
 restapi:
   listen: 0.0.0.0:8008
-  # connect_address: set by PATRONI_RESTAPI_CONNECT_ADDRESS (e.g. m20-pg1:8008)
+  # connect_address: m20-pgN:8008  -> in the per-node file
   # In production, protect the unsafe endpoints (POST /switchover, /restart...):
   # authentication:
   #   username: patroni
@@ -73,7 +73,7 @@ bootstrap:
 # -----------------------------------------------------------------------------
 postgresql:
   listen: 0.0.0.0:5432
-  # connect_address: set by PATRONI_POSTGRESQL_CONNECT_ADDRESS (e.g. m20-pg1:5432)
+  # connect_address: m20-pgN:5432  -> in the per-node file
   data_dir: /var/lib/postgresql/data/pg17
   # pgpass: Patroni writes the replication password here for pg_basebackup/pg_rewind.
   pgpass: /tmp/pgpass
@@ -106,10 +106,6 @@ postgresql:
 
 # A container has no hardware watchdog (/dev/watchdog). Production: mode: required.
 watchdog:
-  mode: off
+  mode: 'off'
 
-tags:
-  nofailover: false       # true = never promote this node
-  noloadbalance: false    # true = GET /replica returns 503 (keep out of read pool)
-  clonefrom: false        # true = preferred source for new replicas' basebackup
-  nosync: false           # true = never pick this node as the synchronous standby
+# tags: per node, in pgN.yml

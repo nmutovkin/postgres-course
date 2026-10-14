@@ -81,8 +81,21 @@ class Outage:
     kinds: dict[str, int] = field(default_factory=dict)
 
 
+notices: dict[str, int] = {}
+
+
+def on_notice(diag: psycopg.errors.Diagnostic) -> None:
+    """Print server WARNINGs (e.g. a cancelled synchronous-replication wait).
+    Each distinct message is printed the first 3 times, then only counted."""
+    msg = f"{diag.severity}: {diag.message_primary}"
+    notices[msg] = notices.get(msg, 0) + 1
+    if notices[msg] <= 3:
+        print(f"{now()}  SERVER {msg}" + (f" ({diag.message_detail})" if diag.message_detail else ""))
+
+
 def connect(dsn: str) -> psycopg.Connection:
     conn = psycopg.connect(dsn, autocommit=True)
+    conn.add_notice_handler(on_notice)
     # Never hang forever on a dead server: give each statement 3 s.
     conn.execute("SET statement_timeout = '3s'")
     return conn
@@ -128,6 +141,7 @@ def main() -> int:
     last_ok: float | None = None
     last_server = None
     seq = 0
+    max_latency = 0.0
     t0 = time.monotonic()
     next_report = t0 + 5
     oks_since_report = 0
@@ -139,13 +153,18 @@ def main() -> int:
             if conn is None or conn.closed:
                 conn = connect(args.dsn)
             sent = True
+            t_stmt = time.monotonic()
             row = conn.execute(
                 "INSERT INTO ha_lab.writes (run_id, seq) VALUES (%s, %s) RETURNING host(inet_server_addr())",
                 (run_id, seq),
             ).fetchone()
             t = time.monotonic()
+            latency = t - t_stmt
+            max_latency = max(max_latency, latency)
             server = host_name(row[0] if row else None)
             acked.append(seq)
+            if latency > 1.0:
+                print(f"{now()}  SLOW COMMIT seq={seq}: the INSERT took {latency:.2f}s")
             oks_since_report += 1
             if current is not None:
                 current.recovered_at = t
@@ -191,7 +210,8 @@ def main() -> int:
     # ---------------------------------------------------------------- report
     print()
     print(f"=== run {run_id} summary ===")
-    print(f"attempts: {seq}   acknowledged: {len(acked)}   failed: {seq - len(acked)}")
+    print(f"attempts: {seq}   acknowledged: {len(acked)}   failed: {seq - len(acked)}   "
+          f"slowest successful INSERT: {max_latency:.2f}s")
     for i, o in enumerate(outages, 1):
         if o.recovered_at is None:
             print(f"outage {i}: NOT recovered by the end of the run ({o.errors} errors)")
@@ -203,6 +223,9 @@ def main() -> int:
             )
         for k, n in sorted(o.kinds.items(), key=lambda kv: -kv[1])[:4]:
             print(f"    {n:4d} x {k}")
+
+    for msg, n in notices.items():
+        print(f"server notice x{n}: {msg}")
 
     # Verify against the current primary (wait for one, up to 60 s).
     t_v = time.monotonic()

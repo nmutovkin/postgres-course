@@ -11,22 +11,30 @@ SET search_path = bazaar, public;
 
 DO $$
 DECLARE
-    v_user    bigint;
-    v_product bigint;
-    v_placed  int := 0;
+    v_user     bigint;
+    v_product  bigint;
+    v_placed   int := 0;
+    v_users    int;
+    v_products int;
 BEGIN
+    -- Pick among the first few hundred candidates (cheap on the large dataset too).
+    SELECT least(count(*), 500) INTO v_users FROM users WHERE is_active;
+    SELECT least(count(*), 500) INTO v_products
+    FROM products AS p JOIN inventory AS inv ON inv.product_id = p.id
+    WHERE p.status = 'active' AND inv.quantity - inv.reserved >= 10;
+
     FOR i IN 1..200 LOOP
         SELECT id INTO v_user
         FROM users
         WHERE is_active
-        OFFSET floor(random() * 50) LIMIT 1;
+        OFFSET floor(random() * v_users) LIMIT 1;
 
         SELECT p.id INTO v_product
         FROM products AS p
         JOIN inventory AS inv ON inv.product_id = p.id
         WHERE p.status = 'active'
-          AND inv.quantity - inv.reserved >= 1
-        OFFSET floor(random() * 50) LIMIT 1;
+          AND inv.quantity - inv.reserved >= 10
+        OFFSET floor(random() * v_products) LIMIT 1;
 
         IF v_user IS NOT NULL AND v_product IS NOT NULL THEN
             PERFORM place_order(v_user, jsonb_build_array(

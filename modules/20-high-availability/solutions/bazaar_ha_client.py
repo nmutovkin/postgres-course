@@ -148,6 +148,8 @@ class Client:
 
 
 def load_catalog(dsn: str, n_users: int, n_products: int) -> tuple[list[int], list[int]]:
+    """Pick active users and active products, and restock those products so
+    that the run measures failover behaviour, not Bazaar running out of stock."""
     with psycopg.connect(dsn, autocommit=True) as c:
         c.execute(SETUP)
         users = [r[0] for r in c.execute(
@@ -155,11 +157,14 @@ def load_catalog(dsn: str, n_users: int, n_products: int) -> tuple[list[int], li
         products = [r[0] for r in c.execute(
             """SELECT p.id
                FROM bazaar.products p JOIN bazaar.inventory i ON i.product_id = p.id
-               WHERE p.status = 'active' AND i.quantity - i.reserved >= 20
-               ORDER BY i.quantity - i.reserved DESC, p.id
+               WHERE p.status = 'active'
+               ORDER BY p.id
                LIMIT %s""", (n_products,))]
+        c.execute(
+            "UPDATE bazaar.inventory SET quantity = quantity + 100000 "
+            "WHERE product_id = ANY(%s) AND quantity - reserved < 50000", (products,))
     if not users or not products:
-        sys.exit("no active users or no products with stock: load Bazaar first (./scripts/load-bazaar.sh)")
+        sys.exit("no active users or no active products: load Bazaar first (./scripts/load-bazaar.sh)")
     return users, products
 
 

@@ -23,10 +23,11 @@ RUN python3 -m venv /opt/patroni \
  && ln -s /opt/patroni/bin/patronictl /usr/local/bin/patronictl
 
 ENV PATH=/opt/patroni/bin:$PATH \
-    PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml
+    PATRONICTL_CONFIG_FILE=/etc/patroni
 
 # Patroni (not docker-entrypoint.sh) owns initdb, configuration and start/stop.
 USER postgres
 WORKDIR /var/lib/postgresql
 EXPOSE 5432 8008
-CMD ["patroni", "/etc/patroni/patroni.yml"]
+# /etc/patroni holds 00-common.yml + 10-node.yml (see compose.yml); Patroni merges them.
+CMD ["patroni", "/etc/patroni"]

@@ -6,14 +6,15 @@
 --     docker exec -i course-pg psql -U postgres -d bazaar < project/db/tools/check.sql
 --
 -- Each check prints the number of violating rows. Every row should show 0,
--- except the ones marked "(info)", which describe deliberate anomalies:
---   * reviews_without_delivered_purchase: small data has exactly 1 (user 7
---     reviewed product 1 without buying it); large data has ~2% on purpose.
+-- except the ones marked "(info)", which count deliberate anomalies:
+--   * reviews_without_delivered_purchase: the small dataset has exactly 1
+--     (user 7 reviewed product 1 without buying it); the large one ~6,000.
 --
 -- Checks for tables that do not exist yet in the current state are skipped
--- (psql \if), so the same script works at every state.
--- Status columns are compared as ::text so the script works both before
--- (text + CHECK) and after (enum) module 08.
+-- (psql \if), so the same script works at every state. Status columns are
+-- compared as ::text so the script works both before (text + CHECK) and after
+-- (enum) module 08. All checks are set-based (joins + GROUP BY) so they run in
+-- seconds on the large dataset even before module 11 adds indexes.
 -- =============================================================================
 
 SET search_path = bazaar, public;
@@ -50,7 +51,7 @@ FROM (
        OR (status::text IN ('shipped', 'delivered') AND shipped_at IS NULL)
        OR (status::text IN ('pending', 'paid', 'cancelled') AND shipped_at IS NOT NULL)
        OR (status::text = 'delivered' AND delivered_at IS NULL)
-       OR (status::text <> 'delivered' AND status::text <> 'refunded' AND delivered_at IS NOT NULL)
+       OR (status::text NOT IN ('delivered', 'refunded') AND delivered_at IS NOT NULL)
        OR (delivered_at IS NOT NULL AND shipped_at IS NULL)
 
     UNION ALL
@@ -128,9 +129,6 @@ ORDER BY n;
 
 \if :has_v2
 \echo '== schema v2 (module 07 tables) =='
--- Written set-based (joins + GROUP BY) rather than with correlated subqueries:
--- before module 11 there is no index on payments.order_id etc., and a
--- per-order subquery would scan payments 500k times on the large dataset.
 WITH order_payments AS (
     SELECT
         o.id, o.status::text AS status, o.total, o.paid_at,
@@ -140,7 +138,7 @@ WITH order_payments AS (
         count(p.id) FILTER (WHERE p.amount < 0)                                         AS n_negative
     FROM orders o
     LEFT JOIN payments p ON p.order_id = o.id
-    GROUP BY o.id
+    GROUP BY o.id, o.status, o.total, o.paid_at   -- (not just o.id: after 2101 id alone is not the PK)
 ),
 first_delivery AS (
     SELECT o.user_id, i.product_id, min(o.delivered_at) AS delivered_at
@@ -189,21 +187,34 @@ FROM (
     WHERE r.created_at < f.delivered_at
 
     UNION ALL
-    -- the price valid at order time = the history row with the latest valid_from <= created_at
+    -- The price valid at order time is the history row with the latest
+    -- valid_from <= created_at. Set-based version: turn the history into
+    -- [valid_from, valid_to) intervals and join on them.
     SELECT 8, 'unit_price_equals_price_history_at_order_time', count(*)
     FROM order_items i
     JOIN orders o ON o.id = i.order_id
-    CROSS JOIN LATERAL (
-        SELECT h.price
-        FROM product_price_history h
-        WHERE h.product_id = i.product_id AND h.valid_from <= o.created_at
-        ORDER BY h.valid_from DESC
-        LIMIT 1
-    ) h
+    JOIN (
+        SELECT product_id, price, valid_from,
+               lead(valid_from, 1, 'infinity') OVER (PARTITION BY product_id ORDER BY valid_from) AS valid_to
+        FROM product_price_history
+    ) h ON h.product_id = i.product_id
+       AND o.created_at >= h.valid_from
+       AND o.created_at <  h.valid_to
     WHERE h.price <> i.unit_price
 
     UNION ALL
-    SELECT 9, 'latest_price_history_equals_current_price', count(*)
+    SELECT 9, 'order_items_without_price_history', count(*)
+    FROM order_items i
+    JOIN orders o ON o.id = i.order_id
+    LEFT JOIN (
+        SELECT product_id, min(valid_from) AS first_valid_from
+        FROM product_price_history
+        GROUP BY product_id
+    ) h ON h.product_id = i.product_id
+    WHERE h.first_valid_from IS NULL OR h.first_valid_from > o.created_at
+
+    UNION ALL
+    SELECT 10, 'latest_price_history_equals_current_price', count(*)
     FROM products p
     LEFT JOIN (
         SELECT DISTINCT ON (product_id) product_id, price
@@ -213,7 +224,7 @@ FROM (
     WHERE p.price IS DISTINCT FROM h.price
 
     UNION ALL
-    SELECT 10, 'cart_items_reference_active_products', count(*)
+    SELECT 11, 'cart_items_reference_active_products', count(*)
     FROM cart_items c
     JOIN products p ON p.id = c.product_id
     WHERE p.status::text <> 'active'
@@ -246,12 +257,14 @@ SELECT 'seller_sales_daily_matches_base_tables' AS check_name, count(*) AS viola
 FROM (
     (SELECT seller_id, day, orders_count, items_sold, revenue FROM seller_sales_daily
      EXCEPT ALL
-     SELECT o.seller_id, (o.created_at AT TIME ZONE 'UTC')::date, count(DISTINCT o.id), sum(i.quantity), sum(i.quantity * i.unit_price)
+     SELECT o.seller_id, (o.created_at AT TIME ZONE 'UTC')::date, count(DISTINCT o.id),
+            sum(i.quantity), sum(i.quantity * i.unit_price)
      FROM orders o JOIN order_items i ON i.order_id = o.id
      WHERE o.status::text IN ('paid', 'shipped', 'delivered')
      GROUP BY 1, 2)
     UNION ALL
-    (SELECT o.seller_id, (o.created_at AT TIME ZONE 'UTC')::date, count(DISTINCT o.id), sum(i.quantity), sum(i.quantity * i.unit_price)
+    (SELECT o.seller_id, (o.created_at AT TIME ZONE 'UTC')::date, count(DISTINCT o.id),
+            sum(i.quantity), sum(i.quantity * i.unit_price)
      FROM orders o JOIN order_items i ON i.order_id = o.id
      WHERE o.status::text IN ('paid', 'shipped', 'delivered')
      GROUP BY 1, 2

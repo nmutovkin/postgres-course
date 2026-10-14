@@ -68,34 +68,25 @@ services:
     <<: *patroni
     container_name: m20-pg1
     hostname: m20-pg1
-    environment:
-      PATRONI_NAME: pg1
-      PATRONI_RESTAPI_CONNECT_ADDRESS: m20-pg1:8008
-      PATRONI_POSTGRESQL_CONNECT_ADDRESS: m20-pg1:5432
     volumes:
-      - ./patroni/patroni.yml:/etc/patroni/patroni.yml:ro
+      - ./patroni/patroni.yml:/etc/patroni/00-common.yml:ro
+      - ./patroni/pg1.yml:/etc/patroni/10-node.yml:ro
       - pg1:/var/lib/postgresql/data
   pg2:
     <<: *patroni
     container_name: m20-pg2
     hostname: m20-pg2
-    environment:
-      PATRONI_NAME: pg2
-      PATRONI_RESTAPI_CONNECT_ADDRESS: m20-pg2:8008
-      PATRONI_POSTGRESQL_CONNECT_ADDRESS: m20-pg2:5432
     volumes:
-      - ./patroni/patroni.yml:/etc/patroni/patroni.yml:ro
+      - ./patroni/patroni.yml:/etc/patroni/00-common.yml:ro
+      - ./patroni/pg2.yml:/etc/patroni/10-node.yml:ro
       - pg2:/var/lib/postgresql/data
   pg3:
     <<: *patroni
     container_name: m20-pg3
     hostname: m20-pg3
-    environment:
-      PATRONI_NAME: pg3
-      PATRONI_RESTAPI_CONNECT_ADDRESS: m20-pg3:8008
-      PATRONI_POSTGRESQL_CONNECT_ADDRESS: m20-pg3:5432
     volumes:
-      - ./patroni/patroni.yml:/etc/patroni/patroni.yml:ro
+      - ./patroni/patroni.yml:/etc/patroni/00-common.yml:ro
+      - ./patroni/pg3.yml:/etc/patroni/10-node.yml:ro
       - pg3:/var/lib/postgresql/data
 
   # --------------------------------------------------------------- HAProxy --
