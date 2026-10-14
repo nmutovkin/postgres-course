@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from decimal import Decimal
+from typing import Any
 
 import psycopg
 from psycopg import sql
@@ -107,6 +108,12 @@ IMPORT_INVENTORY = """
     FROM import_products s
     JOIN products p ON p.seller_id = s.seller_id AND p.sku = s.sku
     ON CONFLICT (product_id) DO UPDATE SET quantity = EXCLUDED.quantity
+"""
+
+ENQUEUE_JOB = """
+    INSERT INTO jobs (queue, kind, payload)
+    VALUES (%(queue)s, %(kind)s, %(payload)s)
+    RETURNING id
 """
 
 
@@ -252,3 +259,18 @@ def import_products(conn: psycopg.Connection, products: Iterable[NewProduct]) ->
         cur.execute("DROP TABLE import_products")
     inserted = sum(flags)
     return ImportResult(inserted=inserted, updated=len(flags) - inserted)
+
+
+def enqueue_job(
+    conn: psycopg.Connection,
+    kind: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    queue: str = "default",
+) -> int:
+    """Add a job to the module-10 queue; workers see it when the caller commits."""
+    row = conn.execute(
+        ENQUEUE_JOB, {"queue": queue, "kind": kind, "payload": Jsonb(payload or {})}
+    ).fetchone()
+    assert row is not None
+    return row[0]

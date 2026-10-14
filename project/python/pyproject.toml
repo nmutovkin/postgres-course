@@ -18,6 +18,7 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
     "ruff>=0.6",
+    "pydantic>=2",  # only for the row-factory examples of module 22
 ]
 
 [project.scripts]

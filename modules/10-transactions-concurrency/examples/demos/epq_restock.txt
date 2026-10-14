@@ -1,0 +1,7 @@
+-- Section 6.3: EvalPlanQual only re-checks rows it already found (reset.sh 10 first)
+A: BEGIN;
+A: UPDATE inventory SET quantity = quantity + 3 WHERE product_id = 60;
+A: UPDATE inventory SET quantity = quantity - 7 WHERE product_id = 12;
+B: UPDATE inventory SET quantity = quantity + 20 WHERE quantity BETWEEN 1 AND 4 RETURNING product_id, quantity;
+A: COMMIT;
+A: SELECT product_id, quantity FROM inventory WHERE product_id IN (3, 12, 13, 15, 60) ORDER BY product_id;

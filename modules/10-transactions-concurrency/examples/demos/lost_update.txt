@@ -1,0 +1,10 @@
+-- Section 6.2: a lost update under READ COMMITTED (reset.sh 10 first)
+A: BEGIN;
+A: SELECT quantity, reserved FROM inventory WHERE product_id = 15;
+B: BEGIN;
+B: SELECT quantity, reserved FROM inventory WHERE product_id = 15;
+A: UPDATE inventory SET reserved = 1 WHERE product_id = 15;
+B: UPDATE inventory SET reserved = 3 WHERE product_id = 15;
+A: COMMIT;
+B: COMMIT;
+A: SELECT quantity, reserved FROM inventory WHERE product_id = 15;

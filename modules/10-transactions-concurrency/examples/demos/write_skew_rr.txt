@@ -1,0 +1,10 @@
+-- Section 7.3: write skew under REPEATABLE READ (reset.sh 10 first)
+A: BEGIN ISOLATION LEVEL REPEATABLE READ;
+A: SELECT count(*) FROM promotions pr JOIN products p ON p.id = pr.product_id WHERE p.seller_id = 4 AND upper_inf(pr.active_during);
+B: BEGIN ISOLATION LEVEL REPEATABLE READ;
+B: SELECT count(*) FROM promotions pr JOIN products p ON p.id = pr.product_id WHERE p.seller_id = 4 AND upper_inf(pr.active_during);
+A: INSERT INTO promotions (product_id, discount_pct, active_during) VALUES (49, 20, tstzrange('2025-07-01', NULL));
+B: INSERT INTO promotions (product_id, discount_pct, active_during) VALUES (50, 15, tstzrange('2025-07-01', NULL));
+A: COMMIT;
+B: COMMIT;
+A: SELECT count(*) FROM promotions pr JOIN products p ON p.id = pr.product_id WHERE p.seller_id = 4 AND upper_inf(pr.active_during);

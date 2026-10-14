@@ -1,0 +1,8 @@
+-- Section 6.3: atomic conditional update re-checked by EvalPlanQual (reset.sh 10 first)
+A: BEGIN;
+A: UPDATE inventory SET reserved = reserved + 3 WHERE product_id = 15 AND quantity - reserved >= 3 RETURNING quantity, reserved;
+B: BEGIN;
+B: UPDATE inventory SET reserved = reserved + 3 WHERE product_id = 15 AND quantity - reserved >= 3 RETURNING quantity, reserved;
+A: COMMIT;
+B: UPDATE inventory SET reserved = reserved + 1 WHERE product_id = 15 AND quantity - reserved >= 1 RETURNING quantity, reserved;
+B: COMMIT;

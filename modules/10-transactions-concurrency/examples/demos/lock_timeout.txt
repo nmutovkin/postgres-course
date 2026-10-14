@@ -1,0 +1,9 @@
+-- Section 11.5: lock_timeout as the remedy (reset.sh 10 first; it adds a column)
+A: BEGIN;
+A: SELECT count(*) FROM products;
+B: SET lock_timeout = '2s';
+B: ALTER TABLE products ADD COLUMN weight_g int;
+C: SELECT title FROM products WHERE id = 1;
+!sleep 2
+A: COMMIT;
+B: ALTER TABLE products ADD COLUMN weight_g int;

@@ -1,0 +1,7 @@
+-- Section 10.3: NOWAIT and SKIP LOCKED
+A: BEGIN;
+A: SELECT product_id, quantity, reserved FROM inventory WHERE product_id = 15 FOR UPDATE;
+B: SELECT product_id, quantity, reserved FROM inventory WHERE product_id = 15 FOR UPDATE NOWAIT;
+B: SELECT product_id, quantity, reserved FROM inventory WHERE product_id IN (13, 15, 16) ORDER BY product_id FOR UPDATE SKIP LOCKED;
+B: SELECT product_id, quantity, reserved FROM inventory WHERE product_id IN (13, 15, 16) ORDER BY product_id;
+A: ROLLBACK;

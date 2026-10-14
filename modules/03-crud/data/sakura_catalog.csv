@@ -1,0 +1,15 @@
+sku,title,description,category_slug,price,quantity,status
+SG-AUD-001,Sakura Mini Bluetooth Speaker,Palm-sized speaker with a cherry-blossom grille and 12-hour battery.,speakers,39.90,25,active
+SG-AUD-002,Hanami Wireless Earbuds,Lightweight earbuds with a pastel charging case.,headphones,59.00,40,active
+SG-AUD-003,Koto Studio Headphones,,headphones,129.00,8,draft
+SG-CMP-001,Origami Laptop Stand,Folding aluminium stand that fits in a sleeve pocket.,computers,34.50,60,active
+SG-CMP-002,Bonsai USB-C Hub 7-in-1,"Seven ports, one cable.",computers,"24,99",100,active
+SG-CMP-003,Kanji Mechanical Keyboard,Tactile switches with hiragana keycaps.,keyboards,89.00,15,active
+SG-MON-001,"Fuji 27"" 4K Monitor",Factory-calibrated 4K panel with a matte finish.,monitors,349.00,6,active
+SG-MON-002,,Portable 15.6-inch screen.,monitors,199.00,5,active
+SG-AUD-001,Sakura Mini Bluetooth Speaker (v2),Second listing of the same SKU by mistake.,speakers,42.00,10,active
+SG-ACC-001,Washi Tape Cable Ties (10 pcs),Reusable fabric cable ties in five patterns.,computers,6.50,-5,active
+SG-ACC-002,Daruma Phone Stand,Weighted stand that always gets back up.,computers,14.00,ten,live
+SG-AUD-004,Taiko Party Speaker,Big sound for small rooms.,speakers,149.00,12,
+SG-CMP-004,Sumi-e Mouse Pad XL,  Extra-large desk mat with an ink-wash mountain print.  ,computers,12,200,active
+SG-MON-003,"Hokusai 49"" Ultrawide Monitor",Curved 49-inch monitor for the serious multitasker.,monitors,12345678901,1,draft

@@ -70,16 +70,21 @@ BEGIN
     UPDATE bazaar.orders SET status = p_new_status WHERE id = p_order_id;
 
     -- The orders audit trigger records the change with changed_by = session_user
-    -- (bazaar_support); keep the reason next to it.
-    INSERT INTO bazaar.audit_log (table_name, operation, row_pk, new_row)
+    -- (bazaar_support); keep the reason next to it. Inside a SECURITY DEFINER
+    -- function current_user is the OWNER, so name the session user explicitly
+    -- (changed_by defaults to current_user).
+    INSERT INTO bazaar.audit_log (table_name, operation, row_pk, new_row, changed_by)
     VALUES ('orders', 'UPDATE', jsonb_build_object('id', p_order_id),
-            jsonb_build_object('support_reason', p_reason));
+            jsonb_build_object('support_reason', p_reason), session_user);
 
     RETURN p_new_status;
 END
 $$;
 
-REVOKE EXECUTE ON FUNCTION bazaar.support_set_order_status(bigint, bazaar.order_status, text) FROM PUBLIC;
+-- PUBLIC gets EXECUTE on every new function, and the default privileges of
+-- bazaar_owner (1501) also gave it to bazaar_app at CREATE time: revoke both.
+REVOKE EXECUTE ON FUNCTION bazaar.support_set_order_status(bigint, bazaar.order_status, text)
+    FROM PUBLIC, bazaar_app;
 GRANT EXECUTE ON FUNCTION bazaar.support_set_order_status(bigint, bazaar.order_status, text) TO bazaar_support;
 
 COMMIT;

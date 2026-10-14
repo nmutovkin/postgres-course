@@ -11,6 +11,7 @@
 #   m21-fdw-coord  coordinator: a partitioned table whose partitions are foreign tables
 #   m21-shard1     shard node 1
 #   m21-shard2     shard node 2
+#   m21-app        Python 3.12 + psycopg, runs router/router.py (application-level sharding)
 #
 #   cd modules/21-sharding/lab
 #   docker compose up -d                       # Citus coordinator + 2 workers
@@ -100,6 +101,17 @@ services:
     container_name: m21-shard2
     hostname: m21-shard2
     command: ["postgres", "-c", "max_prepared_transactions=10"]
+
+  app:
+    # A Python container on the lab network for the application-level router
+    # (section 10). psycopg 3 is installed from PyPI when it starts.
+    image: python:3.12-slim
+    profiles: ["fdw"]
+    container_name: m21-app
+    hostname: m21-app
+    working_dir: /router
+    command: ["sh", "-c", "pip install --quiet --root-user-action=ignore 'psycopg[binary]>=3.2,<3.3' && sleep infinity"]
+    volumes: ["./router:/router:ro"]
 
 volumes:
   coord:

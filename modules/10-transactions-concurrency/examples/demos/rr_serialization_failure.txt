@@ -1,0 +1,17 @@
+-- Section 7.2: 40001 under REPEATABLE READ (reset.sh 10 first)
+A: BEGIN ISOLATION LEVEL REPEATABLE READ;
+A: SELECT quantity, reserved FROM inventory WHERE product_id = 15;
+B: BEGIN;
+B: UPDATE inventory SET reserved = reserved + 1 WHERE product_id = 15;
+A: UPDATE inventory SET reserved = reserved + 3 WHERE product_id = 15 AND quantity - reserved >= 3;
+B: COMMIT;
+A: SELECT quantity, reserved FROM inventory WHERE product_id = 15;
+A: ROLLBACK;
+A: BEGIN ISOLATION LEVEL REPEATABLE READ;
+A: SELECT quantity, reserved FROM inventory WHERE product_id = 15;
+B: BEGIN;
+B: UPDATE inventory SET reserved = reserved + 1 WHERE product_id = 15;
+A: UPDATE inventory SET reserved = reserved + 3 WHERE product_id = 15 AND quantity - reserved >= 3;
+B: ROLLBACK;
+A: COMMIT;
+A: SELECT quantity, reserved FROM inventory WHERE product_id = 15;

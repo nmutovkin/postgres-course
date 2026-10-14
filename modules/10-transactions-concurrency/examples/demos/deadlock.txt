@@ -1,0 +1,11 @@
+-- Section 13.1: a deadlock (the !wait gives the detector time to run)
+A: BEGIN;
+A: UPDATE inventory SET reserved = reserved + 1 WHERE product_id = 1;
+B: BEGIN;
+B: UPDATE inventory SET reserved = reserved + 1 WHERE product_id = 2;
+A: UPDATE inventory SET reserved = reserved + 1 WHERE product_id = 2;
+!wait 1.6
+B: UPDATE inventory SET reserved = reserved + 1 WHERE product_id = 1;
+A: COMMIT;
+B: ROLLBACK;
+A: SELECT product_id, reserved FROM inventory WHERE product_id IN (1, 2) ORDER BY product_id;

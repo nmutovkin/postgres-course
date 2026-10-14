@@ -69,7 +69,9 @@ def connect(settings: Settings | None = None, **overrides: Any) -> psycopg.Conne
     return conn
 
 
-def create_pool(settings: Settings | None = None, *, open: bool = True, **overrides: Any) -> ConnectionPool:
+def create_pool(
+    settings: Settings | None = None, *, open: bool = True, **overrides: Any
+) -> ConnectionPool:
     """Create the process-wide connection pool."""
     s = settings or get_settings()
     kw = connect_kwargs(s)

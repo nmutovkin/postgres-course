@@ -1668,7 +1668,7 @@ ALTER TABLE legacy_products RENAME TO old_products;
 ```
 
 ```text
-               Table "lab.old_products"
+                 Table "lab.old_products"
   Column  |     Type      | Collation | Nullable | Default 
 ----------+---------------+-----------+----------+---------
  id       | integer       |           | not null | 
