@@ -1152,7 +1152,30 @@ Details that matter:
 - `format()` with **`%I`** quotes an *identifier* safely (double quotes when needed), and **`%L`** quotes a *literal* (single quotes, escaping embedded ones). Always build statements with these, never by gluing strings with `||`. A table named `Order Items` or a value like `O'Brien` would break a naive script.
 - In `LIKE`, `_` matches any single character. `'scratch\_%'` escapes it so it matches a literal underscore. Without the backslash, `scratchy_notes` would match too.
 - Each generated statement runs separately. Under the default autocommit, each one commits on its own (section 11.4).
-- `CREATE DATABASE` can't run inside a `DO` block or a function, and has no `IF NOT EXISTS`. "Generate the statement only if needed, then `\gexec`" is the standard idempotent trick, and it's exactly what the project milestone uses.
+- `CREATE DATABASE` can't run inside a `DO` block or a function, and has no `IF NOT EXISTS`. You need another way to run it only when the database is missing. That's what the project milestone asks for.
+
+**Creating a database only if it doesn't exist.** The idea is to ask the catalog first and act on the answer. Using only tools from this module (`\gset` from 10.2, and `\if`, which section 11.3 covers in full):
+
+```sql
+SELECT count(*) = 0 AS need_db
+FROM pg_database
+WHERE datname = 'bazaar' \gset
+
+\if :need_db
+    CREATE DATABASE bazaar;
+\endif
+```
+
+Line by line:
+
+- `pg_database` is the catalog with one row per database (section 15). `WHERE datname = 'bazaar'` keeps only the row for `bazaar`, so `count(*)` is 1 if it exists and 0 if it doesn't.
+- `count(*) = 0` turns that number into a boolean, `t` or `f`, and `AS need_db` names the column.
+- `\gset` stores the column in the psql variable `need_db`.
+- `\if :need_db` runs the lines up to `\endif` only when the variable is true.
+
+The first run prints `CREATE DATABASE`. The second prints nothing and still succeeds, so the script is safe to run twice.
+
+> **Under the hood:** you'll often see the same check written as a single query: `SELECT 'CREATE DATABASE bazaar' WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'bazaar') \gexec`. It returns the statement as one row when the database is missing and zero rows otherwise, so `\gexec` has either one statement or nothing to run. `EXISTS` and subqueries are covered in module 04.
 
 ### 10.4 `\watch`: re-run a query periodically
 
