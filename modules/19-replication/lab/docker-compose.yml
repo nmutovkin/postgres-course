@@ -1,0 +1,132 @@
+# Module 19 lab: a replicated Bazaar.
+#
+#   m19-primary     read/write primary (wal_level=logical)
+#   m19-replica1    physical streaming standby, SYNCHRONOUS (synchronous_standby_names)
+#   m19-replica2    physical streaming standby, asynchronous
+#   m19-analytics   separate cluster that receives orders/order_items/products
+#                   through LOGICAL replication (set up by scripts/setup-analytics.sh)
+#
+# Optional (profile "extras"):
+#   m19-replica3    cascading standby that streams from m19-replica2
+#   m19-delayed     standby that applies WAL 5 minutes late (recovery_min_apply_delay)
+#
+#   cd modules/19-replication/lab
+#   docker compose up -d
+#   docker compose --profile extras up -d      # also start replica3 and delayed
+#
+# No ports are published: use `docker exec -it m19-primary psql -U postgres`.
+
+name: m19-lab
+
+x-postgres: &postgres
+  image: postgres:17
+  shm_size: 256mb
+  environment:
+    POSTGRES_PASSWORD: postgres
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U postgres"]
+    interval: 2s
+    timeout: 3s
+    retries: 60
+
+x-standby: &standby
+  <<: *postgres
+  entrypoint: ["/lab/scripts/standby-entrypoint.sh"]
+
+services:
+  primary:
+    <<: *postgres
+    container_name: m19-primary
+    hostname: m19-primary
+    command: ["postgres", "-c", "cluster_name=primary"]
+    volumes:
+      - primary:/var/lib/postgresql/data
+      - ./conf/primary-init.sh:/docker-entrypoint-initdb.d/10-primary-init.sh:ro
+      - ./:/lab:ro
+      - ../../../project:/course/project:ro
+
+  replica1:
+    <<: *standby
+    container_name: m19-replica1
+    hostname: m19-replica1
+    # cluster_name doubles as the application_name the standby reports to the
+    # primary; synchronous_standby_names on the primary refers to it.
+    command: ["postgres", "-c", "cluster_name=replica1"]
+    environment:
+      POSTGRES_PASSWORD: postgres
+      PGPASSWORD: replicator
+      UPSTREAM_HOST: m19-primary
+      SLOT_NAME: replica1
+    depends_on:
+      primary: { condition: service_healthy }
+    volumes:
+      - replica1:/var/lib/postgresql/data
+      - ./:/lab:ro
+
+  replica2:
+    <<: *standby
+    container_name: m19-replica2
+    hostname: m19-replica2
+    command: ["postgres", "-c", "cluster_name=replica2"]
+    environment:
+      POSTGRES_PASSWORD: postgres
+      PGPASSWORD: replicator
+      UPSTREAM_HOST: m19-primary
+      SLOT_NAME: replica2
+    depends_on:
+      primary: { condition: service_healthy }
+    volumes:
+      - replica2:/var/lib/postgresql/data
+      - ./:/lab:ro
+
+  analytics:
+    <<: *postgres
+    container_name: m19-analytics
+    hostname: m19-analytics
+    command: ["postgres", "-c", "cluster_name=analytics"]
+    volumes:
+      - analytics:/var/lib/postgresql/data
+      - ./:/lab:ro
+
+  replica3:
+    <<: *standby
+    profiles: ["extras"]
+    container_name: m19-replica3
+    hostname: m19-replica3
+    command: ["postgres", "-c", "cluster_name=replica3"]
+    environment:
+      POSTGRES_PASSWORD: postgres
+      PGPASSWORD: replicator
+      UPSTREAM_HOST: m19-replica2      # cascading: clone and stream from a standby
+      SLOT_NAME: replica3
+    depends_on:
+      replica2: { condition: service_healthy }
+    volumes:
+      - replica3:/var/lib/postgresql/data
+      - ./:/lab:ro
+
+  delayed:
+    <<: *standby
+    profiles: ["extras"]
+    container_name: m19-delayed
+    hostname: m19-delayed
+    command: ["postgres", "-c", "cluster_name=delayed"]
+    environment:
+      POSTGRES_PASSWORD: postgres
+      PGPASSWORD: replicator
+      UPSTREAM_HOST: m19-primary
+      SLOT_NAME: delayed
+      RECOVERY_MIN_APPLY_DELAY: 5min
+    depends_on:
+      primary: { condition: service_healthy }
+    volumes:
+      - delayed:/var/lib/postgresql/data
+      - ./:/lab:ro
+
+volumes:
+  primary:
+  replica1:
+  replica2:
+  analytics:
+  replica3:
+  delayed:

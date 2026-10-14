@@ -4,4 +4,5 @@
 set -euo pipefail
 DB="${1:-bazaar}"; shift || true
 CONTAINER="${COURSE_PG_CONTAINER:-course-pg}"
-exec docker exec -it -e PGOPTIONS="${PGOPTIONS:-}" "$CONTAINER" psql -U postgres -d "$DB" "$@"
+TTY_FLAG="-i"; [ -t 0 ] && TTY_FLAG="-it"   # allow piping files: ./psql.sh bazaar < file.sql
+exec docker exec $TTY_FLAG -e PGOPTIONS="${PGOPTIONS:-}" "$CONTAINER" psql -U postgres -d "$DB" "$@"

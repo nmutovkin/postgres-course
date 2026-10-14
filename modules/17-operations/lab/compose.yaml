@@ -1,0 +1,57 @@
+# Module 17 lab: PostgreSQL 17 behind PgBouncer.
+#
+#   cd modules/17-operations/lab
+#   docker compose up -d --wait        # start both services
+#   ./bench.sh                         # pgbench: direct vs pooled
+#   docker compose down -v             # tear everything down (including the volume)
+#
+# Ports on your machine (change them with env vars if they are taken):
+#   LAB_PG_PORT     (default 55432) -> PostgreSQL directly
+#   LAB_BOUNCER_PORT (default 56432) -> PgBouncer
+name: m17-pooling
+
+services:
+  pg:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - log_connections=off
+    ports:
+      - "${LAB_PG_PORT:-55432}:5432"
+    volumes:
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+      - labdata:/var/lib/postgresql/data
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bench"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.26.0-p0
+    depends_on:
+      pg:
+        condition: service_healthy
+    ports:
+      - "${LAB_BOUNCER_PORT:-56432}:6432"
+    volumes:
+      # The image only generates a config when none exists; we provide our own.
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  labdata:

@@ -1,0 +1,45 @@
+-- =============================================================================
+-- psqlrc  --  Module 01 milestone, part 2 (reference solution)
+-- Copy to ~/.psqlrc (see project.md). Lines starting with -- are SQL comments,
+-- which psql ignores; every other line is a psql meta-command.
+-- =============================================================================
+
+-- Don't print "Null display is ..." etc. for each setting below.
+\set QUIET on
+
+-- Make NULL visible: an empty cell could be NULL or an empty string ''.
+\pset null '∅'
+
+-- Switch to the vertical (expanded) layout only when a row is too wide.
+\x auto
+
+-- Print how long each statement took (client-measured, includes network).
+\timing on
+
+-- Box-drawing characters instead of ASCII dashes and pipes.
+\pset linestyle unicode
+
+-- Inside an explicit transaction, a typo no longer aborts the transaction.
+-- "interactive" = only when typing at the prompt, never in scripts (-f).
+\set ON_ERROR_ROLLBACK interactive
+
+-- Tab completion upper-cases keywords (select<TAB> -> SELECT).
+\set COMP_KEYWORD_CASE upper
+
+-- History: big, de-duplicated, one file per database.
+\set HISTSIZE 10000
+\set HISTCONTROL ignoredups
+\set HISTFILE ~/.psql_history- :DBNAME
+
+-- Prompt: user@host:port/database, then the usual state markers.
+--   %R  = (=) ready, (-) continuation, (') inside a string, (() inside parentheses
+--   %x  = (*) in a transaction, (!) in a failed transaction
+--   %#  = # for superusers, > for everybody else
+\set PROMPT1 '%n@%M:%>/%/%R%x%# '
+\set PROMPT2 '%n@%M:%>/%/%R%x%# '
+
+-- Saved queries: type :activity or :settings at the prompt.
+\set activity 'SELECT pid, usename, datname, state, wait_event_type, now() - query_start AS running_for, left(query, 60) AS query FROM pg_stat_activity WHERE backend_type = ''client backend'' ORDER BY query_start;'
+\set settings 'SELECT name, setting, unit, source FROM pg_settings WHERE source NOT IN (''default'', ''override'') ORDER BY name;'
+
+\set QUIET off

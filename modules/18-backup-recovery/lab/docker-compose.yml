@@ -1,0 +1,48 @@
+# Module 18 lab: one PostgreSQL 17 server with WAL archiving, a backup volume,
+# and pgBackRest installed. Restores and drills run in throw-away containers
+# that the scripts create (m18-restore, m18-drill).
+#
+#   cd modules/18-backup-recovery/lab
+#   docker compose up -d --build
+#   COURSE_PG_CONTAINER=m18-primary ../../../project/bin/reset.sh 16
+#
+# All names start with m18- so the lab can run next to the main course-pg.
+name: m18-lab
+
+services:
+  primary:
+    build:
+      context: .
+      dockerfile: ${M18_DOCKERFILE:-Dockerfile}
+    image: m18-postgres-pgbackrest:17
+    container_name: m18-primary
+    hostname: m18-primary
+    environment:
+      POSTGRES_PASSWORD: postgres
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      # Archiving settings are applied with ALTER SYSTEM by conf/init-archiving.sql,
+      # so they can be changed later without editing this file (see the module README).
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - archive:/archive              # the WAL archive (would be another machine/bucket in production)
+      - backups:/backups              # base backups taken with pg_basebackup
+      - pgbackrest:/var/lib/pgbackrest
+      - ./conf/pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - ./conf/init-archiving.sql:/docker-entrypoint-initdb.d/10-init-archiving.sql:ro
+      - ./:/lab:ro
+      - ../../../project:/course/project:ro
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:
+  archive:
+  backups:
+  pgbackrest:

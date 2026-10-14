@@ -1,0 +1,115 @@
+# =============================================================================
+# patroni.yml -- shared by m20-pg1, m20-pg2, m20-pg3.
+#
+# The per-node values (name and the addresses other nodes use to reach this
+# one) come from environment variables set in compose.yml:
+#   PATRONI_NAME, PATRONI_RESTAPI_CONNECT_ADDRESS, PATRONI_POSTGRESQL_CONNECT_ADDRESS
+# Environment variables override the matching keys in this file.
+# =============================================================================
+
+scope: bazaar-ha          # cluster name: every key in etcd lives under /service/bazaar-ha/
+namespace: /service/      # etcd key prefix (the default)
+# name: set by PATRONI_NAME (pg1, pg2, pg3) -- must be unique in the cluster
+
+log:
+  level: INFO
+  format: '%(asctime)s %(levelname)s: %(message)s'
+
+restapi:
+  listen: 0.0.0.0:8008
+  # connect_address: set by PATRONI_RESTAPI_CONNECT_ADDRESS (e.g. m20-pg1:8008)
+  # In production, protect the unsafe endpoints (POST /switchover, /restart...):
+  # authentication:
+  #   username: patroni
+  #   password: ...
+
+etcd3:
+  # All three members: the client library fails over between them on its own.
+  hosts:
+    - m20-etcd1:2379
+    - m20-etcd2:2379
+    - m20-etcd3:2379
+
+# -----------------------------------------------------------------------------
+# bootstrap.dcs = the DYNAMIC configuration. It is written to etcd ONCE, when
+# the cluster is first initialized, and from then on lives in etcd (key
+# /service/bazaar-ha/config). Change it with `patronictl edit-config`, not here.
+# -----------------------------------------------------------------------------
+bootstrap:
+  dcs:
+    ttl: 30                       # leader key lifetime (seconds)
+    loop_wait: 10                 # sleep between HA loop iterations
+    retry_timeout: 10             # how long DCS / Postgres operations are retried
+    maximum_lag_on_failover: 1048576   # 1 MiB: a replica further behind than this is not promoted
+    primary_start_timeout: 300    # wait this long for a crashed primary to recover in place before failing over
+    synchronous_mode: false       # exercise 9 turns this on
+    synchronous_mode_strict: false
+    failsafe_mode: false          # exercise 8 discusses it
+    postgresql:
+      use_pg_rewind: true         # rejoin a diverged old primary without a full re-clone
+      use_slots: true             # Patroni creates a physical slot per member on the leader
+      parameters:
+        # Parameters that MUST be identical on all members belong here.
+        max_connections: 100
+        max_wal_senders: 10
+        max_replication_slots: 10
+        wal_level: replica
+        hot_standby: 'on'
+        wal_log_hints: 'on'       # pg_rewind needs this OR data checksums; we have both
+        wal_keep_size: 128MB
+        max_wal_size: 1GB
+        shared_buffers: 128MB
+        password_encryption: scram-sha-256
+        shared_preload_libraries: pg_stat_statements
+
+  # initdb runs once, on whichever node wins the race for the "initialize" key.
+  initdb:
+    - encoding: UTF8
+    - locale: C.UTF-8
+    - data-checksums
+
+# -----------------------------------------------------------------------------
+# postgresql = the LOCAL configuration of this node.
+# -----------------------------------------------------------------------------
+postgresql:
+  listen: 0.0.0.0:5432
+  # connect_address: set by PATRONI_POSTGRESQL_CONNECT_ADDRESS (e.g. m20-pg1:5432)
+  data_dir: /var/lib/postgresql/data/pg17
+  # pgpass: Patroni writes the replication password here for pg_basebackup/pg_rewind.
+  pgpass: /tmp/pgpass
+  authentication:
+    superuser:
+      username: postgres
+      password: postgres
+    replication:
+      username: replicator
+      password: replicator
+    rewind:                       # PG 11+: a non-superuser role for pg_rewind
+      username: rewinder
+      password: rewinder
+  # Patroni OWNS pg_hba.conf: it rewrites the file from this list on start.
+  pg_hba:
+    - local   all          all                       trust
+    - host    all          all        127.0.0.1/32   trust
+    - host    replication  replicator all            scram-sha-256
+    - host    all          all        all            scram-sha-256
+  # Local parameters (can differ per node) -- overridden by nothing in the DCS
+  # unless the same key is set there too.
+  parameters:
+    unix_socket_directories: /var/run/postgresql
+  # How a new replica gets its data. basebackup = pg_basebackup from the leader.
+  create_replica_methods:
+    - basebackup
+  basebackup:
+    checkpoint: fast
+    max-rate: 100M
+
+# A container has no hardware watchdog (/dev/watchdog). Production: mode: required.
+watchdog:
+  mode: off
+
+tags:
+  nofailover: false       # true = never promote this node
+  noloadbalance: false    # true = GET /replica returns 503 (keep out of read pool)
+  clonefrom: false        # true = preferred source for new replicas' basebackup
+  nosync: false           # true = never pick this node as the synchronous standby

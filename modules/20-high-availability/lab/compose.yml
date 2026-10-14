@@ -1,0 +1,141 @@
+# =============================================================================
+# Module 20 lab: 3 etcd + 3 Patroni/Postgres 17 + HAProxy + a client box.
+#   ./scripts/up.sh      build and start everything
+#   ./scripts/down.sh    remove containers, network and volumes
+# Every container, network and volume name starts with m20- so the lab never
+# collides with the main course-pg container or other labs.
+# =============================================================================
+name: m20
+
+# etcd reads its whole configuration from ETCD_* environment variables.
+x-etcd: &etcd
+  image: gcr.io/etcd-development/etcd:v3.5.17
+  networks: [ha]
+  command: ["/usr/local/bin/etcd"]
+  environment: &etcd-env
+    ETCD_INITIAL_CLUSTER: m20-etcd1=http://m20-etcd1:2380,m20-etcd2=http://m20-etcd2:2380,m20-etcd3=http://m20-etcd3:2380
+    ETCD_INITIAL_CLUSTER_STATE: new
+    ETCD_INITIAL_CLUSTER_TOKEN: m20-etcd
+    ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+    ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+    ETCD_DATA_DIR: /etcd-data
+    ETCD_ENABLE_V2: "false"
+
+x-patroni: &patroni
+  image: m20-patroni:17
+  build:
+    context: .
+    dockerfile: ${M20_DOCKERFILE:-Dockerfile}   # Dockerfile.prebuilt if apt mirrors are blocked
+  networks: [ha]
+  shm_size: 256mb
+  depends_on: [etcd1, etcd2, etcd3]
+
+services:
+  # ------------------------------------------------------------------ etcd --
+  etcd1:
+    <<: *etcd
+    container_name: m20-etcd1
+    hostname: m20-etcd1
+    environment:
+      <<: *etcd-env
+      ETCD_NAME: m20-etcd1
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://m20-etcd1:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://m20-etcd1:2379
+    volumes: [etcd1:/etcd-data]
+  etcd2:
+    <<: *etcd
+    container_name: m20-etcd2
+    hostname: m20-etcd2
+    environment:
+      <<: *etcd-env
+      ETCD_NAME: m20-etcd2
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://m20-etcd2:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://m20-etcd2:2379
+    volumes: [etcd2:/etcd-data]
+  etcd3:
+    <<: *etcd
+    container_name: m20-etcd3
+    hostname: m20-etcd3
+    environment:
+      <<: *etcd-env
+      ETCD_NAME: m20-etcd3
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://m20-etcd3:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://m20-etcd3:2379
+    volumes: [etcd3:/etcd-data]
+
+  # ----------------------------------------------------- Patroni + Postgres --
+  pg1:
+    <<: *patroni
+    container_name: m20-pg1
+    hostname: m20-pg1
+    environment:
+      PATRONI_NAME: pg1
+      PATRONI_RESTAPI_CONNECT_ADDRESS: m20-pg1:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: m20-pg1:5432
+    volumes:
+      - ./patroni/patroni.yml:/etc/patroni/patroni.yml:ro
+      - pg1:/var/lib/postgresql/data
+  pg2:
+    <<: *patroni
+    container_name: m20-pg2
+    hostname: m20-pg2
+    environment:
+      PATRONI_NAME: pg2
+      PATRONI_RESTAPI_CONNECT_ADDRESS: m20-pg2:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: m20-pg2:5432
+    volumes:
+      - ./patroni/patroni.yml:/etc/patroni/patroni.yml:ro
+      - pg2:/var/lib/postgresql/data
+  pg3:
+    <<: *patroni
+    container_name: m20-pg3
+    hostname: m20-pg3
+    environment:
+      PATRONI_NAME: pg3
+      PATRONI_RESTAPI_CONNECT_ADDRESS: m20-pg3:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: m20-pg3:5432
+    volumes:
+      - ./patroni/patroni.yml:/etc/patroni/patroni.yml:ro
+      - pg3:/var/lib/postgresql/data
+
+  # --------------------------------------------------------------- HAProxy --
+  haproxy:
+    image: haproxy:3.0
+    container_name: m20-haproxy
+    hostname: m20-haproxy
+    networks: [ha]
+    depends_on: [pg1, pg2, pg3]
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "127.0.0.1:${M20_RW_PORT:-5000}:5000"      # read-write  -> leader only
+      - "127.0.0.1:${M20_RO_PORT:-5001}:5001"      # read-only   -> replicas
+      - "127.0.0.1:${M20_STATS_PORT:-7000}:7000"   # stats page  http://localhost:7000
+
+  # ---------------------------------------------------------------- client --
+  # A box on the same network with psql, Python and psycopg, for the client
+  # scripts. It runs nothing by itself.
+  client:
+    image: m20-patroni:17
+    container_name: m20-client
+    hostname: m20-client
+    networks: [ha]
+    command: ["sleep", "infinity"]
+    init: true
+    environment:
+      PGPASSWORD: postgres
+    volumes:
+      - ./client:/lab/client:ro
+      - ../solutions:/lab/solutions:ro
+
+networks:
+  ha:
+    name: m20-net
+
+volumes:
+  etcd1: { name: m20-etcd1-data }
+  etcd2: { name: m20-etcd2-data }
+  etcd3: { name: m20-etcd3-data }
+  pg1:   { name: m20-pg1-data }
+  pg2:   { name: m20-pg2-data }
+  pg3:   { name: m20-pg3-data }

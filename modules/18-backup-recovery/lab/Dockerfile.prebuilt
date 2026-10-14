@@ -1,0 +1,15 @@
+# Fallback for networks that block the Debian/PGDG apt mirrors but allow
+# Docker Hub: copy the pgBackRest binary (and the one library the postgres
+# image lacks) out of a public pgBackRest image instead of apt-get installing it.
+# Use it with:  M18_DOCKERFILE=Dockerfile.prebuilt docker compose up -d --build
+FROM woblerr/pgbackrest:2.54.2 AS pgbackrest
+FROM postgres:17
+
+COPY --from=pgbackrest /usr/bin/pgbackrest /usr/bin/pgbackrest
+COPY --from=pgbackrest /usr/lib/x86_64-linux-gnu/libssh2.so.1 /usr/lib/x86_64-linux-gnu/libssh2.so.1
+RUN pgbackrest version
+
+RUN set -eux; \
+    mkdir -p /archive/wal /backups/base /var/lib/pgbackrest /var/log/pgbackrest /var/spool/pgbackrest /etc/pgbackrest; \
+    chown -R postgres:postgres /archive /backups /var/lib/pgbackrest /var/log/pgbackrest /var/spool/pgbackrest; \
+    chmod 750 /archive /backups /var/lib/pgbackrest

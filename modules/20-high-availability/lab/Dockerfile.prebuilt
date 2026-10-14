@@ -1,0 +1,29 @@
+# Fallback for networks that block the Debian apt mirrors but allow Docker Hub
+# and PyPI: take the Python interpreter from the official python image (same
+# Debian release as postgres:17) instead of apt-get installing python3-venv.
+# Use it with:  M20_DOCKERFILE=Dockerfile.prebuilt ./scripts/up.sh
+# (No curl/jq in this variant: the scripts don't need them; use python3 or
+#  patronictl inside the containers instead.)
+ARG PG_IMAGE=postgres:17
+FROM python:3.13-slim-trixie AS py
+FROM ${PG_IMAGE}
+
+USER root
+COPY --from=py /usr/local/bin/python3.13 /usr/local/bin/python3.13
+COPY --from=py /usr/local/lib/python3.13 /usr/local/lib/python3.13
+COPY --from=py /usr/local/lib/libpython3.13.so.1.0 /usr/local/lib/
+RUN ldconfig && ln -s python3.13 /usr/local/bin/python3 \
+ && python3 -c "import ssl, ctypes; print('python ok')"
+
+RUN python3 -m venv /opt/patroni \
+ && /opt/patroni/bin/pip install --no-cache-dir \
+        "patroni[etcd3]==4.1.5" "psycopg[binary]==3.3.6" \
+ && ln -s /opt/patroni/bin/patroni    /usr/local/bin/patroni \
+ && ln -s /opt/patroni/bin/patronictl /usr/local/bin/patronictl
+
+ENV PATH=/opt/patroni/bin:$PATH \
+    PATRONICTL_CONFIG_FILE=/etc/patroni/patroni.yml
+USER postgres
+WORKDIR /var/lib/postgresql
+EXPOSE 5432 8008
+CMD ["patroni", "/etc/patroni/patroni.yml"]
