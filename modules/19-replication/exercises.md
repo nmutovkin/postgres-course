@@ -32,7 +32,7 @@ Run the same query on each container in a shell loop. A standby that feeds anoth
 
 `pg_basebackup -R` copied the primary's configuration into each standby (section 3.2). Using `pg_file_settings` on `m19-replica1`, list every setting that comes from its `postgresql.auto.conf`, and say for each one whether it came from the primary or was written by `pg_basebackup -R`. Which of them would cause trouble if `replica1` were promoted?
 
-**Self-check:** 11 settings, 2 of them written by `-R` (`primary_conninfo`, `primary_slot_name`); `synchronous_standby_names = 'FIRST 1 (replica1)'` is among the rest.
+**Self-check:** 10 settings, 2 of them written by `-R` (`primary_conninfo`, `primary_slot_name`); `synchronous_standby_names = 'FIRST 1 (replica1)'` is among the rest.
 
 <details><summary>Hint</summary>
 
@@ -148,7 +148,7 @@ The customer-care team wants the **negative reviews** (rating 1 or 2) on the ana
 
 ### Exercise 10 ★★: Undo a `DROP TABLE` with the delayed standby
 
-With the `extras` profile running and `m19-delayed` at least five minutes old, drop the `promotions` table on the primary. Use the delayed standby to put the table back on the primary, **with** its exclusion constraint, check constraints and foreign key, before the delayed standby replays the drop.
+With the `extras` profile running, drop the `promotions` table on the primary. Use the delayed standby to put the table back on the primary, **with** its exclusion constraint, check constraints and foreign key, before the delayed standby replays the drop.
 
 **Self-check:** the primary has `promotions` again with 9 rows, `\d promotions` shows `promotions_no_overlap`, and `m19-delayed` still shows the table while paused. Resume replay at the end: five minutes later the delayed standby applies the drop and then the re-creation.
 

@@ -121,7 +121,25 @@ flowchart LR
 
 You can see these processes in the lab. On the primary there is one `walsender` per standby; on a standby there is a `walreceiver` and a `startup` process that says what it is doing:
 
-<<OUT:ps>>
+```bash
+docker exec m19-primary  bash -c 'ps -eo pid,args | grep "postgres: "'
+docker exec m19-replica1 bash -c 'ps -eo pid,args | grep "postgres: "'
+```
+
+```text
+     62 postgres: primary: checkpointer
+     63 postgres: primary: background writer
+     65 postgres: primary: walwriter
+     66 postgres: primary: autovacuum launcher
+     67 postgres: primary: logical replication launcher
+     84 postgres: primary: walsender replicator 172.20.0.4(55956) streaming 0/462D1E8
+     85 postgres: primary: walsender replicator 172.20.0.5(38970) streaming 0/462D1E8
+
+     39 postgres: replica1: checkpointer
+     40 postgres: replica1: background writer
+     41 postgres: replica1: startup recovering 000000010000000000000004
+     42 postgres: replica1: walreceiver streaming 0/462D1E8
+```
 
 The process title even shows the LSN each walsender has sent and the WAL file the startup process is replaying. The `primary:` and `replica1:` prefixes come from the `cluster_name` setting, which the lab sets per container.
 
@@ -234,8 +252,8 @@ ORDER BY 1;
 ```text
  application_name | client_addr |   state   | sync_state
 ------------------+-------------+-----------+------------
- replica1         | 172.23.0.5  | streaming | sync
- replica2         | 172.23.0.4  | streaming | async
+ replica1         | 172.20.0.5  | streaming | sync
+ replica2         | 172.20.0.4  | streaming | async
 ```
 
 Where does `application_name` come from? The WAL receiver uses the `application_name` in `primary_conninfo` if there is one; otherwise it uses the standby's **`cluster_name`** setting. The lab sets `cluster_name` per container (`-c cluster_name=replica1` in the compose file), which is why the standbys identify themselves as `replica1` and `replica2`. This matters because `synchronous_standby_names` on the primary refers to standbys **by this name**.
@@ -255,12 +273,13 @@ UPDATE products SET price = price WHERE id = 1;
 CREATE TEMP TABLE t (x int);
 SELECT nextval('orders_id_seq');
 SELECT pg_current_wal_lsn();
+LISTEN orders_changed;
 ```
 
 ```text
  pg_is_in_recovery | pg_last_wal_receive_lsn | pg_last_wal_replay_lsn | pg_last_xact_replay_timestamp
 -------------------+-------------------------+------------------------+-------------------------------
- t                 | 0/4D51198               | 0/4D51198              | 2026-10-14 07:28:36.617666+00
+ t                 | 0/462D1E8               | 0/462D1E8              | 2026-10-14 08:38:55.069921+00
 (1 row)
 
 ERROR:  cannot execute UPDATE in a read-only transaction
@@ -268,9 +287,10 @@ ERROR:  cannot execute CREATE TABLE in a read-only transaction
 ERROR:  cannot execute nextval() in a read-only transaction
 ERROR:  recovery is in progress
 HINT:  WAL control functions cannot be executed during recovery.
+ERROR:  cannot execute LISTEN during recovery
 ```
 
-Every session on a hot standby is read-only: no writes to tables, no temporary tables, no `nextval()` (sequences are written), no `CREATE INDEX`, no `VACUUM`, no `ANALYZE` (statistics come from the primary through WAL). `SELECT ... FOR UPDATE` fails too, because row locks are writes. `LISTEN` and `NOTIFY` fail too ("cannot execute LISTEN during recovery"): notifications are not part of WAL, so a standby can never deliver them. What *does* work is every plain `SELECT`, `EXPLAIN`, `COPY ... TO`, `SET`, cursors and prepared statements. In practice: reporting queries and read-only API endpoints.
+Every session on a hot standby is read-only: no writes to tables, no temporary tables, no `nextval()` (sequences are written), no `CREATE INDEX`, no `VACUUM`, no `ANALYZE` (statistics come from the primary through WAL). `SELECT ... FOR UPDATE` fails too, because row locks are writes. `LISTEN` and `NOTIFY` fail too: notifications are not part of WAL, so a standby can never deliver them. What *does* work is every plain `SELECT`, `EXPLAIN`, `COPY ... TO`, `SET`, cursors and prepared statements. In practice: reporting queries and read-only API endpoints.
 
 The functions `pg_last_wal_receive_lsn()` and `pg_last_wal_replay_lsn()` are the standby-side counterparts of the primary's `pg_current_wal_lsn()`; section 6 uses them for monitoring.
 
@@ -321,18 +341,18 @@ SELECT pg_size_pretty(sum(size)) AS pg_wal_size, count(*) AS segments FROM pg_ls
 ```text
  slot_name | active | wal_status | safe_wal_size | retained
 -----------+--------+------------+---------------+----------
- replica2  | f      | reserved   |               | 253 MB
+ replica2  | f      | reserved   | 1805 MB       | 253 MB
 
  pg_wal_size | segments
 -------------+----------
- 336 MB      |       21
+ 304 MB      |       19
 ```
 
-The slot is inactive, yet the checkpoint could not recycle anything after its `restart_lsn`: 253 MB are retained for a server that is not there. In production, at a few hundred MB of WAL per minute, a weekend is enough to fill a terabyte.
+The slot is inactive, yet the checkpoint could not recycle anything after its `restart_lsn`: 253 MB are retained for a server that is not there. (`safe_wal_size` says how much more WAL can be written before the slot is in danger; it comes from the cap explained next, which the lab sets to 2 GB.) In production, at a few hundred MB of WAL per minute, a weekend is enough to fill a terabyte.
 
 ### 4.3 Capping the damage: `max_slot_wal_keep_size`
 
-`max_slot_wal_keep_size` (default `-1`, unlimited) caps how much WAL slots may retain. When a slot falls further behind than that, the next checkpoint **invalidates** the slot and removes the WAL anyway: the primary's disk is saved and the consumer is sacrificed (it will need re-cloning). `wal_status` tells you where each slot stands:
+`max_slot_wal_keep_size` (default `-1`, unlimited; the lab sets 2 GB) caps how much WAL slots may retain. When a slot falls further behind than that, the next checkpoint **invalidates** the slot and removes the WAL anyway: the primary's disk is saved and the consumer is sacrificed (it will need re-cloning). `wal_status` tells you where each slot stands:
 
 | `wal_status` | Meaning |
 |---|---|
@@ -352,31 +372,29 @@ FROM pg_replication_slots;
 ```
 
 ```text
-    slot_name     | slot_type | active | wal_status | invalidation_reason
-------------------+-----------+--------+------------+---------------------
- replica2         | physical  | f      | lost       | wal_removed
- replica1         | physical  | t      | reserved   |
- bazaar_analytics | logical   | f      | lost       | wal_removed
+ slot_name | slot_type | active | wal_status | invalidation_reason
+-----------+-----------+--------+------------+---------------------
+ replica2  | physical  | f      | lost       | wal_removed
+ replica1  | physical  | t      | reserved   |
 ```
 
-The primary log says:
+The primary log says `LOG:  invalidating obsolete replication slot "replica2"`, and when `replica2` comes back, it cannot continue:
 
 ```text
-LOG:  invalidating obsolete replication slot "replica2"
-LOG:  invalidating obsolete replication slot "bazaar_analytics"
-ERROR:  can no longer get changes from replication slot "bazaar_analytics"
-DETAIL:  This slot has been invalidated because it exceeded the maximum reserved size.
+FATAL:  could not receive data from WAL stream: ERROR:  requested WAL segment 000000010000000000000004 has already been removed
 ```
 
-and when `replica2` comes back, it cannot continue:
+(On another run of the same steps the slot first showed `unreserved` after the `CHECKPOINT`, because that checkpoint had not yet removed the segments; the next checkpoint invalidated it. `unreserved` really does mean "about to be lost".)
 
-```text
-FATAL:  could not receive data from WAL stream: ERROR:  requested WAL segment 000000010000000000000005 has already been removed
-```
-
-Look closely: a **second** slot was invalidated, `bazaar_analytics`, the logical replication subscription you will build in section 10, and its subscriber was **connected and healthy**. A logical slot's `restart_lsn` cannot move past the start of the oldest transaction that might still need decoding, so one 250 MB transaction kept it 250 MB behind even though the subscriber had confirmed everything. A 64 MB cap is far too small for a server that runs bulk loads.
-
-> **Pitfall:** `max_slot_wal_keep_size` applies to **every** slot, physical and logical. Size it for the worst legitimate case (the longest standby maintenance window you will tolerate, *and* the largest single transaction you run, both expressed in WAL bytes), and keep it well below the free space on the WAL volume. The lab uses 2 GB. Then alert on `wal_status` long before the cap is reached (section 6).
+> **Pitfall:** `max_slot_wal_keep_size` applies to **every** slot, physical and logical, and a logical slot can fall behind even while its subscriber is connected and healthy: its `restart_lsn` cannot move past the start of the oldest transaction that might still need decoding. When this experiment was first run with the analytics subscription of section 10 already in place, the 250 MB `CREATE TABLE ... AS` kept the logical slot 250 MB behind, and the same checkpoint invalidated it too:
+>
+> ```text
+> LOG:  invalidating obsolete replication slot "bazaar_analytics"
+> ERROR:  can no longer get changes from replication slot "bazaar_analytics"
+> DETAIL:  This slot has been invalidated because it exceeded the maximum reserved size.
+> ```
+>
+> Size the cap for the worst legitimate case (the longest standby maintenance window you will tolerate, *and* the largest single transaction you run, both in WAL bytes), keep it well below the free space on the WAL volume, and alert on `wal_status` long before the cap is reached (section 6). A 64 MB cap is far too small for a server that runs bulk loads.
 
 Cleaning up after an invalidation is always the same: drop the slot, rebuild the consumer. For the lab:
 
@@ -386,7 +404,7 @@ docker compose rm -sf replica2 && docker volume rm m19-lab_replica2
 docker compose up -d replica2            # the entrypoint re-clones it
 ```
 
-and for the logical subscription, drop and recreate it on the subscriber (section 10 explains why that also re-copies the data). Then restore the cap and drop the test table:
+(For a logical subscription, you drop and recreate the subscription instead; section 11.4 explains why that also re-copies the data.) Then restore the cap and drop the test table:
 
 ```sql
 ALTER SYSTEM SET max_slot_wal_keep_size = '2GB';
@@ -446,7 +464,7 @@ About 30 seconds later the standby session gets:
 
 ERROR:  canceling statement due to conflict with recovery
 DETAIL:  User query might have needed to see row versions that must be removed.
-Time: 33226.293 ms (00:33.226)
+Time: 33460.495 ms (00:33.460)
 ```
 
 The standby counts cancellations per database:
@@ -479,7 +497,7 @@ You have three ways to reduce cancellations, and each moves the cost somewhere e
    ```text
     slot_name | xmin | active
    -----------+------+--------
-    replica2  |  877 | t
+    replica2  |  808 | t
     replica1  |      | t
    ```
 
@@ -512,25 +530,25 @@ WHERE application_name = 'replica2' \gx
 
 ```text
 -[ RECORD 1 ]----+------------------------------
-pid              | 85
+pid              | 329
 usename          | replicator
 application_name | replica2
-client_addr      | 172.23.0.4
+client_addr      | 172.20.0.4
 state            | streaming
-sent_lsn         | 0/4D51198
-write_lsn        | 0/4D51198
-flush_lsn        | 0/4D51198
-replay_lsn       | 0/4D51198
-write_lag        |
-flush_lag        |
-replay_lag       |
+sent_lsn         | 0/16E3D970
+write_lsn        | 0/16E3D970
+flush_lsn        | 0/16E3D970
+replay_lsn       | 0/16E3D970
+write_lag        | 00:00:00.000098
+flush_lag        | 00:00:00.000947
+replay_lag       | 00:00:00.015198
 sync_priority    | 0
 sync_state       | async
-reply_time       | 2026-10-14 07:29:06.853934+00
+reply_time       | 2026-10-14 08:40:54.853435+00
 ```
 
 - `sent_lsn` / `write_lsn` / `flush_lsn` / `replay_lsn` are the four positions from section 2.2, as last reported by the standby.
-- `write_lag` / `flush_lag` / `replay_lag` are **time** measurements: how long it took between the primary flushing some WAL locally and the standby reporting that it had written / flushed / replayed it. They are NULL when the standby has caught up and the primary is idle, which is why they are empty above.
+- `write_lag` / `flush_lag` / `replay_lag` are **time** measurements: how long it took between the primary flushing some WAL locally and the standby reporting that it had written / flushed / replayed it (here a fraction of a millisecond for write and flush, 15 ms for replay). They become NULL a little while after the standby has caught up and the primary is idle.
 - `reply_time` is when the standby last sent a status message. Standbys report at least every `wal_receiver_status_interval` (10 s); a `reply_time` much older than that means the connection is wedged.
 - `sync_state`: `async`, `sync`, `potential` (would become sync if the current sync standby went away), or `quorum` (section 7).
 
@@ -559,11 +577,11 @@ UPDATE inventory SET quantity = quantity + 5;
 ```text
  application_name | replay_lag_bytes |    write_lag    |    flush_lag    |   replay_lag
 ------------------+------------------+-----------------+-----------------+-----------------
- replica1         | 0 bytes          | 00:00:00.000124 | 00:00:00.000521 | 00:00:00.000744
- replica2         | 11 kB            | 00:00:00.000125 | 00:00:00.0005   | 00:00:00.003175
+ replica1         | 0 bytes          | 00:00:00.000223 | 00:00:00.000557 | 00:00:00.000721
+ replica2         | 38 kB            | 00:00:00.00045  | 00:00:00.000629 | 00:00:00.003774
 ```
 
-`replica2` received and flushed everything (its write and flush lags are sub-millisecond), but it is 11 kB behind in **replay**. Meanwhile the replica still shows the old price, and from its own point of view:
+`replica2` received and flushed everything (its write and flush lags are sub-millisecond), but it is 38 kB behind in **replay**. Meanwhile the replica still shows the old price, and from its own point of view:
 
 ```sql
 -- on m19-replica2
@@ -580,7 +598,7 @@ SELECT pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn(),
 
  pg_last_wal_receive_lsn | pg_last_wal_replay_lsn | not_yet_replayed | time_since_last_replayed_commit
 -------------------------+------------------------+------------------+---------------------------------
- 0/4D53F58               | 0/4D51198              | 11 kB            | 00:00:45.003731
+ 0/16E47300              | 0/16E3D9A8             | 38 kB            | 00:00:03.717572
 ```
 
 Resume with `SELECT pg_wal_replay_resume();` and the price catches up instantly.
@@ -591,7 +609,7 @@ Neither measure is perfect, and you should understand why before you put either 
 
 - **Bytes** are exact and cheap, but they do not tell you how stale the data is. 11 kB behind might be one second of a quiet night or a millisecond of a busy day.
 - **`replay_lag`** is a time, but it is a *measurement of past positions*: it is computed when the standby reports progress. While replay is completely stuck, the value does not grow smoothly; in the lab, five seconds into a pause it read `00:00:05.13`, and ten seconds later it was still stuck at `00:00:06.53`. And when the primary is idle it becomes NULL even if the standby is broken.
-- **`now() - pg_last_xact_replay_timestamp()`** on the standby is the time since the last *replayed commit* was committed on the primary. It is exactly "how stale is this replica" while the primary is busy, but on an idle primary it grows forever although the standby is perfectly current (it says 45 s above, mostly because nothing had been committed for a while before the test).
+- **`now() - pg_last_xact_replay_timestamp()`** on the standby is the time since the last *replayed commit* was committed on the primary. It is exactly "how stale is this replica" while the primary is busy, but on an idle primary it grows forever although the standby is perfectly current. Above it says 3.7 s: the time since the last commit *before* the pause, not how long replay has been stuck.
 
 The robust solution, used by most monitoring setups, is a **heartbeat**: a tiny table on the primary that a cron job updates every few seconds (`UPDATE heartbeat SET ts = now()`). On each standby, `now() - (SELECT ts FROM heartbeat)` is the real staleness, independent of load. Exercise 4 builds one.
 
@@ -606,13 +624,13 @@ FROM pg_stat_wal_receiver \gx
 ```text
 -[ RECORD 1 ]---------+------------------------------
 status                | streaming
-receive_start_lsn     | 0/3000000
-written_lsn           | 0/4D51198
-flushed_lsn           | 0/4D51198
+receive_start_lsn     | 0/16000000
+written_lsn           | 0/16E47300
+flushed_lsn           | 0/16E47300
 received_tli          | 1
-last_msg_send_time    | 2026-10-14 07:28:56.844526+00
-last_msg_receipt_time | 2026-10-14 07:28:56.844625+00
-latest_end_lsn        | 0/4D51198
+last_msg_send_time    | 2026-10-14 08:40:55.281826+00
+last_msg_receipt_time | 2026-10-14 08:40:55.28195+00
+latest_end_lsn        | 0/16E47300
 slot_name             | replica2
 sender_host           | m19-primary
 ```
@@ -804,7 +822,7 @@ SELECT sender_host, status, slot_name FROM pg_stat_wal_receiver;
 
  application_name |   state   |  sent_lsn  | replay_lsn
 ------------------+-----------+------------+------------
- replica3         | streaming | 0/1D000060 | 0/1D000060
+ replica3         | streaming | 0/18033708 | 0/18033708
 
  sender_host  |  status   | slot_name
 --------------+-----------+-----------
@@ -821,11 +839,11 @@ Now make a mistake on the primary: delete all reviews.
 
 ```sql
 -- on m19-primary
-SELECT count(*) FROM reviews;                  -- 77
-DELETE FROM reviews;                           -- DELETE 77
+SELECT count(*) FROM reviews;                  -- 78
+DELETE FROM reviews;                           -- DELETE 78
 ```
 
-The delayed standby has already *received* the deletion (flush lag 0), but has not *applied* it (replay lag 165 kB):
+The delayed standby has already *received* the deletion (flush lag 0), but has not *applied* it (replay lag 21 kB):
 
 ```sql
 -- on m19-primary
@@ -840,7 +858,7 @@ WHERE application_name IN ('delayed', 'replica2');
  application_name | flush_behind | replay_behind
 ------------------+--------------+---------------
  replica2         | 0 bytes      | 0 bytes
- delayed          | 0 bytes      | 165 kB
+ delayed          | 0 bytes      | 21 kB
 ```
 
 You have five minutes. On the delayed standby, **pause replay first** so the clock stops, then rescue the rows:
@@ -848,7 +866,7 @@ You have five minutes. On the delayed standby, **pause replay first** so the clo
 ```sql
 -- on m19-delayed
 SELECT pg_wal_replay_pause();
-SELECT count(*) FROM reviews;                  -- 77: still there
+SELECT count(*) FROM reviews;                  -- 78: still there
 ```
 
 ```bash
@@ -857,7 +875,7 @@ docker exec m19-delayed psql -U postgres -d bazaar -c "\copy (SELECT * FROM baza
 ```
 
 ```text
-COPY 77
+COPY 78
 ```
 
 (`COPY` may write explicit values into a `GENERATED ALWAYS` identity column; an `INSERT` would need `OVERRIDING SYSTEM VALUE`.) Then `SELECT pg_wal_replay_resume();` on the delayed standby. It will replay the deletion and then the re-insertion five minutes later.
@@ -910,11 +928,11 @@ Asynchronous replicas are slightly behind. Usually that does not matter, but the
 ```sql
 -- on m19-primary
 SELECT place_order(2, '[{"product_id": 1, "quantity": 1}]') AS order_id;   -- 121
-SELECT pg_current_wal_lsn() AS commit_lsn;                                    -- 0/1D057970
+SELECT pg_current_wal_lsn() AS commit_lsn;                                    -- 0/1805F4F0
 
 -- on m19-replica2 (replay paused)
 SELECT id, status FROM orders WHERE id = 121;                                 -- (0 rows)
-SELECT pg_last_wal_replay_lsn() >= '0/1D057970'::pg_lsn AS caught_up;        -- f
+SELECT pg_last_wal_replay_lsn() >= '0/1805F4F0'::pg_lsn AS caught_up;        -- f
 ```
 
 After `pg_wal_replay_resume()`:
@@ -1114,7 +1132,7 @@ SELECT srrelid::regclass, srsubstate FROM pg_subscription_rel;
 ```text
  orders | order_items | products
 --------+-------------+----------
-    105 |         235 |       62
+    105 |         236 |       62
 
       srrelid       | srsubstate
 --------------------+------------
@@ -1123,13 +1141,11 @@ SELECT srrelid::regclass, srsubstate FROM pg_subscription_rel;
  bazaar.orders      | r
 ```
 
-105 orders, not 120: the 15 orders that were never paid (5 pending, 10 cancelled before payment) are filtered out on the publisher, so `SELECT count(*) FROM orders WHERE paid_at IS NOT NULL` on the primary returns the same 105.
+105 of the primary's 121 orders: the 16 orders that were never paid (6 pending, including order 121 that you placed in section 9.2, and 10 cancelled before payment) are filtered out on the publisher; `SELECT count(*) FROM orders WHERE paid_at IS NOT NULL` on the primary returns the same 105. `order_items` has no filter, so all 236 items arrived, including the one of order 121.
 
-Now watch the row filter transform changes. Place an order on the primary: it is `pending`, `paid_at` is NULL, so it is not published (its `order_items` are, since that table has no filter). Pay it, and it appears on the subscriber as an INSERT; cancel it, and the UPDATE follows:
+Now watch the row filter transform changes. Order 121 is `pending` with `paid_at` NULL, so it is not on the analytics server. Pay it, and it appears on the subscriber as an INSERT; cancel it, and the UPDATE follows:
 
 ```sql
--- on m19-primary
-SELECT place_order(2, '[{"product_id": 1, "quantity": 1}]');      -- order 121
 -- on m19-analytics: SELECT id FROM bazaar.orders WHERE id = 121;   -> (0 rows)
 
 -- on m19-primary
@@ -1141,7 +1157,7 @@ SELECT id, status, total, paid_at::time(0), replicated_at::time(0) FROM bazaar.o
 ```text
  id  | status | total  | paid_at  | replicated_at
 -----+--------+--------+----------+---------------
- 121 | paid   | 999.00 | 07:36:39 | 07:36:39
+ 121 | paid   | 1000.00 | 08:55:45 | 08:55:45
 ```
 
 ```sql
@@ -1154,20 +1170,23 @@ SELECT id, status, replicated_at::time(0) FROM bazaar.orders WHERE id = 121;
 ```text
  id  |  status   | replicated_at
 -----+-----------+---------------
- 121 | cancelled | 07:36:39
+ 121 | cancelled | 08:55:45
 ```
 
-`replicated_at` kept its value: it is a subscriber-only column, filled by its default on INSERT and untouched by replicated UPDATEs (which only set the published columns). Two more details to notice: the trigger-maintained `orders.total` arrived as plain data (999.00) because triggers on the subscriber **do not fire** for replicated changes by default (the apply worker runs with `session_replication_role = replica`); and the cancelled order stays in the analytics copy (it was paid once, so it still matches the filter), and it is the `daily_revenue` view that leaves cancelled and refunded orders out of the revenue figures.
+`replicated_at` kept its value: it is a subscriber-only column, filled by its default on INSERT and untouched by replicated UPDATEs (which only set the published columns). Two more details to notice: the trigger-maintained `orders.total` arrived as plain data (1000.00, the product's price after section 6's experiment) because triggers on the subscriber **do not fire** for replicated changes by default (the apply worker runs with `session_replication_role = replica`); and the cancelled order stays in the analytics copy (it was paid once, so it still matches the filter), and it is the `daily_revenue` view that leaves cancelled and refunded orders out of the revenue figures.
 
 The milestone's lag query, `scripts/lag.sql`, run on the primary, shows every consumer in one place:
 
 ```text
        name       |   kind   |   state   | sync_state |   lag   |   replay_lag    | retained_wal | wal_status | alert
 ------------------+----------+-----------+------------+---------+-----------------+--------------+------------+-------
- bazaar_analytics | logical  | streaming | async      | 0 bytes |                 | 408 bytes    | reserved   | OK
- replica1         | physical | streaming | sync       | 0 bytes |                 | 0 bytes      | reserved   | OK
- replica2         | physical | streaming | async      | 0 bytes | 00:00:00.000553 | 0 bytes      | reserved   | OK
+ bazaar_analytics | logical  | streaming | async      | 0 bytes | 00:00:00.000481 | 2360 bytes   | reserved   | OK
+ delayed          | physical | streaming | async      | 273 kB  | 00:00:15.151166 | 0 bytes      | reserved   | OK
+ replica1         | physical | streaming | sync       | 0 bytes | 00:00:00.000624 | 0 bytes      | reserved   | OK
+ replica2         | physical | streaming | async      | 0 bytes | 00:00:00.000837 | 0 bytes      | reserved   | OK
 ```
+
+(`delayed` appears because the extras profile from section 8 is still running. Its replay is always minutes behind, by design; in production you would give known-delayed standbys their own thresholds, for example by matching on the name in the `CASE`.)
 
 For a logical consumer, "lag" is measured from `confirmed_flush_lsn` (what the subscriber has confirmed applying). On the subscriber, `pg_stat_subscription` shows the apply worker's `received_lsn`, `last_msg_receipt_time` and `latest_end_time`, and `pg_stat_subscription_stats` counts errors.
 
@@ -1198,8 +1217,8 @@ The subscriber's log:
 
 ```text
 ERROR:  logical replication target relation "bazaar.orders" is missing replicated column: "coupon_code"
-CONTEXT:  processing remote data for replication origin "pg_16431" during message type "UPDATE" in transaction 547137, finished at 0/1D0738F0
-LOG:  background worker "logical replication apply worker" (PID 2439) exited with exit code 1
+CONTEXT:  processing remote data for replication origin "pg_16417" during message type "UPDATE" in transaction 829, finished at 0/1805A250
+LOG:  background worker "logical replication apply worker" (PID 765) exited with exit code 1
 ```
 
 The apply worker exits and is restarted every few seconds (`wal_retrieve_retry_interval`), failing on the same change each time, while the publisher accumulates WAL for the slot. Replication of **everything** in the subscription is stuck behind that one change. The lag query shows it:
@@ -1207,7 +1226,7 @@ The apply worker exits and is restarted every few seconds (`wal_retrieve_retry_i
 ```text
        name       |   kind   |    state     | sync_state |    lag     | ... | wal_status | alert
 ------------------+----------+--------------+------------+------------+-----+------------+-------
- bazaar_analytics | logical  | DISCONNECTED |            | 1240 bytes | ... | reserved   | CRIT
+ bazaar_analytics | logical  | DISCONNECTED |            | 1208 bytes | ... | reserved   | CRIT
 ```
 
 The `products` change did **not** break anything: `products` is published with a column list, so the new `weight_grams` column is simply not published. Column lists protect subscribers from publisher-side schema additions.
@@ -1246,7 +1265,7 @@ UPDATE orders SET status = 'shipped', shipped_at = now() WHERE id = 120;
 ```text
 ERROR:  duplicate key value violates unique constraint "orders_pkey"
 DETAIL:  Key (id)=(122) already exists.
-CONTEXT:  processing remote data for replication origin "pg_16431" during message type "INSERT" for replication target relation "bazaar.orders" in transaction 547139, finished at 0/1D077700
+CONTEXT:  processing remote data for replication origin "pg_16417" during message type "INSERT" for replication target relation "bazaar.orders" in transaction 833, finished at 0/1807D0E0
 ```
 
 Replication stops at that transaction, and order 120 stays `paid` on the subscriber although it shipped. Conflicts are never resolved automatically in PostgreSQL 17 for constraint violations: you must fix them. The options:
@@ -1263,14 +1282,14 @@ Replication stops at that transaction, and order 120 stays `paid` on the subscri
     id  | status  | total
    -----+---------+--------
     120 | shipped |  90.00
-    122 | paid    | 999.00
+    122 | paid    | 1000.00
    ```
 
-2. **Skip the failing transaction**: `ALTER SUBSCRIPTION bazaar_analytics SKIP (lsn = '0/1D077700');` using the `finished at` LSN from the error context. The *whole* remote transaction is skipped, so the subscriber permanently misses its changes (here, order 122 would never arrive, and neither would anything else in that transaction). Use it only when you understand exactly what you are throwing away, and then repair the data by hand.
+2. **Skip the failing transaction**: `ALTER SUBSCRIPTION bazaar_analytics SKIP (lsn = '0/1807D0E0');` using the `finished at` LSN from the error context. The *whole* remote transaction is skipped, so the subscriber permanently misses its changes (here, order 122 would never arrive, and neither would anything else in that transaction). Use it only when you understand exactly what you are throwing away, and then repair the data by hand.
 
 3. **Stop the retry loop** with `ALTER SUBSCRIPTION ... DISABLE` while you investigate, or create subscriptions with `WITH (disable_on_error = true)` so the first error disables the subscription instead of looping. Either way the slot keeps retaining WAL on the publisher, so do not leave it disabled for long.
 
-`pg_stat_subscription_stats.apply_error_count` counts these failures (it reached 6 during this demo); alert on it increasing.
+`pg_stat_subscription_stats.apply_error_count` counts these failures (it reached 4 during this demo); alert on it increasing.
 
 Other conflict types behave differently: an `UPDATE` or `DELETE` whose target row is **missing** on the subscriber is silently skipped (the subscriber just has nothing to change), which is why the subscriber can drift from the publisher without any error. Keep subscriber tables effectively read-only (`REVOKE INSERT, UPDATE, DELETE` from everyone except the subscription owner) unless you have a reason to write to them.
 
@@ -1330,7 +1349,7 @@ FROM pg_replication_slots;
 ```text
     slot_name     | slot_type | failover | synced | confirmed_flush_lsn
 ------------------+-----------+----------+--------+---------------------
- bazaar_analytics | logical   | t        | t      | 0/1D084D98
+ bazaar_analytics | logical   | t        | t      | 0/18081720
 ```
 
 `synced = t` marks a slot maintained by the sync worker; it cannot be used on the standby, but after a promotion it becomes a normal slot. Section 12 uses it.
@@ -1367,7 +1386,7 @@ LOG:  database system is ready to accept connections
 and the new timeline's history file, `pg_wal/00000002.history`, says where timeline 2 branched off timeline 1 (Module 18 explains timelines and history files in detail):
 
 ```text
-1	0/1D084E10	no recovery target specified
+1	0/18081798	no recovery target specified
 ```
 
 ### 12.2 The trap: inherited `synchronous_standby_names`
@@ -1384,7 +1403,7 @@ It hangs. `pg_stat_activity` shows the backend in `wait_event = 'SyncRep'`:
 ```text
  pid | wait_event |                      left
 -----+------------+-------------------------------------------------
- 851 | SyncRep    | UPDATE products SET price = 949.00 WHERE id = 1
+ 961 | SyncRep    | UPDATE products SET price = 949.00 WHERE id = 1
 ```
 
 and the configuration explains why:
@@ -1401,7 +1420,7 @@ ALTER SYSTEM RESET synchronized_standby_slots;
 SELECT pg_reload_conf();
 ```
 
-The waiting `UPDATE` completes immediately, and new WAL is written on timeline 2 (`pg_walfile_name(pg_current_wal_lsn())` returns `00000002000000000000001D`).
+The waiting `UPDATE` completes immediately, and new WAL is written on timeline 2 (`pg_walfile_name(pg_current_wal_lsn())` returns `000000020000000000000018`).
 
 ### 12.3 Re-pointing the other standby
 
@@ -1459,7 +1478,7 @@ SELECT pg_is_in_recovery();         -- f: it thinks it is the primary
 SET synchronous_commit = local;     -- its own sync setting would hang it too
 INSERT INTO reviews (product_id, user_id, rating, title)
 VALUES (3, 4, 1, 'written on the OLD primary')
-RETURNING id;                        -- 80
+RETURNING id;                        -- 79
 ```
 
 That is **split brain**: two servers accepting writes for the same database, each with changes the other does not have. It is the single most dangerous failure in replicated systems, and the main problem Module 20's HA tooling (fencing, consensus through etcd) exists to prevent.
@@ -1471,10 +1490,20 @@ The old primary's timeline 1 has now diverged from the new primary's timeline 2.
 3. It copies those blocks from the source, plus all non-relation files (configuration files, `pg_xact`, and so on) and the WAL from the source.
 4. It writes a `backup_label`, so that on startup the target replays the source's WAL from the divergence point and becomes consistent with it.
 
-Requirements: the target must have been shut down cleanly, and it must have either data checksums or **`wal_log_hints = on`** (so that hint-bit-only page changes are WAL-logged and pg_rewind can see them); the lab primary sets `wal_log_hints`. The source must be running (or be a cleanly stopped data directory).
+Requirements: the target must have been shut down cleanly, and it must have either data checksums or **`wal_log_hints = on`** (so that hint-bit-only page changes are WAL-logged and pg_rewind can see them); the lab primary sets `wal_log_hints`. The source must be running (or be a cleanly stopped data directory), and, if it was **promoted only recently, it needs a `CHECKPOINT` first**.
+
+That last requirement is easy to miss. A promotion does not wait for a checkpoint; it requests one that runs in the background, spread over minutes. Until it completes, the new primary's control file still describes its last *restartpoint* as a standby, which can be far in the past. `pg_rewind` takes the starting point for the target's replay from there. When this lab was first run without the checkpoint, the rewound server asked for WAL from the very beginning of the standby's life:
+
+```text
+LOG:  starting backup recovery with redo LSN 0/3000028, checkpoint LSN 0/3000080, on timeline ID 1
+FATAL:  could not receive data from WAL stream: ERROR:  requested WAL segment 000000010000000000000003 has already been removed
+```
+
+and stayed stuck in "the database system is starting up". With the checkpoint, it works:
 
 ```bash
 docker stop m19-primary
+docker exec m19-replica1 psql -U postgres -c "CHECKPOINT"
 docker run --rm --network m19-lab_default -u postgres \
     -v m19-lab_primary:/var/lib/postgresql/data -e PGPASSWORD=postgres postgres:17 \
     pg_rewind --target-pgdata=/var/lib/postgresql/data \
@@ -1483,19 +1512,19 @@ docker run --rm --network m19-lab_default -u postgres \
 
 ```text
 pg_rewind: connected to server
-pg_rewind: servers diverged at WAL location 0/1D084E10 on timeline 1
-pg_rewind: rewinding from last common checkpoint at 0/1D084D98 on timeline 1
+pg_rewind: servers diverged at WAL location 0/18081798 on timeline 1
+pg_rewind: rewinding from last common checkpoint at 0/18081720 on timeline 1
 pg_rewind: reading source file list
 pg_rewind: reading target file list
 pg_rewind: reading WAL in target
-pg_rewind: need to copy 411 MB (total source directory size is 469 MB)
+pg_rewind: need to copy 389 MB (total source directory size is 415 MB)
 ...
 pg_rewind: creating backup label and updating control file
 pg_rewind: syncing target data directory
 pg_rewind: Done!
 ```
 
-(It copied 411 MB here because the source's `pg_wal` still held the 300+ MB written during section 4's experiment, and WAL is always copied in full; on a busy production server the relation blocks are the small part.)
+(It copied 389 MB here because the source's `pg_wal` still held the 300+ MB written during section 4's experiment, and WAL is always copied in full; on a busy production server the relation blocks are the small part.)
 
 `pg_rewind` also copied the source's configuration files, so the old primary's `postgresql.auto.conf` now contains `replica1`'s settings. Check it and make it a standby of the new primary:
 
@@ -1518,7 +1547,7 @@ docker start m19-primary
 ```sql
 -- on m19-primary (now a standby)
 SELECT pg_is_in_recovery();                                      -- t
-SELECT id, title FROM reviews WHERE id = 80;                     -- (0 rows)
+SELECT id, title FROM reviews WHERE id = 79;                     -- (0 rows)
 -- on m19-replica1
 SELECT application_name, state, sync_state FROM pg_stat_replication ORDER BY 1;
 ```
@@ -1533,7 +1562,7 @@ SELECT application_name, state, sync_state FROM pg_stat_replication ORDER BY 1;
 
 The review written during the split brain is **gone**: rewinding discards everything the old primary did after the divergence. If those writes mattered, you would have to extract them before rewinding (for example with `pg_waldump` or by querying the old primary while it still runs) and re-apply them by hand. This is why preventing split brain matters so much more than cleaning it up.
 
-> **In production:** the safe promotion runbook is: (1) make sure the old primary is **really** down and cannot come back on its own (power it off, revoke its network access: "fencing"); (2) promote the most up-to-date standby (the sync one); (3) fix `synchronous_standby_names` and other inherited settings; (4) repoint other standbys and logical subscribers; (5) repoint applications (DNS, proxy, or multi-host connection strings); (6) rewind or re-clone the old primary as a standby. Module 20 shows Patroni doing all of this.
+> **In production:** the safe promotion runbook is: (1) make sure the old primary is **really** down and cannot come back on its own (power it off, revoke its network access: "fencing"); (2) promote the most up-to-date standby (the sync one); (3) fix `synchronous_standby_names` and other inherited settings; (4) repoint other standbys and logical subscribers; (5) repoint applications (DNS, proxy, or multi-host connection strings); (6) `CHECKPOINT` the new primary, then rewind or re-clone the old primary as a standby. Module 20 shows Patroni doing all of this.
 
 ### 12.6 Rebuilding the lab
 
@@ -1565,18 +1594,9 @@ A physical standby must run the same major version as its primary, so streaming 
 6. **Switchover**: stop writes to the old cluster (put the application in maintenance mode, or revoke write access); wait until the subscriber's lag is zero; **copy the sequence values** (see below); point the application at the new cluster.
 7. Optionally replicate **back** from new to old (a reverse subscription created with `copy_data = false`), so you can roll back for a while without losing writes made after the switchover.
 
-Sequences deserve special attention. Logical replication copies the *rows*, not the sequences that generated their ids. In the lab, after a few orders were replicated into a subscriber, the identity sequence of `orders` on each side looked like this:
+Sequences deserve special attention. Logical replication copies the *rows*, not the sequences that generated their ids. Section 13.3 shows a subscriber whose `orders` table already contains order 154 while its identity sequence still stands at 153: switching writes to it would make the next `INSERT INTO orders` take id 154, which already exists. At switchover, set every sequence on the new cluster past the old values, for example with a generated script of `SELECT setval('orders_id_seq', <value from old cluster> + 1000);` (the margin is harmless; ids only need to be unique, not dense).
 
-```text
- server    | max_order_id | seq_last_value
------------+--------------+----------------
- publisher |          154 |            154
- subscriber|          154 |            153
-```
-
-Switching writes to the subscriber now would make the next `INSERT INTO orders` take id 154, which already exists. At switchover, set every sequence on the new cluster past the old values, for example with a generated script of `SELECT setval('orders_id_seq', <value from old cluster> + 1000);` (the margin is harmless; ids only need to be unique, not dense).
-
-You may also have noticed that the order ids jumped from 122 to 154 after the failover in section 12. That is not a bug: for speed, a sequence WAL-logs its state only every 32 values, and a promoted standby starts from the logged value. Gaps in identity values after a crash or failover are normal; never rely on ids being gap-free.
+In section 13.3 the next order placed after the failover of section 12 gets id 154, although the highest id before was 122. That is not a bug: for speed, a sequence WAL-logs its state only every 32 values, and a promoted standby starts from the logged value. Gaps in identity values after a crash or failover are normal; never rely on ids being gap-free.
 
 ### 13.3 `pg_createsubscriber` (PostgreSQL 17)
 
@@ -1588,37 +1608,108 @@ For a large database, step 3's initial copy can take many hours and puts a heavy
 4. creates a subscription with `copy_data = false` that continues from that LSN;
 5. changes the converted server's system identifier, since it is now an independent cluster.
 
-The standby must be stopped while the tool runs (it starts and stops the server itself). In the lab, converting `replica2` (then streaming from `replica1`):
+The standby must be stopped while the tool runs (it starts and stops the server itself). In the lab, convert `replica2` (at this point streaming from `replica1`, the new primary of section 12). Three preparations, each learned the hard way in this lab:
 
 ```bash
-docker stop m19-replica2
+# 1. The -P user must be allowed to make replication connections to the publisher:
+docker exec m19-replica1 bash -c 'echo "host replication postgres all scram-sha-256" >> $PGDATA/pg_hba.conf'
+docker exec m19-replica1 psql -U postgres -c "SELECT pg_reload_conf()"
+# 2. The standby inherited synchronous_standby_names = 'FIRST 1 (replica1)' (section 3.2):
+docker exec m19-replica2 psql -U postgres -c "ALTER SYSTEM SET synchronous_standby_names = ''"
+# 3. Stop it (and the cascading replica3, which streams from it).
+docker stop m19-replica3 m19-replica2
+```
+
+Then a dry run, which performs every check without changing anything, and the real run:
+
+```bash
 docker run --rm --network m19-lab_default -u postgres -w /tmp \
     -v m19-lab_replica2:/var/lib/postgresql/data -e PGPASSWORD=postgres postgres:17 \
-    pg_createsubscriber -D /var/lib/postgresql/data \
+    pg_createsubscriber --dry-run -D /var/lib/postgresql/data \
         -P "host=m19-replica1 user=postgres dbname=bazaar" -d bazaar -U postgres \
         --publication=upgrade_pub --subscription=upgrade_sub
+# the same command without --dry-run, and with -v to see what it does:
+docker run ... pg_createsubscriber -v -D /var/lib/postgresql/data ...
 docker start m19-replica2
 ```
+
+```text
+pg_createsubscriber: getting system identifier from publisher
+pg_createsubscriber: system identifier is 7696443810486124581 on publisher
+pg_createsubscriber: getting system identifier from subscriber
+pg_createsubscriber: system identifier is 7696443810486124581 on subscriber
+pg_createsubscriber: starting the standby server with command-line options
+...
+pg_createsubscriber: creating publication "upgrade_pub" in database "bazaar"
+pg_createsubscriber: creating the replication slot "upgrade_sub" in database "bazaar"
+pg_createsubscriber: starting the subscriber
+pg_createsubscriber: waiting for the target server to reach the consistent state
+pg_createsubscriber: target server reached the consistent state
+pg_createsubscriber: hint: If pg_createsubscriber fails after this point, you must recreate the physical replica before continuing.
+pg_createsubscriber: dropping publication "upgrade_pub" in database "bazaar"
+pg_createsubscriber: creating subscription "upgrade_sub" in database "bazaar"
+pg_createsubscriber: setting the replication progress (node name "pg_25627", LSN 0/180BFF68) in database "bazaar"
+pg_createsubscriber: enabling subscription "upgrade_sub" in database "bazaar"
+pg_createsubscriber: dropping the replication slot "replica2" in database "bazaar"
+pg_createsubscriber: stopping the subscriber
+pg_createsubscriber: server was stopped
+pg_createsubscriber: modifying system identifier of subscriber
+pg_createsubscriber: system identifier is 7696445056919306241 on subscriber
+pg_createsubscriber: running pg_resetwal on the subscriber
+pg_createsubscriber: successfully reset WAL on the subscriber
+pg_createsubscriber: Done!
+```
+
+The log is the procedure above, step by step. Two details: the publication it drops is the *copy* that arrived on the standby through physical replication (the original stays on the publisher), and it also drops the physical slot `replica2` on the publisher, which nobody needs any more.
 
 ```sql
 -- on m19-replica2
 SELECT pg_is_in_recovery();                                          -- f
-SELECT subname, subenabled, subslotname FROM pg_subscription;
-SELECT count(*) FROM pg_subscription_rel;                            -- 15 tables, all state r
+SELECT subname, subenabled, subslotname, subconninfo FROM pg_subscription;
+SELECT count(*), min(srsubstate), max(srsubstate) FROM pg_subscription_rel;
 ```
 
 ```text
-   subname   | subenabled | subslotname
--------------+------------+-------------
- upgrade_sub | t          | upgrade_sub
+   subname   | subenabled | subslotname |                   subconninfo
+-------------+------------+-------------+-------------------------------------------------
+ upgrade_sub | t          | upgrade_sub | user=postgres host='m19-replica1' dbname=bazaar
+
+ count | min | max
+-------+-----+-----
+    15 | r   | r
 ```
 
-Two real-world snags appeared in the lab, and they are worth knowing:
+All 15 tables are immediately in state `r`: nothing was copied. But the subscription does not work yet, and the log says why:
 
-- The first run hung forever. The tool rewrites the standby's `primary_conninfo` using the `-P` connection string, here with user `postgres`, and `pg_hba.conf` only allowed `replication` connections for `replicator`. The log said `no pg_hba.conf entry for replication connection from host "172.23.0.4", user "postgres"`. The `-P` user needs a replication `pg_hba.conf` entry *and* the privileges to create publications and slots.
-- The subscription it created did not include the password (`subconninfo` was `user=postgres host='m19-replica1' dbname=bazaar`), because the password came from `PGPASSWORD`. The apply worker failed with `password authentication failed for user "postgres"` until it was fixed with `ALTER SUBSCRIPTION upgrade_sub CONNECTION '... password=...'` (or a `.pgpass` file for the server's OS user).
+```text
+ERROR:  could not connect to the publisher: connection to server at "m19-replica1" (172.20.0.4), port 5432 failed: FATAL:  password authentication failed for user "postgres"
+```
 
-Use `--dry-run` first: it performs every check without changing anything. For an upgrade, the flow is then: create a physical standby, run `pg_createsubscriber`, `pg_upgrade` the converted server to the new version (PostgreSQL 17's `pg_upgrade` preserves logical slots and subscriptions), let it catch up, and switch over.
+The password came from `PGPASSWORD` in the tool's environment and was not written into `subconninfo`. Fix it with `ALTER SUBSCRIPTION upgrade_sub CONNECTION 'host=m19-replica1 user=postgres dbname=bazaar password=...'` (or a `.pgpass` file for the server's OS user), and changes start flowing.
+
+The other two preparations matter just as much:
+
+- Without the `pg_hba.conf` line, the tool **hangs** with no error on its terminal: it rewrites the standby's `primary_conninfo` to use the `-P` connection (user `postgres`), the standby cannot reconnect, and the server log repeats `no pg_hba.conf entry for replication connection from host "172.23.0.4", user "postgres"`. The `-P` user needs a replication `pg_hba.conf` entry *and* the privileges to create publications and slots.
+- Without clearing `synchronous_standby_names`, the tool hangs right after the line `dropping publication "upgrade_pub"`: the freshly promoted server waits for a synchronous standby called `replica1` before it can commit the `DROP PUBLICATION` (`wait_event = 'SyncRep'`), the trap of section 12.2 in a new costume.
+
+Finally, the sequence problem from section 13.2, live. Place an order on the publisher and compare both sides once it has replicated:
+
+```bash
+docker exec m19-replica1 psql -U postgres -d bazaar -c "SELECT place_order(4, '[{\"product_id\": 2, \"quantity\": 1}]')"
+for n in m19-replica1 m19-replica2; do
+  docker exec $n psql -U postgres -d bazaar -Atc "SELECT current_setting('cluster_name'),
+      (SELECT max(id) FROM orders), (SELECT last_value FROM orders_id_seq)"
+done
+```
+
+```text
+replica1|154|154
+replica2|154|153
+```
+
+The subscriber (`replica2`) has order 154, but its sequence was frozen at the moment of conversion. (Why 154 and not 123? See the end of section 13.2.)
+
+For an upgrade, the flow is then: create a physical standby, run `pg_createsubscriber`, `pg_upgrade` the converted server to the new version (PostgreSQL 17's `pg_upgrade` preserves logical slots and subscriptions), let it catch up, and switch over.
 
 ## 14. Logical decoding and change data capture
 
@@ -1627,6 +1718,7 @@ Use `--dry-run` first: it performs every check without changing anything. For an
 Logical replication is one *consumer* of logical decoding. You can create a logical slot with any **output plugin** and read the stream yourself. PostgreSQL ships `test_decoding`, which produces human-readable text and is perfect for seeing what decoding emits:
 
 ```sql
+-- on the current primary (m19-replica1 if you did section 12)
 SELECT * FROM pg_create_logical_replication_slot('cdc_demo', 'test_decoding');
 
 BEGIN;
@@ -1639,15 +1731,15 @@ SELECT lsn, xid, data FROM pg_logical_slot_get_changes('cdc_demo', NULL, NULL);
 ```
 
 ```text
-    lsn     |  xid   |                                    data
-------------+--------+------------------------------------------------------------------------------
- 0/1D084AB8 | 547143 | BEGIN 547143
- 0/1D084AF0 | 547143 | table bazaar.inventory: UPDATE: product_id[bigint]:2 quantity[integer]:27 reserved[integer]:0 updated_at[timestamp with time zone]:'2026-10-14 07:37:39.817248+00'
- 0/1D084B58 | 547143 | table bazaar.reviews: INSERT: id[bigint]:79 product_id[bigint]:2 user_id[bigint]:3 rating[smallint]:4 title[text]:'Solid' body[text]:null created_at[timestamp with time zone]:'2026-10-14 07:37:39.817248+00'
- 0/1D084CE8 | 547143 | COMMIT 547143
- 0/1D084CE8 | 547144 | BEGIN 547144
- 0/1D084CE8 | 547144 | table bazaar.reviews: DELETE: id[bigint]:79
- 0/1D084D60 | 547144 | COMMIT 547144
+    lsn     | xid |                                    data
+------------+-----+------------------------------------------------------------------------------
+ 0/180F3D08 | 839 | BEGIN 839
+ 0/180F3D40 | 839 | table bazaar.inventory: UPDATE: product_id[bigint]:2 quantity[integer]:27 reserved[integer]:1 updated_at[timestamp with time zone]:'2026-10-14 08:57:58.382691+00'
+ 0/180F3E08 | 839 | table bazaar.reviews: INSERT: id[bigint]:79 product_id[bigint]:2 user_id[bigint]:3 rating[smallint]:4 title[text]:'Solid' body[text]:null created_at[timestamp with time zone]:'2026-10-14 08:57:58.382691+00'
+ 0/180F7160 | 839 | COMMIT 839
+ 0/180F7160 | 840 | BEGIN 840
+ 0/180F7160 | 840 | table bazaar.reviews: DELETE: id[bigint]:79
+ 0/180F71D8 | 840 | COMMIT 840
 ```
 
 Observe: changes are grouped by transaction and emitted in commit order; an `UPDATE` carries the full new row; a `DELETE` carries only the replica identity (`id`); the `inventory` row's `updated_at` came from the trigger, because decoding sees what was actually written. `pg_logical_slot_get_changes()` **consumes** the changes (calling it again returns 0 rows); `pg_logical_slot_peek_changes()` reads without consuming. Real consumers do not poll with SQL; they open a replication connection and stream (`pg_recvlogical` is the command-line client that does this).

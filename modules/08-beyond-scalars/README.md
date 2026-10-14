@@ -1626,7 +1626,7 @@ After that, `order_status` is a type like any other, and Bazaar's `orders.status
   ERROR:  operator does not exist: order_status = text
   ```
 
-  Cast explicitly when needed: `status::text LIKE 'p%'`, or `$1::order_status` for a parameter. Some ORMs and drivers send parameters as `text` or `varchar` and hit this error. Module 24 shows how SQLAlchemy maps enums.
+  Cast explicitly when needed: `status::text LIKE 'p%'`, or `$1::order_status` for a parameter. Some ORMs and drivers send parameters as `text` or `varchar` and hit this error. Part IV comes back to mapping enums from Python.
 
 ### 13.2 Changing an enum: easy to add, hard to remove
 
@@ -1660,7 +1660,7 @@ The caveats:
   HINT:  New enum values must be committed before they can be used.
   ```
 
-  Migration tools that wrap every migration in one transaction need the `ADD VALUE` in a migration of its own, before the one that uses it. Module 26 shows how with Alembic.
+  Migration tools that wrap every migration in one transaction need the `ADD VALUE` in a migration of its own, before the one that uses it (module 26 deals with migrations in Alembic).
 - **`ADD VALUE` fails if the label exists.** Use `ADD VALUE IF NOT EXISTS` for idempotent scripts.
 - **`RENAME VALUE`** works (PostgreSQL 10+): `ALTER TYPE order_status RENAME VALUE 'on_hold' TO 'held'`. Every row using it shows the new name instantly, since rows store the OID, not the text.
 - **There is no `DROP VALUE`.** (`ALTER TYPE ... DROP VALUE` fails with "dropping an enum value is not implemented".) A label might still be stored in some row, in an index page or in a table's history, so PostgreSQL won't remove it. To remove a value you must build a new type and convert every column that uses the old one. That rewrites those tables, and it's one of the exercises.
