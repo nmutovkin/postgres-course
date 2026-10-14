@@ -1674,12 +1674,13 @@ SELECT phase, blocks_done, blocks_total, tuples_done, tuples_total
 FROM pg_stat_progress_create_index \watch 0.5
 ```
 
-For `CREATE INDEX CONCURRENTLY order_items_unit_price_idx ON order_items (unit_price)` the successive samples were:
+For `CREATE INDEX CONCURRENTLY order_items_unit_price_idx ON order_items (unit_price)`, sampling the view every quarter of a second (with `psql -At`, so columns are separated by `|`) gave:
 
 ```text
- initializing                          |    0 |    0 |      0 |       0
- building index: sorting live tuples   | 9316 | 9316 |      0 |       0
- building index: loading tuples in tree|    0 |    0 | 946571 | 1266928
+initializing|0|0|0|0
+building index: sorting live tuples|9316|9316|0|0
+building index: sorting live tuples|9316|9316|0|0
+building index: loading tuples in tree|0|0|946571|1266928
 ```
 
 followed by the validation phases. The phase names include `waiting for writers before build` and `waiting for old snapshots`: if a build sits in one of those, look in `pg_stat_activity` for the old transaction holding it up (Module 17).

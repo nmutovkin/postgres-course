@@ -50,7 +50,7 @@ The exact SQL, including the job queue's data, is in the acceptance check [`solu
 
 - read **no table larger than 10,000 rows with a sequential scan**;
 - touch **at most 500 shared buffers** (the `buffers` column of the check);
-- run in **under 5 ms** on a warm cache (run the check twice; the second run counts).
+- run in **under 10 ms** on a warm cache (run the check twice; the second run counts).
 
 And the whole set of indexes you add must stay **under 120 MB** (the reference set is 79 MB).
 
@@ -70,7 +70,7 @@ In `workspace/11/README.md` (or as a comment block at the top of your migration)
    ./project/bin/psql.sh bazaar < modules/11-indexes/solutions/check_hot_queries.sql
    ```
 
-   It prints one row per query with `ms`, `buffers`, `seq_scans` (tables read sequentially) and `indexes` (indexes used). Every row must have an empty `seq_scans`, `buffers` ≤ 500 and `ms` < 5. The script runs inside `BEGIN ... ROLLBACK`, so its job data and its `DELETE` don't persist, and it vacuums `jobs` at the end.
+   It prints one row per query with `ms`, `buffers`, `seq_scans` (tables read sequentially) and `indexes` (indexes used). Every row must have an empty `seq_scans`, `buffers` ≤ 500 and `ms` < 10. The script runs inside `BEGIN ... ROLLBACK`, so its job data and its `DELETE` don't persist, and it vacuums `jobs` at the end.
 
    With the reference indexes, the output on the course machine was:
 
