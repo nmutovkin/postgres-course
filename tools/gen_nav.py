@@ -34,8 +34,10 @@ MODULE_FILES = {
 }
 MAX_TOC_ENTRIES = 60  # above this, show only "##" headings
 
-NAV_RE = re.compile(r"<!-- nav:start -->.*?<!-- nav:end -->\n*", re.S)
-TOC_RE = re.compile(r"<!-- toc:start -->.*?<!-- toc:end -->\n*", re.S)
+# Markers only count on a line of their own, so prose that mentions them in
+# inline code is left alone.
+NAV_RE = re.compile(r"^<!-- nav:start -->$.*?^<!-- nav:end -->\n*", re.S | re.M)
+TOC_RE = re.compile(r"^<!-- toc:start -->$.*?^<!-- toc:end -->\n*", re.S | re.M)
 FENCE_RE = re.compile(r"^(```|~~~)")
 HEADING_RE = re.compile(r"^(#{2,3})\s+(.*?)\s*#*\s*$")
 

@@ -83,7 +83,7 @@ Depth: heavy modules (indexes, performance, internals, concurrency, replication,
 
 ## Navigation
 
-The nav bar at the top of each module file and the **Contents** list in every Markdown file are generated. Don't edit the blocks between `` or `` by hand. After adding or renaming headings or modules, run:
+The nav bar at the top of each module file and the **Contents** list in every Markdown file are generated. Don't edit the blocks between `<!-- nav:start -->`/`<!-- nav:end -->` or `<!-- toc:start -->`/`<!-- toc:end -->` by hand. After adding or renaming headings or modules, run:
 
 ```bash
 python3 tools/gen_nav.py           # refresh everything
