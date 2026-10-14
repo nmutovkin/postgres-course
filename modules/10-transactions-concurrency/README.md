@@ -179,8 +179,8 @@ psql shows the state in the prompt (module 01): `bazaar=#` outside a transaction
 A subtle consequence of the protocol: when a client sends several statements in **one** query string, the server runs them as a single implicit transaction. `psql -c` sends its argument as one string:
 
 ```bash
-./project/bin/psql.sh -c "UPDATE inventory SET quantity = quantity + 5 WHERE product_id = 25; SELECT 1/0;"
-./project/bin/psql.sh -c "SELECT quantity FROM inventory WHERE product_id = 25"
+./project/bin/psql.sh bazaar -c "UPDATE inventory SET quantity = quantity + 5 WHERE product_id = 25; SELECT 1/0;"
+./project/bin/psql.sh bazaar -c "SELECT quantity FROM inventory WHERE product_id = 25"
 ```
 
 ```text
@@ -194,8 +194,8 @@ ERROR:  division by zero
 The `UPDATE` was rolled back with the failing `SELECT`. With two separate `-c` options, psql sends two strings, and the `UPDATE` commits on its own:
 
 ```bash
-./project/bin/psql.sh -c "UPDATE inventory SET quantity = quantity + 5 WHERE product_id = 25" -c "SELECT 1/0;"
-./project/bin/psql.sh -c "SELECT quantity FROM inventory WHERE product_id = 25"
+./project/bin/psql.sh bazaar -c "UPDATE inventory SET quantity = quantity + 5 WHERE product_id = 25" -c "SELECT 1/0;"
+./project/bin/psql.sh bazaar -c "SELECT quantity FROM inventory WHERE product_id = 25"
 ```
 
 ```text

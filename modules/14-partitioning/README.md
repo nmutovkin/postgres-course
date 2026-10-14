@@ -63,7 +63,7 @@ A **partitioned table** is a table that stores no rows itself. It is a router in
 
 Partitioning solves four problems well.
 
-**1. Retention and bulk deletion.** Removing a month of data from a single table is a `DELETE` of hundreds of thousands of rows: every row version is marked dead (WAL for each), every index keeps pointing to them until VACUUM removes the entries (more WAL), and the file doesn't shrink. With partitions, the month is a table: `DROP TABLE` unlinks its files. Section 9.4 measures it: 300 ms and 89 MB of WAL for `DELETE` + `VACUUM` on the unpartitioned copy, against 2 ms and 0.2 MB to detach and drop the partition.
+**1. Retention and bulk deletion.** Removing a month of data from a single table is a `DELETE` of hundreds of thousands of rows: every row version is marked dead (WAL for each), every index keeps pointing to them until VACUUM removes the entries (more WAL), and the file doesn't shrink. With partitions, the month is a table: `DROP TABLE` unlinks its files. Section 9.4 measures it: 0.6 s and 89 MB of WAL for `DELETE` + `VACUUM` on the unpartitioned copy, against 2 ms and 0.2 MB to detach and drop the partition.
 
 **2. Partition pruning.** A query with `WHERE occurred_at >= '2025-11-01' AND occurred_at < '2025-12-01'` reads one partition (509,415 rows, 88 MB) instead of the whole table. A sequential scan of one month beats a sequential scan of twelve.
 
@@ -326,7 +326,7 @@ SELECT indisvalid FROM pg_index WHERE indexrelid = 'events_user_id_idx'::regclas
 --  t
 ```
 
-The concurrent builds took 0.16–0.42 s per month (2.7 s in total, a little longer than the blocking build, as usual for `CONCURRENTLY`), and inserts continued throughout. The parent index becomes valid automatically when the last partition's index is attached. Until then, the planner doesn't use it for the parent, and new partitions created in the meantime don't get the index automatically. The same technique works for `REINDEX`: rebuild one partition at a time with `REINDEX INDEX CONCURRENTLY`.
+The concurrent builds took 0.16–0.42 s per month (about 3 s in total, longer than the blocking build, as usual for `CONCURRENTLY`), and inserts continued throughout. The parent index becomes valid automatically when the last partition's index is attached. Until then, the planner doesn't use it for the parent, and new partitions created in the meantime don't get the index automatically. The same technique works for `REINDEX`: rebuild one partition at a time with `REINDEX INDEX CONCURRENTLY`.
 
 > **Pitfall:** `ON ONLY` + attach works for unique indexes too, but each partition's index must be a unique index on exactly the same columns. To add a primary key to a partitioned table this way, build unique indexes on the partitions concurrently, then add the constraint on the parent: PostgreSQL attaches the matching indexes instead of building new ones.
 
@@ -730,7 +730,7 @@ With a large default partition, this is slow (a scan of the default partition wh
 
 ### 9.3 `ATTACH` and `DETACH`
 
-**`ALTER TABLE parent ATTACH PARTITION t FOR VALUES ...`** turns an existing table into a partition. The table must have the same columns (names and types), all the parent's `CHECK` constraints (same names), `NOT NULL` where the parent has it, and no identity column of its own. Attaching needs only a `SHARE UPDATE EXCLUSIVE` lock on the parent (reads and writes on other partitions continue) and an `ACCESS EXCLUSIVE` lock on the table being attached.
+**`ALTER TABLE parent ATTACH PARTITION t FOR VALUES ...`** turns an existing table into a partition. The table must have the same columns (names and types), all the parent's `CHECK` constraints (same names), `NOT NULL` where the parent has it, and no identity column of its own. Attaching needs only a `SHARE UPDATE EXCLUSIVE` lock on the parent (reads and writes on other partitions continue) and an `ACCESS EXCLUSIVE` lock on the table being attached (and on the default partition, if there is one, which must be checked too).
 
 But PostgreSQL must verify that **every row of the table fits the bounds**, which means a full scan of it while holding that lock, unless an existing, validated `CHECK` constraint already proves it. On the unpartitioned copy, `lab.events_flat` (4.66 million rows after section 9.4's `DELETE`), attached to a new partitioned table `lab.ev` as the partition for 2025:
 

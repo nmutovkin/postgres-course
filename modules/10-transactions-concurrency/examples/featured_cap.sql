@@ -12,11 +12,11 @@
 --       created_at timestamptz NOT NULL DEFAULT clock_timestamp());
 --
 -- Each run:
---   ./project/bin/psql.sh -c "TRUNCATE lab.featured_products"
+--   ./project/bin/psql.sh bazaar -c "TRUNCATE lab.featured_products"
 --   docker exec course-pg pgbench -U postgres -d bazaar -n -c 8 -j 8 -t 20 --max-tries=20 \
 --       -D level='SERIALIZABLE' \
 --       -f /course/modules/10-transactions-concurrency/examples/featured_cap.sql
---   ./project/bin/psql.sh -c "SELECT count(*) FROM lab.featured_products"
+--   ./project/bin/psql.sh bazaar -c "SELECT count(*) FROM lab.featured_products"
 -- Use -D level='REPEATABLE READ' for the broken variant.
 \set pid random(47, 56)
 BEGIN ISOLATION LEVEL :level;
