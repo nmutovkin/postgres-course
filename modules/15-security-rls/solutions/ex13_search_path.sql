@@ -30,6 +30,9 @@ BEGIN
     UPDATE bazaar.products SET price = 0.01 WHERE id = 3;  -- runs as bazaar_owner!
     RETURN pg_catalog.lower($1);
 END $$;
+-- the function runs as its owner (bazaar_owner), so the owner must be able to
+-- resolve objects in the attacker's schema: grant USAGE on it.
+GRANT USAGE ON SCHEMA analyst_scratch TO PUBLIC;
 SET search_path = analyst_scratch, pg_catalog, bazaar;
 SELECT bazaar.shop_revenue('TechTrove');          -- looks normal (41598.82)
 SELECT price FROM bazaar.products WHERE id = 3;    -- 0.01: the analyst changed a price it cannot UPDATE

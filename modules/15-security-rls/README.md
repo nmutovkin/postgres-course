@@ -627,17 +627,19 @@ AS $$ SELECT EXISTS (SELECT 1 FROM users WHERE lower(email) = lower(p_email)); $
 RESET ROLE;
 ```
 
-It looks innocent. But `lower(...)` and `users` are unqualified, and there is no pinned `search_path`. Now the attacker — here `bazaar_analyst`, who may create a schema of their own (common, and harmless-looking) — plants a trap:
+It looks innocent. But `lower(...)` and `users` are unqualified, and there is no pinned `search_path`. The attacker is `bazaar_analyst`, who has a *personal schema* they may write to — a very common convenience ("here's a scratch schema for your ad-hoc work"). That foothold is all it takes. They plant a trap in it:
 
 ```sql
+-- a superuser once set this up for the analyst; nothing unusual:
+CREATE SCHEMA evil AUTHORIZATION bazaar_analyst;
+
 \c - bazaar_analyst
-CREATE SCHEMA evil;    -- or any schema the attacker can create in / write to
 CREATE FUNCTION evil.lower(text) RETURNS text LANGUAGE plpgsql AS $$
 BEGIN
     UPDATE bazaar.products SET price = 0.01 WHERE id = 3;   -- runs as bazaar_owner!
     RETURN pg_catalog.lower($1);
 END $$;
-GRANT USAGE ON SCHEMA evil TO PUBLIC;
+GRANT USAGE ON SCHEMA evil TO PUBLIC;   -- so the function's OWNER can resolve the trap (see below)
 
 SET search_path = evil, pg_catalog, bazaar;   -- put the trap first
 SELECT bazaar.email_taken('zoe.martin@example.com');   --> t   (looks normal)
@@ -645,6 +647,8 @@ SELECT price FROM bazaar.products WHERE id = 3;          --> 0.01
 ```
 
 The analyst has no `UPDATE` on `products`. But inside `email_taken`, the unqualified `lower()` resolved to `evil.lower()` (first on the caller's path), which ran `UPDATE bazaar.products ...` *with `bazaar_owner`'s privileges*. The product's price is now one cent. The audit log even blames `bazaar_analyst` (the `session_user`), which is true but no comfort.
+
+> **The `GRANT USAGE` is essential, and instructive.** A `SECURITY DEFINER` function resolves names using the *caller's* `search_path` (so `evil` is consulted first), but it runs with the *owner's* privileges — so the owner, `bazaar_owner`, must have `USAGE` on `evil` to actually resolve and call `evil.lower`. Without the grant, the owner can't see into `evil`, resolution falls through to `pg_catalog.lower`, and the attack silently fails. Because the attacker *owns* `evil`, they can grant that `USAGE` themselves. It is the search_path that selects the schema and the owner's privilege that lets the resolved object be used; the attack needs both.
 
 The exact same attack works through a hijacked **operator** (operators are functions too): plant `evil.=(bigint,bigint)` and put `evil` first, and `WHERE seller_id = p_seller_id` inside a definer function runs your code. And through a shadowing **table** in `pg_temp` if the function reads an unqualified table name and `pg_temp` is early on the path.
 

@@ -178,9 +178,9 @@ A seller sometimes moves stock between two of their own products (a mislabelled 
 - otherwise decreases `p_from`'s `quantity` and increases `p_to`'s by `p_units`, atomically;
 - **never deadlocks**, even when transfers in opposite directions between the same two products run concurrently.
 
-Prove the last point. Set products 1 and 2 to 1,000 units each, then run 8 clients × 200 random transfers of one unit in either direction with [`solutions/exercises/ex06_transfer_bench.sql`](solutions/exercises/ex06_transfer_bench.sql). Check the total and the `deadlocks` counter in `pg_stat_database` before and after. Then run the same benchmark against the obvious implementation (subtract from one row, then add to the other) and compare.
+Prove the last point. Set products 1 and 2 to 1,000 units each, then run 8 clients × 200 random transfers of one unit in either direction with [`solutions/exercises/ex06_transfer_bench.sql`](solutions/exercises/ex06_transfer_bench.sql). Check the total and the `deadlocks` counter in `pg_stat_database` before and after. Then run the same benchmark against the obvious implementation (subtract from one row, then add to the other; [`ex06_transfer_naive.sql`](solutions/exercises/ex06_transfer_naive.sql)) and compare. Use `-t 10` for that run: it is *very* slow.
 
-**Self-check:** with your function, the bench reports 0 failed transactions, `deadlocks` does not change, and the sum of the two quantities is still 2,000. The obvious implementation also keeps the sum (failed transactions roll back), but produces hundreds of deadlocks and runs far slower.
+**Self-check:** with your function, the bench reports 0 failed transactions, `deadlocks` does not change, and the sum of the two quantities is still 2,000. The obvious implementation also keeps the sum (failed transactions roll back), but most of its transactions die as deadlocks, and it is thousands of times slower.
 
 <details><summary>Hint</summary>
 
@@ -192,23 +192,44 @@ Section 13.3: lock both rows first, in ascending `product_id` order, regardless 
 
 ## Exercise 7 ★★: Diagnose a blocking chain
 
-It is 14:02 and Bazaar's product pages time out. A colleague captured this snapshot from `pg_stat_activity` (`blocked_by` is `pg_blocking_pids(pid)`):
+It is 14:02 and Bazaar's product pages time out. A colleague captured this snapshot from `pg_stat_activity` (`app` is `application_name`, `blocked_by` is `pg_blocking_pids(pid)`; the query column is cut at 60 characters):
 
 ```text
-@@SNAPSHOT_ACTIVITY@@
+ pid  |     app      |        state        |     waiting_on     | blocked_by  | xact_age |                            query
+------+--------------+---------------------+--------------------+-------------+----------+--------------------------------------------------------------
+ 2923 | admin-tool   | idle in transaction | Client:ClientRead  | {}          | 00:00:08 | SELECT * FROM place_order(8, '[{"product_id": 18, "quantity"
+ 2948 | checkout-api | active              | Lock:transactionid | {2923}      | 00:00:06 | SELECT * FROM place_order(13, '[{"product_id": 44, "quantity
+ 2964 | migrate      | active              | Lock:relation      | {2923,2948} | 00:00:04 | ALTER TABLE inventory ADD COLUMN warehouse text;
+ 2979 | product-page | active              | Lock:relation      | {2964}      | 00:00:03 | SELECT title, available FROM active_products WHERE id = 44;
+ 2994 | checkout-api | active              | Lock:relation      | {2964}      | 00:00:02 | SELECT * FROM place_order(11, '[{"product_id": 44, "quantity
+(5 rows)
 ```
 
 and the locks on `inventory` and on transaction ids:
 
 ```text
-@@SNAPSHOT_LOCKS@@
+ pid  |   locktype    | relation  | tuple |  xid  |        mode         | granted
+------+---------------+-----------+-------+-------+---------------------+---------
+ 2923 | relation      | inventory |       |       | RowExclusiveLock    | t
+ 2923 | relation      | inventory |       |       | RowShareLock        | t
+ 2923 | transactionid |           |       | 13514 | ExclusiveLock       | t
+ 2948 | relation      | inventory |       |       | RowShareLock        | t
+ 2948 | transactionid |           |       | 13514 | ShareLock           | f
+ 2948 | tuple         | inventory |    18 |       | AccessExclusiveLock | t
+ 2964 | relation      | inventory |       |       | AccessExclusiveLock | f
+ 2964 | transactionid |           |       | 13515 | ExclusiveLock       | t
+ 2979 | relation      | inventory |       |       | AccessShareLock     | f
+ 2994 | relation      | inventory |       |       | RowShareLock        | f
+(10 rows)
 ```
 
-Answer from the snapshot alone, then reproduce it to check:
+The five sessions ran, in this order: the admin tool `BEGIN; SELECT * FROM place_order(8, '[{"product_id": 18, "quantity": 1}]');` (and nothing since); a checkout `place_order(13, '[{"product_id": 44, "quantity": 1}, {"product_id": 18, "quantity": 2}]')`; a deploy's `ALTER TABLE inventory ADD COLUMN warehouse text;`; a product page `SELECT title, available FROM active_products WHERE id = 44;`; a checkout `place_order(11, '[{"product_id": 44, "quantity": 1}]')`.
+
+Answer from the snapshot alone, then reproduce it (five psql windows, `SET application_name = '...'` in each) to check:
 
 1. Draw the wait-for graph. Which session is the root of the problem, and what is it doing?
-2. Session @@PID_PAGE@@ only reads. Why is it blocked, and by whom?
-3. Session @@PID_CHECKOUT2@@ wants product 44 only, which nobody has locked. Why does it wait?
+2. Session 2979 only reads. Why is it blocked, and by whom?
+3. Session 2994 wants product 44 only, which nobody has locked. Why does it wait?
 4. You may run **one** command right now to get the product pages back as fast as possible. Which one? What happens next, step by step? What would you do second?
 5. Which two settings would have prevented this incident, and on which roles would you set them?
 

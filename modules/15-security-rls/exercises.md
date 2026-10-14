@@ -213,26 +213,28 @@ Order matters — the `reject` line for `postgres` must come before any line tha
 
 ## Exercise 13 ★★★: Exploit, then fix, a search_path hole
 
-Here is a `SECURITY DEFINER` function the team added so analysts can get a seller's revenue without reading `orders` directly. It has the hijack bug. Create it, exploit it as `bazaar_analyst` to run an `UPDATE` you have no privilege for, then fix it and show the exploit no longer works.
+Here is a `SECURITY DEFINER` function the team added so analysts can get a shop's revenue by name without reading `orders` directly. It has the hijack bug. Create it, exploit it as `bazaar_analyst` to run an `UPDATE` you have no privilege for, then fix it and show the exploit no longer works. Assume the analyst has a personal schema `analyst_scratch` they may write to.
 
 ```sql
 SET ROLE bazaar_owner;
-CREATE FUNCTION bazaar.seller_revenue(p_seller_id bigint) RETURNS numeric
+CREATE FUNCTION bazaar.shop_revenue(p_shop_name text) RETURNS numeric
 LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_total numeric;
 BEGIN
-    SELECT coalesce(sum(total),0) INTO v_total FROM orders
-    WHERE seller_id = p_seller_id AND status IN ('paid','shipped','delivered');
+    SELECT coalesce(sum(o.total),0) INTO v_total
+    FROM orders o JOIN sellers s ON s.id = o.seller_id
+    WHERE lower(s.shop_name) = lower(p_shop_name)      -- unqualified lower(): the bug
+      AND o.status IN ('paid','shipped','delivered');
     RETURN v_total;
 END $$;
 RESET ROLE;
 ```
 
-**Self-check:** before the fix, as `bazaar_analyst`, you can cause `products` row 3's price to change to `0.01` even though the analyst has no `UPDATE` on `products`, by planting a shadowing object and putting its schema first on `search_path`. After adding `SET search_path = pg_catalog, bazaar, pg_temp` to the function, the same attack leaves product 3 at `2199.99`. Bonus: show the attack also works through a shadowing **operator** (`=`), not just a function, and that a pinned `search_path` blocks that too.
+**Self-check:** before the fix, as `bazaar_analyst`, you can cause `products` row 3's price to change to `0.01` even though the analyst has no `UPDATE` on `products`, by planting a shadowing `lower()` in your schema, granting the owner `USAGE` on that schema, and putting it first on `search_path`. After adding `SET search_path = pg_catalog, bazaar, pg_temp` to the function, the same attack leaves product 3 at `2199.99`.
 
 <details><summary>Hint</summary>
 
-The body uses the unqualified operator `=` (and `IN`, which is `=` under the hood) and the unqualified table `orders`. As the analyst, `CREATE SCHEMA evil; CREATE FUNCTION evil."=" ...` or an evil `int8eq`-style function wired into `CREATE OPERATOR evil.=`, then `GRANT USAGE ON SCHEMA evil TO PUBLIC; SET search_path = evil, pg_catalog, bazaar;`. The function resolves `=` to yours and runs your side-effecting body as `bazaar_owner`. Fix with `ALTER FUNCTION bazaar.seller_revenue(bigint) SET search_path = pg_catalog, bazaar, pg_temp;`. Reference: [`solutions/ex13_search_path.sql`](solutions/ex13_search_path.sql). Restore product 3 and drop the evil schema when done.
+The body calls an unqualified function (`lower()`) and names tables unqualified. The attacker needs a schema they can write to: the analyst cannot `CREATE SCHEMA` itself, so assume a personal schema exists (created for them with `CREATE SCHEMA analyst_scratch AUTHORIZATION bazaar_analyst`). In it, define `analyst_scratch.lower(text)` that does the privileged `UPDATE` and then returns `pg_catalog.lower($1)`. **Crucially**, the function runs as its owner `bazaar_owner`, so the owner must be able to resolve your schema: `GRANT USAGE ON SCHEMA analyst_scratch TO PUBLIC`. Then `SET search_path = analyst_scratch, pg_catalog, bazaar` and call the function. Fix with `ALTER FUNCTION ... SET search_path = pg_catalog, bazaar, pg_temp`. Reference: [`solutions/ex13_search_path.sql`](solutions/ex13_search_path.sql) (it uses a `shop_revenue(text)` function). Restore product 3 and drop the schema when done.
 
 </details>
 

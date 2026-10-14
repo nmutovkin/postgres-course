@@ -7,3 +7,11 @@ __pycache__/
 workspace/
 *.dump
 infra/**/data/
+# generated lab secrets/certs and runtime state
+*.key
+*.pem
+*.crt
+*.csr
+*.srl
+modules/**/lab/**/certs/
+modules/**/lab/**/data/

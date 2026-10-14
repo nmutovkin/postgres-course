@@ -79,7 +79,7 @@ Write a monitoring query for the primary that returns one row per replication sl
 
 Test it: stop `replica2`, generate about 200 MB of WAL on the primary (`CREATE TABLE t AS SELECT g, repeat('x', 200) FROM generate_series(1, 800000) g`), and run your query. Then start `replica2` again, drop the test table, and run it once more.
 
-**Self-check:** with `replica2` stopped, its slot is first in the list, inactive, retaining about 200 MB, at roughly 10% of the lab's 2 GB limit; after the restart it catches up and its retained WAL drops to a few kilobytes.
+**Self-check:** with `replica2` stopped, its slot is first in the list, inactive, retaining about 200 MB, at roughly 10% of the lab's 2 GB limit; after the restart it catches up and its retained WAL drops to (nearly) 0 bytes.
 
 <details><summary>Hint</summary>
 
@@ -137,7 +137,7 @@ Before running `CREATE PUBLICATION ... FOR ALL TABLES` (for an upgrade, section 
 
 The customer-care team wants the **negative reviews** (rating 1 or 2) on the analytics server, without the review text (`body`). Extend the milestone's publication and subscription accordingly, without recreating the subscription and without re-copying the tables that are already there.
 
-**Self-check:** on `m19-analytics`, `SELECT count(*) FROM bazaar.reviews` equals the primary's `SELECT count(*) FROM reviews WHERE rating <= 2`; inserting a 1-star review on the primary makes it appear on the analytics server; changing that review's rating to 5 makes it disappear there.
+**Self-check:** on `m19-analytics`, `SELECT count(*) FROM bazaar.reviews` equals the primary's `SELECT count(*) FROM reviews WHERE rating <= 2`; inserting a 1-star review on the primary makes it appear on the analytics server; changing that review's rating to 5 (`UPDATE reviews SET rating = 5 WHERE id = ...`) makes it disappear there. The analytics count matches the primary's count at every step.
 
 <details><summary>Hint</summary>
 
