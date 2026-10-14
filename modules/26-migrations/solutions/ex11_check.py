@@ -22,7 +22,9 @@ FILES = [HERE / "ex11_2605_split_name_expand.py", HERE / "ex11_2606_split_name_c
 
 
 def show(c: psycopg.Connection, label: str) -> None:
-    rows = c.execute("SELECT id, full_name, first_name, last_name FROM users ORDER BY id").fetchall()
+    rows = c.execute(
+        "SELECT id, full_name, first_name, last_name FROM users ORDER BY id"
+    ).fetchall()
     print(f"  {label}")
     for r in rows:
         print(f"    {r}")
@@ -40,7 +42,9 @@ def main() -> None:
         mig.upgrade(dsn, "2605")
         with psycopg.connect(dsn, autocommit=True) as c:
             show(c, "after expand + backfill:")
-            c.execute("INSERT INTO users (email, full_name) VALUES ('d@example.com', 'Ana María de la Cruz')")
+            c.execute(
+                "INSERT INTO users (email, full_name) VALUES ('d@example.com', 'Ana María de la Cruz')"
+            )
             c.execute(
                 "INSERT INTO users (email, first_name, last_name)"
                 " VALUES ('e@example.com', 'Ana María', 'de la Cruz')"
@@ -51,7 +55,9 @@ def main() -> None:
         mig.upgrade(dsn, "2606")
         with psycopg.connect(dsn, autocommit=True) as c:
             try:
-                c.execute("INSERT INTO users (email, full_name) VALUES ('f@example.com', 'Old Code')")
+                c.execute(
+                    "INSERT INTO users (email, full_name) VALUES ('f@example.com', 'Old Code')"
+                )
             except psycopg.Error as e:
                 print("  after contract, old code:", type(e).__name__, str(e).splitlines()[0])
         mig.downgrade(dsn, "2605")

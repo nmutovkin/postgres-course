@@ -1,6 +1,6 @@
 """Exercise 5: what autogenerate drafts for the change (printed, not written to a file).
 
-    cd project/python && python ../../modules/26-migrations/solutions/ex05_draft.py
+cd project/python && python ../../modules/26-migrations/solutions/ex05_draft.py
 """
 
 from __future__ import annotations

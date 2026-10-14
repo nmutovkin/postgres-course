@@ -1,6 +1,6 @@
 """Exercise 8: old and new code during the rename, as bazaar_app.
 
-    cd project/python && python ../../modules/26-migrations/solutions/ex08_check.py
+cd project/python && python ../../modules/26-migrations/solutions/ex08_check.py
 """
 
 from __future__ import annotations
@@ -26,8 +26,10 @@ NEW = (
 
 
 def as_app(dsn: str) -> str:
-    return make_url(dsn).set(username="bazaar_app", password="app").render_as_string(
-        hide_password=False
+    return (
+        make_url(dsn)
+        .set(username="bazaar_app", password="app")
+        .render_as_string(hide_password=False)
     )
 
 
@@ -47,7 +49,9 @@ def main() -> None:
         mig.upgrade(dsn, "2701")
         with psycopg.connect(dsn, autocommit=True) as c:
             c.execute("INSERT INTO users (email, full_name) VALUES ('c@example.com', 'C')")
-            c.execute("INSERT INTO sellers (user_id, shop_name, country_code) VALUES (1, 'S', 'DE')")
+            c.execute(
+                "INSERT INTO sellers (user_id, shop_name, country_code) VALUES (1, 'S', 'DE')"
+            )
             c.execute("INSERT INTO categories (name, slug) VALUES ('C', 'c')")
             c.execute(
                 "INSERT INTO products (seller_id, category_id, sku, title, price)"

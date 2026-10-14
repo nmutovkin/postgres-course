@@ -106,7 +106,7 @@ Conventions:
 
 ```bash
 pytest -v                                      # needs the database at head (alembic upgrade head)
-pytest -n 4                                    # in parallel (pytest-xdist): about 9 s instead of 25 s
+pytest -n 4                                    # in parallel (pytest-xdist): about 11 s instead of 26 s
 pytest -m "not slow"
 BAZAAR_TEST_DOCKER=1 pytest -m docker          # also build Bazaar in a throwaway container
 ruff check src tests migrations && ruff format --check src tests migrations

@@ -1,7 +1,7 @@
 """One traced "request" with OpenTelemetry's console exporter (module 27, section 7.5).
 
-    cd project/python && pip install -e '.[otel]'
-    python ../../modules/27-python-production/examples/otel_console.py
+cd project/python && pip install -e '.[otel]'
+python ../../modules/27-python-production/examples/otel_console.py
 """
 
 from __future__ import annotations

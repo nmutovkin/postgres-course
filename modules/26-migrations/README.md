@@ -1169,7 +1169,7 @@ Tried on a scratch database: an update by "old code" (`SET body = 'edited by old
 Alternatives:
 
 - **Dual writes in the application** instead of a trigger: v1.5 writes both columns and reads the old one; v2 reads the new one. It needs one more deployment, but keeps logic out of the database.
-- **A view** for a table rename: rename the table, and create a view with the old name (`CREATE VIEW old_name AS SELECT * FROM new_name`). Simple views are automatically updatable (Module 09), so old code keeps working against the view until it's gone.
+- **A view** for a table rename: rename the table, and create a view with the old name (`CREATE VIEW old_name AS SELECT * FROM new_name`). Simple views are automatically updatable (Module 09), so old code keeps working against the view until it's gone. A compatibility view that isn't automatically updatable (it joins tables, or computes a renamed column) can route writes with `INSTEAD OF` triggers (Module 09).
 
 Exercise 1 does the full sequence for splitting `users.full_name`.
 

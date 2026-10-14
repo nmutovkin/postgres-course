@@ -1,6 +1,6 @@
 """Exercise 5: after the reviewed revision, the patched metadata matches the database.
 
-    cd project/python && python ../../modules/26-migrations/solutions/ex05_check.py
+cd project/python && python ../../modules/26-migrations/solutions/ex05_check.py
 """
 
 from __future__ import annotations

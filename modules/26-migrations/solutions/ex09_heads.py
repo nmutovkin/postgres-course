@@ -1,6 +1,6 @@
 """Exercise 9: two branches, two heads; the CI check; rebase versus merge.
 
-    cd project/python && python ../../modules/26-migrations/solutions/ex09_heads.py
+cd project/python && python ../../modules/26-migrations/solutions/ex09_heads.py
 """
 
 from __future__ import annotations
@@ -54,14 +54,18 @@ def main() -> None:
         # Fix 1 (preferred): rebase the second revision onto the first.
         versions = mig.root / "migrations" / "versions"
         f = next(versions.glob("2703_*.py"))
-        f.write_text(re.sub(r"down_revision: (.*) = '2701'", r"down_revision: \1 = '2702'", f.read_text()))
+        f.write_text(
+            re.sub(r"down_revision: (.*) = '2701'", r"down_revision: \1 = '2702'", f.read_text())
+        )
         print("after rebasing 2703 onto 2702:")
         heads_check(cfg)
         history(cfg)
         command.upgrade(cfg, "head")
 
         # Fix 2 (for long-lived parallel lines): a merge revision.
-        f.write_text(re.sub(r"down_revision: (.*) = '2702'", r"down_revision: \1 = '2701'", f.read_text()))
+        f.write_text(
+            re.sub(r"down_revision: (.*) = '2702'", r"down_revision: \1 = '2701'", f.read_text())
+        )
         command.merge(cfg, "heads", message="merge wishlist and gift wrap", rev_id="2704")
         print("with a merge revision instead:")
         heads_check(cfg)

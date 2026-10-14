@@ -77,7 +77,9 @@ def run(lock_timeout: str) -> None:
         }
     for app, state, wtype, wevent, blocked_by, query in rows:
         names = [pids.get(p, str(p)) for p in blocked_by]
-        print(f"  {app:<12} {state:<20} {wtype or '':<5} {wevent or '':<9} blocked_by={names} {query}")
+        print(
+            f"  {app:<12} {state:<20} {wtype or '':<5} {wevent or '':<9} blocked_by={names} {query}"
+        )
     time.sleep(HOLD)
     a.commit()  # A finishes; the queue drains
     a.close()

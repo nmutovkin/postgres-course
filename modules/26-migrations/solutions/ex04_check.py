@@ -1,6 +1,6 @@
 """Exercise 4: the fixed revision on an empty database (up, down, up), plus its SQL.
 
-    cd project/python && python ../../modules/26-migrations/solutions/ex04_check.py
+cd project/python && python ../../modules/26-migrations/solutions/ex04_check.py
 """
 
 from __future__ import annotations
@@ -37,8 +37,15 @@ def main() -> None:
         mig.upgrade(dsn, "2605")
         print("re-upgrade is identical:", diff(after, snap(dsn)) == [])
         sql = mig.sql("2701:2605")
-        print("statements outside a transaction:", sql.count("CONCURRENTLY"), "concurrent,",
-              sql.count("NOT VALID"), "NOT VALID,", sql.count("VALIDATE CONSTRAINT"), "VALIDATE")
+        print(
+            "statements outside a transaction:",
+            sql.count("CONCURRENTLY"),
+            "concurrent,",
+            sql.count("NOT VALID"),
+            "NOT VALID,",
+            sql.count("VALIDATE CONSTRAINT"),
+            "VALIDATE",
+        )
 
 
 if __name__ == "__main__":

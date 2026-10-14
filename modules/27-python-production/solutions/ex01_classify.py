@@ -20,9 +20,7 @@ DSN = get_settings().dsn
 
 
 def as_role(user: str, password: str) -> str:
-    return make_url(DSN).set(username=user, password=password).render_as_string(
-        hide_password=False
-    )
+    return make_url(DSN).set(username=user, password=password).render_as_string(hide_password=False)
 
 
 def duplicate_email() -> None:
@@ -105,7 +103,9 @@ CASES: list[tuple[str, Callable[[], None]]] = [
 ]
 
 if __name__ == "__main__":
-    print(f"{'situation':<36} {'exception':<26} {'sqlstate':<8} {'kind':<14} retried / if idempotent")
+    print(
+        f"{'situation':<36} {'exception':<26} {'sqlstate':<8} {'kind':<14} retried / if idempotent"
+    )
     for label, fn in CASES:
         try:
             fn()

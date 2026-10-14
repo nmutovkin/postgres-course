@@ -1,7 +1,7 @@
 """Exercise 5: the metadata change, applied in memory (the learner edits bazaar/sa/tables.py).
 
-    reviews.helpful_votes  integer NOT NULL DEFAULT 0, CHECK (helpful_votes >= 0)
-    index (product_id, helpful_votes DESC) for "most helpful reviews first"
+reviews.helpful_votes  integer NOT NULL DEFAULT 0, CHECK (helpful_votes >= 0)
+index (product_id, helpful_votes DESC) for "most helpful reviews first"
 """
 
 from __future__ import annotations

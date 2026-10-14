@@ -19,7 +19,7 @@ On Black Friday 2025, Bazaar took 3,527 orders in one day. Somewhere in that day
 cd project/python && uv sync && source .venv/bin/activate
 export BAZAAR_DSN=postgresql://postgres:postgres@localhost:5432/bazaar
 alembic stamp 2600 && alembic upgrade head      # includes revision 2701 (this module's outbox)
-pytest -n 4                                     # 125 tests, about 10 s
+pytest -n 4                                     # 126 tests, about 11 s
 ```
 
 You need Module 26's migrations and `bazaar.testing`; the outbox builds on Module 10's job queue and Module 23's worker. The PgBouncer lab in [`lab/`](lab/) needs Docker (section 5.3). Outputs come from PostgreSQL 17.11, psycopg 3.3.6, asyncpg 0.32.0, SQLAlchemy 2.1.4, pytest-xdist 3.8.0, testcontainers 4.15.0 and OpenTelemetry 1.45.1.
@@ -37,7 +37,7 @@ The tempting shortcut is to run the tests against SQLite ("it's SQL too") or to 
 - Concurrency semantics (`READ COMMITTED` re-evaluation, serialization failures, deadlocks, lock queues) only exist in the real engine. Section 1.8's tests found two bugs that a mock could never reproduce.
 - A mock asserts that your code sent the SQL you *think* is right. It can't tell you that the SQL is wrong.
 
-So every Bazaar test runs against PostgreSQL 17, the same major version as production. The cost is speed and isolation, and the rest of this section is about getting both back.
+So every Bazaar test runs against PostgreSQL 17, the same major version as production. The database's own code (`place_order()`, the triggers, the RLS policies) is tested **through the application**, by calling it the way the service does and checking the results; pgTAP, a unit-testing framework written in SQL, is the alternative for teams that want such tests next to the SQL itself. The cost is speed and isolation, and the rest of this section is about getting both back.
 
 ### 1.2 Fixture strategies
 
@@ -141,12 +141,12 @@ Since PostgreSQL 15, `CREATE DATABASE` copies a template block by block through 
 
 ```text
 $ pytest -q
-125 passed, 1 skipped in 25.03s
+126 passed, 1 skipped in 25.74s
 $ pytest -q -n 4
-125 passed, 1 skipped in 9.93s
+126 passed, 1 skipped in 11.25s
 ```
 
-Not 4× (startup and the slowest tests set a floor), but a 2.5× speedup for one flag. The skipped test is the container test of the next section.
+Not 4× (worker startup and the slowest tests set a floor, and this 4-core machine runs the database too), but a 2.3× speedup for one flag. The skipped test is the container test of the next section.
 
 ### 1.6 testcontainers: a server per test session
 
@@ -278,7 +278,7 @@ def classify(exc: BaseException) -> ErrorKind:
     return ErrorKind.PERMANENT
 ```
 
-Classify by **SQLSTATE**, not by exception class or message: SQLSTATEs are stable across drivers and versions, and both drivers expose them (`exc.sqlstate`). Messages are translated (`lc_messages`) and change between versions. Errors without a SQLSTATE come from the client side: a dropped socket, a refused connection, a pool or client timeout. Two traps from writing this function: `TimeoutError` is a subclass of `OSError`, so it must be checked first; and psycopg's `ConnectionTimeout` (the `connect_timeout` expiring) is a *subclass* of `OperationalError`, which only the MRO check catches. `tests/test_resilience.py` pins down 21 cases, plus SQLAlchemy-wrapped errors from real statements.
+Classify by **SQLSTATE**, not by exception class or message: SQLSTATEs are stable across drivers and versions, and both drivers expose them (`exc.sqlstate`). Messages are translated (`lc_messages`) and change between versions. Errors without a SQLSTATE come from the client side: a dropped socket, a refused connection, a pool or client timeout. Two traps from writing this function: `TimeoutError` is a subclass of `OSError`, so it must be checked first; and psycopg's `ConnectionTimeout` (the `connect_timeout` expiring) is a *subclass* of `OperationalError`, which only the MRO check catches. `tests/test_resilience.py` pins down 22 cases, plus SQLAlchemy-wrapped errors from real statements. Exercise 1 found the 22nd: a wrong password arrives as an `OperationalError` without a SQLSTATE, which looked like a lost connection and was retried. `classify()` now recognizes the server's messages for refused connections (`password authentication failed`, `no pg_hba.conf entry`, `does not exist`) as permanent.
 
 ### 2.1 Failover, as the application sees it
 
@@ -1037,13 +1037,13 @@ Bazaar holds names, emails, addresses and order histories. In the application la
 | `bazaar/errors.py` | `IdempotencyConflict`, `constraint_name()` (psycopg and asyncpg) |
 | `bazaar/testing.py` | `TemplateDatabase`, `scratch_database()`, `create_database()` (copies database settings and grants), `migrations_fingerprint()` |
 | `migrations/versions/2701_outbox.py` | `outbox`, `processed_messages`, `notify_outbox()` |
-| tests | `test_resilience.py` (35), `test_outbox.py` (12), `test_observability.py` (9), `test_concurrency.py` (4), `test_containers.py` (1, opt-in); fixtures `fresh_db`, `empty_db`, `head_template` |
+| tests | `test_resilience.py` (36), `test_outbox.py` (12), `test_observability.py` (9), `test_concurrency.py` (4), `test_containers.py` (1, opt-in); fixtures `fresh_db`, `empty_db`, `head_template` |
 
 ---
 
 ## Summary
 
-- Test against real PostgreSQL: the features are the database's. Roll back for speed; use **template databases** (`CREATE DATABASE ... TEMPLATE`, 138 ms per copy here, rebuilt by fingerprint, settings and grants copied explicitly) where commits matter; **pytest-xdist** with per-worker names (25 s → 10 s); **testcontainers** for a brand-new cluster. **Force** concurrency with barriers.
+- Test against real PostgreSQL: the features are the database's. Roll back for speed; use **template databases** (`CREATE DATABASE ... TEMPLATE`, 138 ms per copy here, rebuilt by fingerprint, settings and grants copied explicitly) where commits matter; **pytest-xdist** with per-worker names (26 s → 11 s); **testcontainers** for a brand-new cluster. **Force** concurrency with barriers.
 - Classify errors by SQLSTATE: serialization and deadlocks, lock timeouts, connection loss (failover), standby connections, timeouts, overload, permanent. Unwrap SQLAlchemy's wrappers; mind the exception hierarchy (`TimeoutError` is an `OSError`).
 - Retry **whole transactions** with exponential backoff, full jitter and a deadline; never retry timeouts, overload or business errors; retry lost connections only for idempotent work, because a commit's outcome can be unknown. **Idempotency keys** make writes retryable; a unique index settles concurrent duplicates.
 - Every layer gets a timeout, nested sensibly: request deadline, pool, connect, statement, lock, idle-in-transaction, PostgreSQL 17's transaction timeout. Client-side cancellation (psycopg async) stops the server's work too.

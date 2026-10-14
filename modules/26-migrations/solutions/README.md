@@ -116,8 +116,13 @@ DDL  ALTER TABLE orders ADD CONSTRAINT orders_total_nonnegative CHECK (total >= 
 def upgrade() -> None:
     op.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_token uuid")
     op.execute("ALTER TABLE orders ALTER COLUMN tracking_token SET DEFAULT gen_random_uuid()")
-    backfill("orders", "tracking_token = gen_random_uuid()", "tracking_token IS NULL",
-             batch_size=2_000, skip_triggers=True)
+    backfill(
+        "orders",
+        "tracking_token = gen_random_uuid()",
+        "tracking_token IS NULL",
+        batch_size=2_000,
+        skip_triggers=True,
+    )
     set_not_null_online("orders", "tracking_token")
     set_not_null_online("orders", "shipping_address_id")
     create_index_concurrently("orders_status_idx", "orders", "status")

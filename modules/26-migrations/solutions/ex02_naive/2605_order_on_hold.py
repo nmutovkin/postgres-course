@@ -14,8 +14,9 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute("ALTER TYPE order_status ADD VALUE 'on_hold' AFTER 'paid'")
-    op.execute("CREATE INDEX orders_on_hold_created_at_idx ON orders (created_at)"
-               " WHERE status = 'on_hold'")
+    op.execute(
+        "CREATE INDEX orders_on_hold_created_at_idx ON orders (created_at) WHERE status = 'on_hold'"
+    )
 
 
 def downgrade() -> None:

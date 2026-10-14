@@ -76,7 +76,9 @@ def client_side_asyncio_timeout() -> None:
                     "SELECT count(*) FROM pg_stat_activity WHERE query = 'SELECT pg_sleep(5)'"
                     " AND state = 'active'"
                 )
-                print(f"{'':<34}       (server still running the query: {(await cur.fetchone())[0]})")
+                print(
+                    f"{'':<34}       (server still running the query: {(await cur.fetchone())[0]})"
+                )
 
     asyncio.run(main())
 

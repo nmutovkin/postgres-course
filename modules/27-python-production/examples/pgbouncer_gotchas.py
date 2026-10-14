@@ -36,9 +36,14 @@ def timeouts_through_bouncer() -> None:
     settings = replace(get_settings(), dsn=BOUNCER)
     try:
         with db.connect(settings) as c:
-            print("connected; SHOW statement_timeout =", c.execute("SHOW statement_timeout").fetchone()[0])
-            print("          SHOW idle_in_transaction_session_timeout =",
-                  c.execute("SHOW idle_in_transaction_session_timeout").fetchone()[0])
+            print(
+                "connected; SHOW statement_timeout =",
+                c.execute("SHOW statement_timeout").fetchone()[0],
+            )
+            print(
+                "          SHOW idle_in_transaction_session_timeout =",
+                c.execute("SHOW idle_in_transaction_session_timeout").fetchone()[0],
+            )
     except psycopg.OperationalError as e:
         print("refused:", str(e).strip().splitlines()[-1])
 
@@ -52,8 +57,9 @@ def role_defaults() -> None:
         admin.execute(
             "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = 'bazaar_app'"
         )
-    settings = replace(get_settings(), dsn=BOUNCER, statement_timeout_ms=0,
-                       idle_in_transaction_timeout_ms=0)  # no startup options at all
+    settings = replace(
+        get_settings(), dsn=BOUNCER, statement_timeout_ms=0, idle_in_transaction_timeout_ms=0
+    )  # no startup options at all
     try:
         with db.connect(settings) as c:
             print("SHOW statement_timeout =", c.execute("SHOW statement_timeout").fetchone()[0])
@@ -65,8 +71,9 @@ def role_defaults() -> None:
 
 def session_state_leaks() -> None:
     step("3. session state: SET vs SET LOCAL, through 2 shared server connections")
-    s = replace(get_settings(), dsn=BOUNCER, statement_timeout_ms=0,
-                idle_in_transaction_timeout_ms=0)
+    s = replace(
+        get_settings(), dsn=BOUNCER, statement_timeout_ms=0, idle_in_transaction_timeout_ms=0
+    )
     engine = create_engine(s, poolclass=NullPool)  # PgBouncer is the pool
     try:
         with engine.begin() as c:  # "request 1": seller 42, session-level SET
@@ -74,8 +81,9 @@ def session_state_leaks() -> None:
         seen = []
         for _ in range(4):  # "requests 2-5", other users, fresh client connections
             with engine.begin() as c:
-                seen.append(c.execute(sa.text("SELECT current_setting('app.seller_id', true)"))
-                            .scalar_one())
+                seen.append(
+                    c.execute(sa.text("SELECT current_setting('app.seller_id', true)")).scalar_one()
+                )
         print("SET:       later requests see app.seller_id =", seen)
         with engine.begin() as c:
             c.execute(sa.text("RESET app.seller_id"))
@@ -83,8 +91,9 @@ def session_state_leaks() -> None:
         seen = []
         for _ in range(4):
             with engine.begin() as c:
-                seen.append(c.execute(sa.text("SELECT current_setting('app.seller_id', true)"))
-                            .scalar_one())
+                seen.append(
+                    c.execute(sa.text("SELECT current_setting('app.seller_id', true)")).scalar_one()
+                )
         print("SET LOCAL: later requests see app.seller_id =", seen)
     finally:
         with engine.begin() as c:  # clean up both server connections
@@ -96,8 +105,9 @@ def session_state_leaks() -> None:
 
 async def asyncpg_prepared() -> None:
     step("4. SQLAlchemy + asyncpg (prepares every statement) with max_prepared_statements=200")
-    s = replace(get_settings(), dsn=BOUNCER, statement_timeout_ms=0,
-                idle_in_transaction_timeout_ms=0)
+    s = replace(
+        get_settings(), dsn=BOUNCER, statement_timeout_ms=0, idle_in_transaction_timeout_ms=0
+    )
     engine = create_async_engine(s, poolclass=NullPool)
     errors = 0
 
@@ -106,8 +116,9 @@ async def asyncpg_prepared() -> None:
         for i in range(20):
             try:
                 async with engine.connect() as c:
-                    await c.execute(sa.text("SELECT title FROM products WHERE id = :id"),
-                                    {"id": i + 1})
+                    await c.execute(
+                        sa.text("SELECT title FROM products WHERE id = :id"), {"id": i + 1}
+                    )
             except Exception:
                 errors += 1
 

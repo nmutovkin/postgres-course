@@ -1,6 +1,6 @@
 """Exercise 2: run the naive and the fixed revision 2605 on scratch databases.
 
-    cd project/python && python ../../modules/26-migrations/solutions/ex02_check.py
+cd project/python && python ../../modules/26-migrations/solutions/ex02_check.py
 """
 
 from __future__ import annotations
@@ -21,7 +21,10 @@ from bazaar.config import get_settings  # noqa: E402
 
 def main() -> None:
     print("--- naive revision")
-    with scratch_migrations(HERE / "ex02_naive" / "2605_order_on_hold.py") as mig, scratch_db() as dsn:
+    with (
+        scratch_migrations(HERE / "ex02_naive" / "2605_order_on_hold.py") as mig,
+        scratch_db() as dsn,
+    ):
         try:
             mig.upgrade(dsn)
         except sa.exc.DBAPIError as e:
@@ -43,7 +46,9 @@ def main() -> None:
                 ).fetchone()[0],
             )
             c.execute("INSERT INTO users (email, full_name) VALUES ('h@example.com', 'H')")
-            c.execute("INSERT INTO sellers (user_id, shop_name, country_code) VALUES (1, 'S', 'DE')")
+            c.execute(
+                "INSERT INTO sellers (user_id, shop_name, country_code) VALUES (1, 'S', 'DE')"
+            )
             c.execute("INSERT INTO orders (user_id, seller_id, status) VALUES (1, 1, 'on_hold')")
         # Old application code: bazaar.models.OrderStatus has no ON_HOLD.
         from dataclasses import replace
