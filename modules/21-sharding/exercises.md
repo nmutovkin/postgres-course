@@ -104,7 +104,7 @@ On a **single-node** Bazaar with the large dataset (`./project/bin/reset.sh 21`)
 
 <details><summary>Hint</summary>
 
-The bucket is `(hashint8(seller_id)::bigint + 2147483648) * 32 / 4294967296`. Cast to `bigint` *before* adding 2³¹, or the `int4` addition overflows. `bucket % 2` gives the worker.
+The bucket is `(hashint8(seller_id)::bigint + 2147483648) * 32 / 4294967296`: shift the signed 32-bit hash into the range 0 … 2³²−1, then cut it into 32 equal slices. `bucket % 2` gives the worker.
 
 </details>
 

@@ -18,7 +18,7 @@ Bazaar's board has a slide titled "10× in two years". Marketing wants every sel
 
 ## Before you start
 
-This module has its own lab in `modules/21-sharding/lab/`: Docker Compose files for a Citus cluster and for a plain-PostgreSQL "do it yourself" cluster, plus scripts that load Bazaar into them. Nothing here touches your usual `course-pg` container.
+This module has its own lab in `modules/21-sharding/lab/`: one Docker Compose file with a Citus cluster and a plain-PostgreSQL "do it yourself" cluster, plus scripts that load Bazaar into them. Nothing here touches your usual `course-pg` container.
 
 ```bash
 cd modules/21-sharding/lab
@@ -39,7 +39,7 @@ docker exec -it m21-coord psql -U postgres -d bazaar
 
 The lab uses the `citusdata/citus:14.2.0-pg17` image (Citus 14.2 on PostgreSQL 17.10). Authentication inside the lab network is `trust`, so you can concentrate on sharding. Section 19 lists what changes in production.
 
-This module leans on three earlier ones: **Module 14** (hash partitioning, pruning, partition-wise joins and aggregates; a sharded table is a partitioned table whose partitions live on other machines), **Module 10** (`place_order()`, row locks, deadlock avoidance) and **Modules 19–20** (each shard node is still a PostgreSQL server that needs replicas and failover).
+This module leans on three earlier ones: **[Module 14](../14-partitioning/)** (hash partitioning, pruning, partition-wise joins and aggregates; a sharded table is a partitioned table whose partitions live on other machines), **[Module 10](../10-transactions-concurrency/)** (`place_order()`, row locks, deadlock avoidance) and **[Modules 19](../19-replication/)–[20](../20-high-availability/)** (each shard node is still a PostgreSQL server that needs replicas and failover).
 
 ---
 
@@ -849,7 +849,7 @@ Compute the boundary in the application and pass a literal or parameter (`create
 
 ### 11.4 Statistics and estimates
 
-The planner has no statistics for foreign tables until you `ANALYZE` them (which samples rows from the shard). For partitions that change constantly, `use_remote_estimate 'true'` makes the planner ask the shard for an `EXPLAIN` estimate during planning, which costs a round trip per foreign scan but gives better join orders. Neither changes the pushdown limits above.
+The planner has no statistics for foreign tables until you `ANALYZE` them (which samples rows from the shard). For partitions that change constantly, `use_remote_estimate 'true'` makes the planner ask the shard for an `EXPLAIN` estimate during planning, which costs a round trip per foreign scan but gives better join orders. Neither changes the pushdown limits above, but remember that pushdown *within* those limits is a cost-based decision. With `use_remote_estimate` switched on, an aggregate over 25 rows of one partition was executed on the coordinator instead of the shard, because the planner estimated that to be cheaper. Small test data can produce different plans from production data.
 
 ### 11.5 Writes and transactions
 
@@ -1078,7 +1078,6 @@ The settings, the dropped triggers and the two `ALTER` statements at the top of 
    - The six 2101 `fill_seller_id_*` triggers look up the parent row in another distributed table: a hidden distributed query inside every row insert. Dropped. The application passes `seller_id`.
    - The three `set_updated_at` triggers only modify `NEW`. Kept.
 4. **The NOLOGIN owner.** Citus opens connections to the workers **as the current role**. Our migrations run as `SET ROLE bazaar_owner` (Module 15), and `REFRESH MATERIALIZED VIEW` runs as the view's owner, which is also `bazaar_owner`. Both failed with `FATAL: role "bazaar_owner" is not permitted to log in` on the workers. The script runs `ALTER ROLE bazaar_owner LOGIN` (Citus propagates roles and `ALTER ROLE` to all nodes). In production, every role that runs distributed queries also needs credentials on the workers, through `.pgpass` or Citus's `pg_dist_authinfo`.
-
 5. **Settings don't reach the workers.** Module 15's seller policies compare `seller_id` with `current_seller_id()`, which reads the setting `app.seller_id` that the seller portal sets with `SET LOCAL`. The policies were distributed along with the tables, but the setting wasn't: as `bazaar_seller` with `app.seller_id = '2'`, `SELECT count(*) FROM orders` returned **0** instead of 36, because on the worker connections the setting was empty. `citus.propagate_set_commands = 'local'` makes Citus forward every `SET LOCAL` to the workers taking part in the transaction. The script sets it for the whole database with `ALTER DATABASE bazaar SET ...`.
 
 Then `lab/scripts/citus-adapt.sql` fixes the SQL that no longer runs. That is section 14.5 and section 15.
@@ -1418,7 +1417,7 @@ SELECT recover_prepared_transactions();
 
 ### 15.3 Delegating a whole function to a worker
 
-`place_order_sharded()` runs on the coordinator and sends every statement to a worker separately: about eight round trips per seller. For functions that work on a **single** tenant, Citus can ship the *call itself* to the worker that holds the tenant:
+`place_order_sharded()` runs on the coordinator and sends every statement to a worker separately: a dozen or so round trips per seller. For functions that work on a **single** tenant, Citus can ship the *call itself* to the worker that holds the tenant:
 
 ```sql
 CREATE FUNCTION seller_open_orders(p_seller_id bigint)

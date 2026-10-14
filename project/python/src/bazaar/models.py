@@ -31,6 +31,12 @@ class OrderStatus(StrEnum):
     REFUNDED = "refunded"
 
 
+class PaymentStatus(StrEnum):
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
 @dataclass(slots=True)
 class Product:
     id: int
