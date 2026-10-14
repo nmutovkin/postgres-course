@@ -18,6 +18,15 @@ settings from here, so there is exactly one place that knows the defaults.
                              role that may create extensions and SET ROLE bazaar_owner
                              (module 26); the application itself should not have one.
 
+    Module 28 (the FastAPI service, bazaar.api):
+    BAZAAR_SELLER_DSN        DSN of the seller portal's engine: a role that row-level
+                             security applies to (module 15). Default: BAZAAR_DSN with
+                             user bazaar_seller, password "seller" (the course role).
+    BAZAAR_SELLER_POOL_SIZE  connections of the seller engine (default 3)
+    BAZAAR_REQUEST_TIMEOUT   whole-request deadline in ms (default 10000; 0 = none)
+    BAZAAR_ADMIN_TOKEN       token for /admin/* (X-Admin-Token); unset = admin disabled
+    BAZAAR_CHECK_SCHEMA      1 (default): refuse to start unless the schema is at head
+
 Standard libpq variables (PGHOST, PGPORT, PGUSER, PGPASSWORD, PGSSLMODE, ...)
 still apply to anything the DSN leaves out.
 """
@@ -59,6 +68,28 @@ class Settings:
             os.environ.get("BAZAAR_MIGRATION_DSN") or os.environ.get("BAZAAR_DSN", DEFAULT_DSN)
         )
     )
+
+    # --- module 28: the service -----------------------------------------------------
+    seller_dsn: str | None = field(
+        default_factory=lambda: os.environ.get("BAZAAR_SELLER_DSN") or None
+    )
+    seller_pool_size: int = field(default_factory=lambda: _int_env("BAZAAR_SELLER_POOL_SIZE", 3))
+    request_timeout_ms: int = field(
+        default_factory=lambda: _int_env("BAZAAR_REQUEST_TIMEOUT", 10000)
+    )
+    admin_token: str | None = field(
+        default_factory=lambda: os.environ.get("BAZAAR_ADMIN_TOKEN") or None
+    )
+    check_schema: bool = field(default_factory=lambda: _int_env("BAZAAR_CHECK_SCHEMA", 1) == 1)
+
+    def seller_dsn_or_default(self) -> str:
+        """BAZAAR_SELLER_DSN, or BAZAAR_DSN with the course's bazaar_seller role."""
+        if self.seller_dsn:
+            return self.seller_dsn
+        from sqlalchemy.engine import make_url
+
+        url = make_url(self.dsn).set(username="bazaar_seller", password="seller")
+        return url.render_as_string(hide_password=False)
 
     def session_settings(self) -> dict[str, str]:
         """Server settings every application connection starts with (all drivers).

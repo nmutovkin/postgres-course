@@ -25,6 +25,9 @@ from bazaar.orm.session import make_async_sessionmaker
 from bazaar.sa.engine import create_async_engine
 from tests.factories import make_shop
 
+# Modules 26-27: these tests need the database at Alembic head (tests/conftest.py).
+pytestmark = pytest.mark.migrated
+
 N = 20
 
 

@@ -27,6 +27,9 @@ from bazaar.resilience import (
 )
 from tests.factories import make_shop
 
+# Modules 26-27: these tests need the database at Alembic head (tests/conftest.py).
+pytestmark = pytest.mark.migrated
+
 FAST = RetryPolicy(attempts=5, base_delay=0.001, max_delay=0.01, deadline=None)
 
 # --- classification ---------------------------------------------------------------------

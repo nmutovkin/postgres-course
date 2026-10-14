@@ -1,8 +1,12 @@
 """Shared fixtures.
 
-The tests need the Bazaar database (`./project/bin/reset.sh 26`) brought to the
-newest Alembic revision (`alembic stamp 2600 && alembic upgrade head`, module 26),
-reachable through BAZAAR_DSN (default: localhost:5432, the course container).
+The tests need the Bazaar database reachable through BAZAAR_DSN (default:
+localhost:5432, the course container). Which tests run depends on its schema:
+
+* `./project/bin/reset.sh 22` (+ sql/2301_notify.sql from module 23 on): the
+  tests of modules 22-25 run; tests marked `migrated` are skipped, with a reason.
+* the newest Alembic revision (`alembic stamp 2600 && alembic upgrade head`,
+  module 26 on): everything runs.
 
 Isolation strategy:
 * `conn` / `aconn` wrap each test in a transaction that is ROLLED BACK at the
@@ -22,6 +26,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator, Iterator
+from dataclasses import dataclass
 
 import psycopg
 import pytest
@@ -41,23 +46,71 @@ def pytest_report_header(config: pytest.Config) -> str:
     return f"BAZAAR_DSN={os.environ.get('BAZAAR_DSN', '(default) localhost:5432')}"
 
 
-@pytest.fixture(scope="session", autouse=True)
-def schema_at_head() -> None:
-    """The database must be at the newest Alembic revision (module 26).
+# --- which schema is the database at? ---------------------------------------------------
+#
+# Modules 22-25 run the tests against `reset.sh 22` (plus sql/2301_notify.sql from
+# module 23 on): no Alembic yet. From module 26 on, the database must be at the
+# newest Alembic revision. Tests (or whole files) that need the migrated schema
+# carry the `migrated` marker; when the database is not at head they are SKIPPED
+# with the reason, and everything else still runs. (Until module 28 this check
+# aborted the whole run, which locked out learners on modules 22-25.)
 
-    Until module 25 this fixture applied project/python/sql/*.sql. Now the
-    schema belongs to the migrations, and the tests refuse to run against a
-    database whose schema is older (or newer) than the code:
-        alembic stamp 2600 && alembic upgrade head      # once, after reset.sh
-    """
+
+@dataclass(frozen=True)
+class SchemaState:
+    reachable: bool
+    current: tuple[str, ...] = ()
+    heads: tuple[str, ...] = ()
+    error: str | None = None
+
+    @property
+    def at_head(self) -> bool:
+        return self.reachable and set(self.current) == set(self.heads)
+
+    def skip_reason(self) -> str:
+        where = f"at {list(self.current)}" if self.current else "not under Alembic (no revision)"
+        return (
+            f"needs the schema at Alembic head {list(self.heads)}; the database is {where}."
+            " Modules 26+: `alembic stamp 2600 && alembic upgrade head` after reset.sh"
+        )
+
+
+def _schema_state() -> SchemaState:
+    heads = migrate.head_revisions()
     engine = create_engine(poolclass=NullPool)
     try:
         with engine.connect() as c:
-            migrate.check_schema(c)
-    except migrate.SchemaOutOfDate as e:
-        pytest.exit(f"schema not at head: {e}", returncode=2)
+            return SchemaState(True, migrate.current_revisions(c), heads)
+    except sa.exc.OperationalError as e:
+        return SchemaState(False, (), heads, str(e.orig).splitlines()[0] if e.orig else str(e))
     finally:
         engine.dispose()
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    state = _schema_state()
+    config.stash[_STATE] = state
+    if not state.reachable:
+        pytest.exit(f"cannot connect to BAZAAR_DSN: {state.error}", returncode=2)
+    if state.at_head:
+        return
+    skip = pytest.mark.skip(reason=state.skip_reason())
+    for item in items:
+        if item.get_closest_marker("migrated"):
+            item.add_marker(skip)
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus, config: pytest.Config) -> None:  # noqa: ANN001
+    state = config.stash.get(_STATE, None)
+    if state is None and not hasattr(config, "workerinput"):  # xdist controller: not collected
+        state = _schema_state()
+    if state is not None and state.reachable and not state.at_head:
+        terminalreporter.write_line(
+            f"NOTE: tests marked 'migrated' were skipped: {state.skip_reason()}", yellow=True
+        )
+
+
+_STATE = pytest.StashKey[SchemaState]()
 
 
 @pytest.fixture

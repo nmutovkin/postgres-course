@@ -38,6 +38,7 @@ __all__ = [
     "count_statements",
     "create_async_engine",
     "create_engine",
+    "create_async_read_engine",
     "create_read_engine",
     "dispose_after_fork",
     "sa_url",
@@ -126,6 +127,37 @@ def create_read_engine(settings: Settings | None = None, **overrides: Any) -> En
         dbapi_conn.autocommit = True
         dbapi_conn.execute("SET default_transaction_read_only = on")
         dbapi_conn.autocommit = autocommit
+
+    return engine
+
+
+def create_async_read_engine(
+    settings: Settings | None = None, *, driver: str = "asyncpg", **overrides: Any
+) -> AsyncEngine:
+    """create_read_engine() for async code (the module 28 service's heavy reads).
+
+    Same rules: BAZAAR_REPLICA_DSN or the primary, application_name "<app>-ro",
+    and default_transaction_read_only=on, sent as a startup parameter
+    (asyncpg server_settings / libpq options), so it costs no round trip.
+    """
+    s = settings or get_settings()
+    s = replace(s, dsn=s.replica_dsn or s.dsn, app_name=f"{s.app_name}-ro")
+    engine = create_async_engine(s, driver=driver, **overrides)
+
+    # do_connect receives the keyword arguments for the driver's connect():
+    # add the setting to what create_async_engine() put there. (The same dict
+    # is passed for every new connection, so the change must be idempotent.)
+    @event.listens_for(engine.sync_engine, "do_connect")
+    def _read_only(dialect, conn_rec, cargs, cparams) -> None:  # noqa: ANN001
+        if driver == "asyncpg":
+            cparams["server_settings"] = {
+                **cparams.get("server_settings", {}),
+                "default_transaction_read_only": "on",
+            }
+        else:
+            opts = cparams.get("options") or ""
+            if "default_transaction_read_only" not in opts:
+                cparams["options"] = f"{opts} -c default_transaction_read_only=on".strip()
 
     return engine
 

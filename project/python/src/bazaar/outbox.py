@@ -209,12 +209,13 @@ async def arelay_batch(conn: psycopg.AsyncConnection, publish: APublish, limit: 
 
 
 async def run_relay(
-    publish: APublish,
+    publish: APublish | None,
     stop: asyncio.Event,
     *,
     dsn: str | None = None,
     poll_interval: float = 5.0,
     batch_size: int = 100,
+    make_publish: Callable[[psycopg.AsyncConnection], APublish] | None = None,
 ) -> int:
     """Relay until `stop` is set; returns the number of messages published.
 
@@ -222,6 +223,10 @@ async def run_relay(
     another does the work. NOTIFY is only a hint: notifications sent while the
     listener was disconnected are lost, so the loop also polls every
     `poll_interval` seconds, and always drains the table completely.
+
+    make_publish (module 28): build the publisher from the relay's working
+    connection instead of passing one, e.g. ajobs_publisher, whose INSERTs
+    must run in the relay's own transaction (`python -m bazaar.relay`).
     """
     from bazaar.aio import db as adb
 
@@ -235,6 +240,10 @@ async def run_relay(
 
     listener = await adb.connect(autocommit=True, **extra)
     worker = await adb.connect(autocommit=True, **extra)
+    if make_publish is not None:
+        publish = make_publish(worker)
+    if publish is None:
+        raise TypeError("run_relay needs publish or make_publish")
     await listener.execute("LISTEN outbox")
     listen_task = asyncio.create_task(listen(listener))
     try:
@@ -264,6 +273,19 @@ def jobs_publisher(conn: psycopg.Connection, routes: dict[str, list[str]]) -> Pu
     def publish(msg: Message) -> None:
         for kind in routes.get(msg.topic, []):
             conn.execute(
+                "INSERT INTO jobs (queue, kind, payload) VALUES ('default', %s, %s)",
+                (kind, Jsonb({"message_id": msg.id, **msg.payload})),
+            )
+
+    return publish
+
+
+def ajobs_publisher(conn: psycopg.AsyncConnection, routes: dict[str, list[str]]) -> APublish:
+    """Async twin of jobs_publisher (for run_relay(make_publish=...), module 28)."""
+
+    async def publish(msg: Message) -> None:
+        for kind in routes.get(msg.topic, []):
+            await conn.execute(
                 "INSERT INTO jobs (queue, kind, payload) VALUES ('default', %s, %s)",
                 (kind, Jsonb({"message_id": msg.id, **msg.payload})),
             )

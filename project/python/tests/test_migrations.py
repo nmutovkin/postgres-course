@@ -29,7 +29,10 @@ from bazaar import migrate
 from bazaar.catalog import diff, snapshot
 from bazaar.sa.engine import NullPool
 
-REVISIONS = ["2600", "2601", "2602", "2603", "2604", "2701"]
+# Modules 26-27: these tests need the database at Alembic head (tests/conftest.py).
+pytestmark = pytest.mark.migrated
+
+REVISIONS = ["2600", "2601", "2602", "2603", "2604", "2701", "2801"]
 
 
 def _engine(dsn: str) -> sa.Engine:

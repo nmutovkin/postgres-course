@@ -16,6 +16,9 @@ from bazaar.errors import IdempotencyConflict, InsufficientStock
 from bazaar.orm import services
 from tests.factories import make_product, make_seller
 
+# Modules 26-27: these tests need the database at Alembic head (tests/conftest.py).
+pytestmark = pytest.mark.migrated
+
 # --- producing in the business transaction (rolled-back reference DB) ------------------------
 
 

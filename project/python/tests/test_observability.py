@@ -10,9 +10,13 @@ from collections.abc import Iterator
 import pytest
 import sqlalchemy as sa
 
+from bazaar import migrate
 from bazaar import observability as obs
 from bazaar.config import get_settings
 from bazaar.sa.engine import NullPool, create_engine, create_read_engine
+
+# Modules 26-27: these tests need the database at Alembic head (tests/conftest.py).
+pytestmark = pytest.mark.migrated
 
 
 @pytest.fixture
@@ -101,14 +105,15 @@ def test_pool_metrics(engine: sa.Engine) -> None:
 
 
 def test_health_check(sa_conn: sa.Connection, fresh_db: str) -> None:
+    head = list(migrate.head_revisions())  # ["2801"] since module 28
     h = obs.check_health(sa_conn)
-    assert h["ok"] and not h["in_recovery"] and h["schema"] == ["2701"]
+    assert h["ok"] and not h["in_recovery"] and h["schema"] == head
     stale = sa.create_engine(fresh_db.replace("postgresql://", "postgresql+psycopg://"))
     with stale.connect() as c:
         c.execute(sa.text("UPDATE alembic_version SET version_num = '2604'"))
         h = obs.check_health(c)
     stale.dispose()
-    assert not h["ok"] and "code expects ['2701']" in h["problems"][0]
+    assert not h["ok"] and f"code expects {head}" in h["problems"][0]
 
 
 def test_read_engine_refuses_writes() -> None:

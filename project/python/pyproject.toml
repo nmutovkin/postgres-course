@@ -52,6 +52,7 @@ asyncio_default_fixture_loop_scope = "function"
 markers = [
     "slow: takes more than a couple of seconds (deselect with -m 'not slow')",
     "docker: starts a PostgreSQL container with testcontainers (BAZAAR_TEST_DOCKER=1)",
+    "migrated: needs the database at Alembic head (module 26+); skipped when it is not",
 ]
 
 [tool.ruff]

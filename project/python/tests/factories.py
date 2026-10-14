@@ -76,10 +76,11 @@ def cleanup(conn: psycopg.Connection, user_ids: list[int], seller_ids: list[int]
             "DELETE FROM orders WHERE user_id = ANY(%s) OR seller_id = ANY(%s) RETURNING id",
             (user_ids, seller_ids),
         ).fetchall()
-        conn.execute(  # outbox events of those orders (module 27)
-            "DELETE FROM outbox WHERE aggregate_type = 'order' AND aggregate_id = ANY(%s)",
-            ([str(o[0]) for o in orders],),
-        )
+        if conn.execute("SELECT to_regclass('outbox')").fetchone()[0]:  # module 27+
+            conn.execute(  # outbox events of those orders
+                "DELETE FROM outbox WHERE aggregate_type = 'order' AND aggregate_id = ANY(%s)",
+                ([str(o[0]) for o in orders],),
+            )
         conn.execute("DELETE FROM products WHERE seller_id = ANY(%s)", (seller_ids,))
         owners = conn.execute(
             "DELETE FROM sellers WHERE id = ANY(%s) RETURNING user_id", (seller_ids,)
