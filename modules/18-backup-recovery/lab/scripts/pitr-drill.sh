@@ -10,8 +10,9 @@
 #   1. snapshot the row count of every table in schema bazaar (one statement,
 #      so one consistent MVCC snapshot) and mark that moment with a named
 #      restore point;
-#   2. keep writing (scripts/bazaar-activity.sql) and then simulate an
-#      accident (DELETE FROM order_items of the newest orders);
+#   2. let the database move on: in the lab we generate writes with
+#      scripts/bazaar-activity.sql (set GENERATE_ACTIVITY=0 on a server that
+#      has real traffic; the drill itself never modifies data);
 #   3. force a WAL switch so everything is archived;
 #   4. restore the newest base backup into a throw-away volume, configure
 #      restore_command + recovery_target_name, start it as container m18-drill;
@@ -58,12 +59,12 @@ point="drill-$(date -u +%Y%m%dT%H%M%SZ)"
 psql_primary -c "SELECT pg_create_restore_point('$point')" >/dev/null
 log "restore point '$point' created; $(wc -l < "$WORK/expected.txt") tables snapshotted"
 
-# ---- 2. more activity, then the accident --------------------------------------
-psql_primary < "$HERE/bazaar-activity.sql" >/dev/null
-psql_primary -c "DELETE FROM bazaar.order_items
-                 WHERE order_id IN (SELECT id FROM bazaar.orders ORDER BY id DESC LIMIT 50)" >/dev/null
-log "post-snapshot activity and accidental DELETE done"
-psql_primary -F' ' -c "$q ORDER BY 1" > "$WORK/damaged.txt"
+# ---- 2. let the database move on -------------------------------------------------
+if [[ "${GENERATE_ACTIVITY:-1}" == "1" ]]; then
+    psql_primary < "$HERE/bazaar-activity.sql" >/dev/null
+    log "post-snapshot activity generated"
+fi
+psql_primary -F' ' -c "$q ORDER BY 1" > "$WORK/current.txt"
 
 # ---- 3. make sure the WAL containing all of this is archived -------------------
 seg=$(psql_primary -c "SELECT pg_walfile_name(pg_switch_wal())")
@@ -119,8 +120,8 @@ docker logs "$DRILL" 2>&1 | grep -E "recovery stopping|selected new timeline|arc
 
 # ---- 6. verify --------------------------------------------------------------------
 psql_drill -F' ' -c "$q ORDER BY 1" > "$WORK/restored.txt"
-printf '%-24s %10s %10s %10s\n' table expected damaged restored
-paste -d' ' "$WORK/expected.txt" "$WORK/damaged.txt" "$WORK/restored.txt" |
+printf '%-24s %10s %10s %10s\n' table expected current restored
+paste -d' ' "$WORK/expected.txt" "$WORK/current.txt" "$WORK/restored.txt" |
     awk '{ printf "%-24s %10s %10s %10s%s\n", $1, $2, $4, $6, ($2 == $6 ? "" : "   <-- MISMATCH") }'
 
 # ---- 7. verdict -----------------------------------------------------------------

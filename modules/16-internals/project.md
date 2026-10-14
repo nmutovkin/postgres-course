@@ -49,7 +49,7 @@ Measured on PostgreSQL 17 from a fresh `reset.sh 16`:
 
 | fillfactor | HOT updates | size before → after |
 |---|---|---|
-| 100 (default) | <<HOT100>> | <<SIZE100>> |
-| 90 (reference) | <<HOT90>> | <<SIZE90>> |
+| 100 (default) | 45.2% (33,659 of 74,432) | 10,192 kB → 12 MB |
+| 90 (reference) | 99.5% (74,124 of 74,504) | 11 MB → 11 MB |
 
 Module 17 builds on this: its milestone sets per-table autovacuum parameters for `inventory` (and `jobs`) and keeps `fillfactor = 90`.
