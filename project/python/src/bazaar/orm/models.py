@@ -51,6 +51,10 @@ class XID(sa.types.UserDefinedType):
         return "xid"
 
     def bind_processor(self, dialect: Any) -> Any:
+        # psycopg sends a str (text, cast by the server to xid); asyncpg prepares
+        # the statement, learns the parameter is an xid, and wants an int.
+        if dialect.driver == "asyncpg":
+            return lambda value: None if value is None else int(value)
         return lambda value: None if value is None else str(value)
 
     def result_processor(self, dialect: Any, coltype: Any) -> Any:

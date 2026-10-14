@@ -183,7 +183,8 @@ END;
 $$;
 
 COMMENT ON FUNCTION search_products(text, int, int) IS
-    'Storefront search: websearch syntax, category subtree filter, rank + rating + sales, snippets, trigram fallback.';
+    'Storefront search: websearch syntax, category subtree filter, '
+    'rank + rating + sales, snippets, trigram fallback.';
 """
 
 

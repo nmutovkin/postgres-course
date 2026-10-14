@@ -31,13 +31,22 @@ from bazaar.sa.engine import count_statements, create_engine
 
 from .factories import cleanup, make_product, make_seller, make_user
 
+# The reference mapping (orm/models.py) describes the schema at Alembic head:
+# Product.slug (revision 2602) and Order.idempotency_key (2604) are mapped, and
+# checkout writes an outbox event (2701). Tests that load products or orders
+# therefore need the migrated schema; on `reset.sh 22` they are skipped
+# (tests/conftest.py). A module-25 learner's own mapping has no such columns.
+needs_head = pytest.mark.migrated(reason="maps products.slug / orders.idempotency_key (26+)")
+
 # --- mapping ---------------------------------------------------------------------------
 
 
+@needs_head
 def test_mapping_matches_database(sa_conn: sa.Connection) -> None:
     assert compare(sa_conn, Base.metadata, mapping_only=True) == []
 
 
+@needs_head
 def test_types_and_relationships(session: Session) -> None:
     laptops = session.get(Category, 3)
     assert laptops is not None and laptops.parent is not None
@@ -49,6 +58,7 @@ def test_types_and_relationships(session: Session) -> None:
     assert product.inventory.available == product.inventory.quantity - product.inventory.reserved
 
 
+@needs_head
 def test_hybrid_and_column_property_in_sql(session: Session) -> None:
     # Inventory.available used as a SQL expression...
     n = session.scalar(
@@ -63,6 +73,7 @@ def test_hybrid_and_column_property_in_sql(session: Session) -> None:
     assert order.item_count == len(order.items)
 
 
+@needs_head
 def test_mutable_jsonb_is_tracked(session: Session) -> None:
     product = session.get(Product, 1)
     assert product is not None
@@ -93,6 +104,7 @@ def _scarce_product(session: Session) -> int:
     ).one()
 
 
+@needs_head
 def test_checkout(session: Session) -> None:
     pid = _scarce_product(session)
     [order] = services.checkout(session, 8, [(pid, 1)])
@@ -103,6 +115,7 @@ def test_checkout(session: Session) -> None:
     assert inv is not None and inv.available == 0
 
 
+@needs_head
 def test_checkout_insufficient_stock_leaves_session_usable(session: Session) -> None:
     pid = _scarce_product(session)
     with pytest.raises(InsufficientStock) as exc:
@@ -114,6 +127,7 @@ def test_checkout_insufficient_stock_leaves_session_usable(session: Session) -> 
 # --- loading strategies ----------------------------------------------------------------
 
 
+@needs_head
 def test_order_history_has_no_n_plus_1(session: Session) -> None:
     engine = session.get_bind().engine
     session.connection()  # begin now (the fixture's SAVEPOINT), so we count only queries
@@ -124,6 +138,7 @@ def test_order_history_has_no_n_plus_1(session: Session) -> None:
     assert len(stmts) == 2  # orders+sellers, then items+products: independent of `limit`
 
 
+@needs_head
 def test_lazy_loading_is_n_plus_1(session: Session) -> None:
     """The same loop without loader options: one query per order and per product."""
     engine = session.get_bind().engine
@@ -138,6 +153,7 @@ def test_lazy_loading_is_n_plus_1(session: Session) -> None:
     assert len(stmts) > 40
 
 
+@needs_head
 def test_raiseload_guards_unplanned_access(session: Session) -> None:
     [order] = services.order_history(session, 8, limit=1)
     with pytest.raises(sa.exc.InvalidRequestError, match="lazy=.raise"):
@@ -157,6 +173,7 @@ def committed_product() -> Iterator[tuple[int, int]]:
         cleanup(conn, [], [seller])
 
 
+@needs_head
 def test_concurrent_edit_is_detected(sa_engine: sa.Engine, committed_product) -> None:
     seller, pid = committed_product
     factory = make_sessionmaker(sa_engine)
@@ -194,6 +211,7 @@ def seller_conn() -> Iterator[sa.Connection]:
     engine.dispose()
 
 
+@needs_head
 def test_rls_seller_sees_only_own_rows(seller_conn: sa.Connection, sa_conn: sa.Connection) -> None:
     own = sa_conn.scalar(sa.text("SELECT count(*) FROM products WHERE seller_id = 42"))
     other = sa_conn.scalar(sa.text("SELECT min(id) FROM products WHERE seller_id = 43"))
@@ -266,12 +284,14 @@ def test_review_validation(session: Session) -> None:
 # --- async ORM ---------------------------------------------------------------------------------
 
 
+@needs_head
 async def test_async_order_history(asession: AsyncSession) -> None:
     orders = await services.order_history_async(asession, 8, limit=5)
     assert len(orders) == 5
     assert all(o.items and o.items[0].product.title for o in orders)  # all preloaded
 
 
+@needs_head
 async def test_async_lazy_load_raises_missing_greenlet(asession: AsyncSession) -> None:
     order = (await asession.scalars(sa.select(Order).where(Order.id == 1))).one()
     with pytest.raises(MissingGreenlet):

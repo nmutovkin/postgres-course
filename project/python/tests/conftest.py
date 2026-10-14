@@ -94,10 +94,12 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         pytest.exit(f"cannot connect to BAZAAR_DSN: {state.error}", returncode=2)
     if state.at_head:
         return
-    skip = pytest.mark.skip(reason=state.skip_reason())
     for item in items:
-        if item.get_closest_marker("migrated"):
-            item.add_marker(skip)
+        marker = item.get_closest_marker("migrated")
+        if marker is not None:
+            why = marker.kwargs.get("reason")
+            reason = f"{why}: {state.skip_reason()}" if why else state.skip_reason()
+            item.add_marker(pytest.mark.skip(reason=reason))
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config: pytest.Config) -> None:  # noqa: ANN001

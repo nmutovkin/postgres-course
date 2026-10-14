@@ -59,9 +59,7 @@ class RequestContext:
                 raise
             # The handler was cancelled at its current await. An in-flight query
             # is cancelled too, and its connection is discarded, not reused.
-            response = problem(
-                Request(scope), 504, "deadline", "Request took too long", headers={}
-            )
+            response = problem(Request(scope), 504, "deadline", "Request took too long", headers={})
             await response(scope, receive, send_wrapper)
         finally:
             log.info(

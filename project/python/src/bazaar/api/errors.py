@@ -176,9 +176,7 @@ async def _on_validation_error(request: Request, exc: Exception) -> JSONResponse
         {"loc": list(e.get("loc", ())), "msg": e.get("msg"), "type": e.get("type")}
         for e in exc.errors()
     ]
-    return problem(
-        request, 422, "validation", "Invalid request", "see `errors`", errors=issues
-    )
+    return problem(request, 422, "validation", "Invalid request", "see `errors`", errors=issues)
 
 
 async def _on_http_exception(request: Request, exc: Exception) -> JSONResponse:

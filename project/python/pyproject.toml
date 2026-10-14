@@ -1,6 +1,6 @@
 [project]
 name = "bazaar"
-version = "0.27.0"
+version = "0.28.0"
 description = "Bazaar marketplace: the Python side of the PostgreSQL course (modules 22-28)"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -13,6 +13,8 @@ dependencies = [
     "asyncpg>=0.30",
     "sqlalchemy[asyncio]>=2.0.30",  # modules 24-25; [asyncio] pulls in greenlet
     "alembic>=1.13",  # module 26
+    "fastapi>=0.140",  # module 28: the HTTP service (tested with 0.143; uses Depends(scope=))
+    "uvicorn[standard]>=0.30",  # module 28: the ASGI server (uvloop, httptools)
 ]
 
 [project.optional-dependencies]
@@ -33,10 +35,12 @@ dev = [
     "pytest-xdist>=3.6",  # module 27: pytest -n 4
     "testcontainers[postgres]>=4.8",  # module 27: tests/test_containers.py (opt-in)
     "bazaar[otel]",  # module 27: the tracing test
+    "httpx>=0.27",  # module 28: API tests (ASGITransport) and the load generator
 ]
 
 [project.scripts]
 bazaar-worker = "bazaar.worker:main"
+bazaar-relay = "bazaar.relay:main"
 
 [build-system]
 requires = ["hatchling"]

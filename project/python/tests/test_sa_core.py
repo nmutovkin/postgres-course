@@ -17,12 +17,17 @@ from bazaar.sa.engine import count_statements, sa_url
 from bazaar.sa.tables import metadata, order_items, orders, products, view_metadata
 
 # --- metadata vs. database -------------------------------------------------------------
+# tables.py describes the schema at Alembic head (products.slug, orders.idempotency_key,
+# outbox, ...): on `reset.sh 22` the drift tests are skipped (tests/conftest.py).
+needs_head = pytest.mark.migrated(reason="tables.py includes revisions 2602-2801")
 
 
+@needs_head
 def test_tables_match_database(sa_conn: sa.Connection) -> None:
     assert compare(sa_conn, metadata, view_metadata) == []
 
 
+@needs_head
 def test_drift_is_detected(sa_conn: sa.Connection) -> None:
     """The comparison is only worth something if it fails: change the schema
     inside the (rolled-back) test transaction and expect precise complaints."""
