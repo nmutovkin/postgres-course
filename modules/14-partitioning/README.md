@@ -424,7 +424,9 @@ SELECT count(*) FROM events WHERE occurred_at >= now() - interval '7 days';
                Filter: (occurred_at >= (now() - '7 days'::interval))
          ->  Seq Scan on events_default events_4 (actual rows=0 loops=1)
                Filter: (occurred_at >= (now() - '7 days'::interval))
-...
+ Planning Time: 5.313 ms
+ Execution Time: 0.104 ms
+(13 rows)
 ```
 
 (This ran in October 2026; your clock gives other partitions.) All 25 partitions were planned, and 21 removed before execution. The same happens with prepared statements that use a **generic plan**, where `$1` is unknown at plan time:
@@ -710,10 +712,13 @@ CONTEXT:  SQL statement "CREATE TABLE bazaar.events_y2027m03 PARTITION OF bazaar
 PL/pgSQL function create_events_partition(date) line 9 at EXECUTE
 ```
 
-The fix is to move the rows out of the default partition first, in one transaction (the identity column needs `OVERRIDING SYSTEM VALUE` to keep its values):
+The fix is to move the rows out of the default partition first, in one transaction (the identity column needs `OVERRIDING SYSTEM VALUE` to keep its values). Again with the stray row, and rolled back at the end:
 
 ```sql
 BEGIN;
+INSERT INTO events (occurred_at, session_id, event_type)
+VALUES ('2027-03-15 10:00+00', gen_random_uuid(), 'page_view');
+
 CREATE TEMP TABLE moved AS
     WITH d AS (
         DELETE FROM events_default
@@ -723,7 +728,16 @@ CREATE TEMP TABLE moved AS
     SELECT * FROM d;
 SELECT create_events_partition('2027-03-01');
 INSERT INTO events OVERRIDING SYSTEM VALUE SELECT * FROM moved;
-COMMIT;
+
+SELECT tableoid::regclass, count(*) FROM events WHERE occurred_at >= '2027-01-01' GROUP BY 1;
+ROLLBACK;
+```
+
+```text
+    tableoid     | count 
+-----------------+-------
+ events_y2027m03 |     1
+(1 row)
 ```
 
 With a large default partition, this is slow (a scan of the default partition while holding locks). Hence the advice of section 2.3: keep it empty, monitor it, create partitions early.

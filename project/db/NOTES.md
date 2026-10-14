@@ -119,3 +119,8 @@ Row counts at state 07 (0201+0301 only): users 30, sellers 6, categories 23, pro
   - the optional `p_lease` parameter of `dequeue_jobs`
 - **Products/sellers statistics.** `CREATE STATISTICS` is on `addresses(country_code, city)` only. Statistics on products `(seller_id, category_id)` made the GROUP BY estimate worse, so they were left out.
 - **0702 data changed.** It was regenerated after WIP commit b19aa92 (street names now match countries), so payment and review rows differ from that commit. The ids above are current.
+
+
+## Pointers added later
+
+- Releasing reserved stock: nothing in `project/db` releases or consumes reservations. Module 10's solutions define `cancel_order()` (`modules/10-transactions-concurrency/solutions/cancel_order.sql`, error `BZ005`) and an exercise-level `ship_next_order`, as learner extensions. Custom SQLSTATEs used in modules: `BZ001`–`BZ004` (place_order), `BZ005`–`BZ007` (module 10 solutions), `BZ010`/`BZ020`/`BZ030` (module 09 examples).
