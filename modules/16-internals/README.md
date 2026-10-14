@@ -757,7 +757,6 @@ SELECT pg_current_snapshot();
 SELECT ctid, xmin, xmax, * FROM lab.page_demo WHERE id = 1;
 ```
 
-
 ```text
  session_a_xid 
 ---------------
@@ -1396,7 +1395,6 @@ docker logs --since 1m course-pg
 
 Back in psql, your session reports that the server closed the connection (psql reconnects automatically on the next command). The log shows the whole sequence:
 
-
 ```text
 2026-10-14 08:05:59.394 UTC [1] LOG:  server process (PID 1390) was terminated by signal 9: Killed
 2026-10-14 08:05:59.394 UTC [1] DETAIL:  Failed process was running: SELECT pg_sleep(60)
@@ -1658,7 +1656,6 @@ VACUUM (VERBOSE) lab.vac_demo;     -- look at the "tuples:" line
 ```
 
 Then `COMMIT` in session A and run the `VACUUM (VERBOSE)` in session B again:
-
 
 ```text
 -- while session A is open:

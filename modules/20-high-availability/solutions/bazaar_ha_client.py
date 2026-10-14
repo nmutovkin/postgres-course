@@ -147,7 +147,7 @@ class Client:
             self.drop()
 
 
-def load_catalog(dsn: str, n_users: int, n_products: int) -> tuple[list[int], list[int]]:
+def load_catalog(dsn: str, n_users: int, n_products: int) -> tuple[list[int], list[int], object]:
     """Pick active users and active products, and restock those products so
     that the run measures failover behaviour, not Bazaar running out of stock."""
     with psycopg.connect(dsn, autocommit=True) as c:
@@ -163,12 +163,13 @@ def load_catalog(dsn: str, n_users: int, n_products: int) -> tuple[list[int], li
         c.execute(
             "UPDATE bazaar.inventory SET quantity = quantity + 100000 "
             "WHERE product_id = ANY(%s) AND quantity - reserved < 50000", (products,))
+        started_at = c.execute("SELECT now()").fetchone()[0]
     if not users or not products:
         sys.exit("no active users or no active products: load Bazaar first (./scripts/load-bazaar.sh)")
-    return users, products
+    return users, products, started_at
 
 
-def verify(dsn: str, acked: dict[uuid.UUID, list[int]]) -> int:
+def verify(dsn: str, acked: dict[uuid.UUID, list[int]], started_at: object) -> int:
     for _ in range(60):
         try:
             with psycopg.connect(dsn, autocommit=True) as c:
@@ -177,6 +178,9 @@ def verify(dsn: str, acked: dict[uuid.UUID, list[int]]) -> int:
                     "SELECT request_id, order_ids FROM ha_lab.checkout_requests WHERE request_id = ANY(%s)", (ids,))}
                 all_orders = [o for v in acked.values() for o in v]
                 n_orders = c.execute("SELECT count(*) FROM bazaar.orders WHERE id = ANY(%s)", (all_orders,)).fetchone()[0]
+                # Any order created during the run that no acknowledged request accounts
+                # for would be a duplicate (assumes this client is the only writer).
+                n_since = c.execute("SELECT count(*) FROM bazaar.orders WHERE created_at >= %s", (started_at,)).fetchone()[0]
                 host = c.info.host
             break
         except psycopg.OperationalError:
@@ -192,7 +196,9 @@ def verify(dsn: str, acked: dict[uuid.UUID, list[int]]) -> int:
     print(f"  ... LOST:                         {len(lost)}")
     print(f"  ... different order ids:          {len(mismatched)}")
     print(f"  orders created / found in orders: {len(all_orders)} / {n_orders}")
-    return 0 if not lost and not mismatched and n_orders == len(all_orders) else 1
+    print(f"  orders in bazaar.orders since the run started: {n_since} (anything above {len(all_orders)} = duplicates)")
+    ok = not lost and not mismatched and n_orders == len(all_orders) == n_since
+    return 0 if ok else 1
 
 
 def main() -> int:
@@ -203,7 +209,7 @@ def main() -> int:
     ap.add_argument("--retry-deadline", type=float, default=90.0, help="give up on one checkout after this long (s)")
     args = ap.parse_args()
 
-    users, products = load_catalog(args.dsn, 500, 300)
+    users, products, started_at = load_catalog(args.dsn, 500, 300)
     log(f"catalog: {len(users)} users, {len(products)} products; running {args.duration:.0f}s")
 
     client = Client(args.dsn)
@@ -241,7 +247,7 @@ def main() -> int:
     print(f"checkouts acknowledged: {len(acked)}  retried: {stats['retried']}  "
           f"replayed (dedup by request_id): {stats['replayed']}  out of stock: {stats['out_of_stock']}  "
           f"gave up: {stats['gave_up']}")
-    return verify(args.dsn, acked)
+    return verify(args.dsn, acked, started_at)
 
 
 if __name__ == "__main__":

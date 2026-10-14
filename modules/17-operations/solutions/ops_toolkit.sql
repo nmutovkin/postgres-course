@@ -58,7 +58,7 @@ SELECT a.pid,
        a.state,
        now() - a.xact_start   AS xact_age,
        now() - a.state_change AS in_state_for,
-       age(a.backend_xmin)    AS xmin_age,      -- how far this snapshot holds back VACUUM
+       greatest(age(a.backend_xid), age(a.backend_xmin)) AS horizon_age,  -- how far it holds back VACUUM
        a.wait_event_type,
        a.wait_event,
        left(regexp_replace(a.query, '\s+', ' ', 'g'), 120) AS last_query
@@ -117,13 +117,16 @@ COMMENT ON VIEW ops.blocking_chains IS 'Lock wait trees; depth 0 rows are the ro
 -- 3. The xmin horizon: what prevents VACUUM from removing dead tuples
 -- -----------------------------------------------------------------------------
 CREATE VIEW ops.xmin_horizon AS
+-- A session holds the horizon back with its snapshot (backend_xmin) and, if it
+-- has written anything, with its own transaction ID (backend_xid): an idle-in-
+-- transaction session in READ COMMITTED has no snapshot, but its XID still counts.
 SELECT 'session' AS kind,
        a.pid::text AS holder,
        a.usename || ' / ' || coalesce(nullif(a.application_name, ''), '-') || ' / ' || a.state AS detail,
-       age(a.backend_xmin) AS xmin_age,
+       greatest(age(a.backend_xid), age(a.backend_xmin)) AS xmin_age,
        now() - a.xact_start AS since
 FROM pg_stat_activity a
-WHERE a.backend_xmin IS NOT NULL
+WHERE (a.backend_xmin IS NOT NULL OR a.backend_xid IS NOT NULL)
   AND a.pid <> pg_backend_pid()
 UNION ALL
 SELECT 'replication slot',

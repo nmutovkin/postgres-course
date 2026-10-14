@@ -637,7 +637,6 @@ SELECT p.pid, p.relid::regclass AS table_name, p.phase,
 FROM pg_stat_progress_vacuum p \gx
 ```
 
-
 ```text
 -[ RECORD 1 ]------+--------------
 pid                | 1128
@@ -653,7 +652,7 @@ indexes_processed  | 0
 pct_scanned        | 11.5
 ```
 
-The phases are `initializing`, `scanning heap`, `vacuuming indexes`, `vacuuming heap`, `cleaning up indexes`, `truncating heap` and `performing final cleanup`, as described in Module 16. A VACUUM stuck in `vacuuming indexes` for a long time on a table with many indexes is normal; one with `index_vacuum_count` > 1 ran out of `maintenance_work_mem` for its dead-tuple list.
+(`indexes_total` and `indexes_processed` are only filled in during the index phases.) The phases are `initializing`, `scanning heap`, `vacuuming indexes`, `vacuuming heap`, `cleaning up indexes`, `truncating heap` and `performing final cleanup`, as described in Module 16. A VACUUM stuck in `vacuuming indexes` for a long time on a table with many indexes is normal; one with `index_vacuum_count` > 1 ran out of `maintenance_work_mem` for its dead-tuple list.
 
 After the fact, `pg_stat_user_tables` records `last_vacuum`/`last_autovacuum`, `vacuum_count`/`autovacuum_count`, and the same for analyze. Setting **`log_autovacuum_min_duration`** (default 10 min since PG 15) to something like `1s` logs a full report (like `VACUUM VERBOSE`) for every slower autovacuum run, which is the best way to see what autovacuum is doing over time.
 
@@ -847,7 +846,7 @@ VACUUM
 | `backend_start`, `xact_start`, `query_start`, `state_change` | When the connection, the current transaction, the current (or last) statement, and the current state started. |
 | `state` | `active` (running a statement), `idle` (waiting for the client), `idle in transaction` (inside a transaction, waiting for the client), `idle in transaction (aborted)`, `fastpath function call`. |
 | `wait_event_type`, `wait_event` | What an active process is waiting for, if anything (section 7.2). |
-| `backend_xid`, `backend_xmin` | The process's XID (if it has written) and the xmin of its snapshot: the column that tells you who holds back VACUUM. |
+| `backend_xid`, `backend_xmin` | The process's XID (if it has written) and the xmin of its snapshot: the columns that tell you who holds back VACUUM (section 7.4). |
 | `query` | The current statement if `active`, otherwise the **last** one. Truncated to `track_activity_query_size` (1 kB). |
 | `query_id` | Matches `pg_stat_statements.queryid` (with `compute_query_id`, on automatically when `pg_stat_statements` is loaded). |
 
@@ -950,7 +949,6 @@ JOIN pg_stat_activity a ON a.pid = t.pid
 ORDER BY t.path;
 ```
 
-
 ```text
    pid_tree   |        state        |    waiting_on     |    xact_age     |                            query                             
 --------------+---------------------+-------------------+-----------------+--------------------------------------------------------------
@@ -992,12 +990,14 @@ The fix here is to end session 1 (section 10). The prevention is to run migratio
 For VACUUM, what matters is the oldest snapshot anywhere. These three queries find whatever holds the horizon back:
 
 ```sql
--- sessions, by snapshot age
-SELECT pid, usename, state, age(backend_xmin) AS xmin_age, now() - xact_start AS xact_age,
-       left(query, 50) AS query
+-- sessions, by how far back they hold the horizon (snapshot or own XID)
+SELECT pid, usename, state,
+       greatest(age(backend_xid), age(backend_xmin)) AS horizon_age,
+       now() - xact_start AS xact_age,
+       left(regexp_replace(query, '\s+', ' ', 'g'), 50) AS query
 FROM pg_stat_activity
-WHERE backend_xmin IS NOT NULL
-ORDER BY age(backend_xmin) DESC
+WHERE backend_xmin IS NOT NULL OR backend_xid IS NOT NULL
+ORDER BY horizon_age DESC
 LIMIT 5;
 
 -- replication slots (Module 19)
@@ -1009,9 +1009,9 @@ SELECT gid, prepared, owner, age(transaction) AS xid_age FROM pg_prepared_xacts;
 ```
 
 ```text
- pid  | usename  | state  | xmin_age | xact_age |                       query                        
-------+----------+--------+----------+----------+----------------------------------------------------
- 1187 | postgres | active |        0 | 00:00:00 | SELECT pid, usename, state, age(backend_xmin) AS x
+ pid  | usename  | state  | horizon_age | xact_age |                       query                        
+------+----------+--------+-------------+----------+----------------------------------------------------
+ 1654 | postgres | active |           0 | 00:00:00 | SELECT pid, usename, state, greatest(age(backend_x
 (1 row)
 
  slot_name | active | xmin_age | catalog_xmin_age 
@@ -1023,7 +1023,7 @@ SELECT gid, prepared, owner, age(transaction) AS xid_age FROM pg_prepared_xacts;
 (0 rows)
 ```
 
-On an idle system the first query shows only your own session. The project's ops toolkit combines these into one view.
+On an idle system the first query shows only your own session. A session holds the horizon back in two ways: with its snapshot (`backend_xmin`), and, once it has written something, with its own transaction ID (`backend_xid`), because its changes are not yet committed or aborted. That's why the query looks at both: a session that is `idle in transaction` under `READ COMMITTED` has no snapshot between statements, but if it has written, its XID alone holds back VACUUM for the whole cluster. The project's ops toolkit combines these three queries into one view.
 
 ---
 
@@ -1233,7 +1233,7 @@ log_statement = ddl                    # every CREATE/ALTER/DROP, for the audit 
 - **`log_min_duration_statement`** is the classic slow-query log. Logging *every* statement (`0`) on a busy server costs real I/O. In PG 13+ `log_min_duration_sample` and `log_statement_sample_rate` let you log a sample of faster statements.
 - **`log_lock_waits`** logs a message when a lock wait exceeds `deadlock_timeout` (1 s), including who holds the lock. It costs almost nothing and turns "it was slow for a while" into a precise story.
 
-Let's turn on lock-wait logging and see what it produces with the blocking scenario from section 7.3:
+Let's turn on lock-wait logging (and a richer prefix) and provoke a lock wait:
 
 ```sql
 ALTER SYSTEM SET log_lock_waits = on;
@@ -1241,6 +1241,26 @@ ALTER SYSTEM SET log_line_prefix = '%m [%p] %q%u@%d app=%a ';
 SELECT pg_reload_conf();
 ```
 
+Then, in two sessions, let a "forgetful worker" hold a row lock for a few seconds while the checkout wants the same row, and look at the log:
+
+```sql
+-- Session 1
+SET application_name = 'forgetful_worker';
+BEGIN;
+UPDATE inventory SET reserved = reserved WHERE product_id = 7;
+-- wait about 3 seconds, then:
+COMMIT;
+```
+
+```sql
+-- Session 2, while session 1 waits
+SET application_name = 'checkout';
+UPDATE inventory SET reserved = reserved WHERE product_id = 7;
+```
+
+```bash
+docker logs --since 1m course-pg
+```
 
 ```text
 2026-10-14 08:18:29.725 UTC [1] LOG:  received SIGHUP, reloading configuration files
@@ -1255,7 +1275,7 @@ SELECT pg_reload_conf();
 2026-10-14 08:18:32.745 UTC [1201] postgres@bazaar app=checkout STATEMENT:  UPDATE inventory SET reserved = reserved WHERE product_id = 7
 ```
 
-The checkout session waited more than a second for a row lock; the log names the process holding it (`Process holding the lock`), the queue, the tuple, and the statement, and later reports when the lock was acquired and after how long.
+The first three lines are the reload. Then the checkout session waited more than `deadlock_timeout` (1 s) for a row lock, and the log names the process holding it (`Process holding the lock: 1194`, which you can look up in `pg_stat_activity` while it's happening), the wait queue, the tuple, and the statement. When the lock is finally granted, a second message reports the total wait. Thanks to the prefix, every line says who (`postgres@bazaar`) and which application (`app=checkout`).
 
 ### 9.3 auto_explain
 
@@ -1397,7 +1417,6 @@ SELECT 1 AS inside_tx;
 -- wait two seconds, then:
 SELECT 2 AS after_idle;
 ```
-
 
 ```text
 SET

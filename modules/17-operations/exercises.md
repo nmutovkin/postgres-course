@@ -101,19 +101,19 @@ Storage parameters are in `pg_class.reloptions` as `'name=value'` strings. A sma
 
 ## Exercise 6 ★★: Estimated vs. exact bloat
 
-Disable autovacuum on `payments`, then update 40% of its rows (`WHERE id % 10 < 4`) in four separate transactions (one per value of `id % 10`). Then:
+Disable autovacuum on `payments`, then update 40% of its rows (`SET provider_ref = provider_ref WHERE id % 10 < 4`) in four separate transactions (one per value of `id % 10`). Then:
 
 1. Run `ANALYZE payments` and compute the estimated bloat with the estimate query from section 6.3 (or `ops.table_bloat` if you have done the project).
 2. Measure the exact numbers with `pgstattuple`.
 3. Fix the table with `VACUUM FULL` and measure again.
 
-Compare the estimate with the exact `dead_tuple_percent + free_percent`, and explain the difference. Finally re-enable autovacuum.
+Compare the estimate with the exact `dead_tuple_percent + free_percent`. You updated about 215,000 rows: how many dead tuples did you expect, how many are there, and why? Finally re-enable autovacuum.
 
-**Self-check:** before the fix the table has about 215,000 dead tuples and the exact dead + free share is between 35% and 45%. After `VACUUM FULL` there are 0 dead tuples and the table is back to about 48 MB.
+**Self-check:** before the fix, `pgstattuple` reports only about 54,000 dead tuples (one slice, not four), the table is about 54 MB, and the estimate is higher than the exact dead + free share. After `VACUUM FULL` there are 0 dead tuples and the table is back to about 48 MB.
 
 <details><summary>Hint</summary>
 
-Four `UPDATE ... WHERE id % 10 = k` statements, each autocommitted. Why does the second update of a 10% slice not reuse the space freed by the first one? (Who would have marked it reusable?)
+Four `UPDATE ... WHERE id % 10 = k` statements, each autocommitted. With autovacuum off, what else can clean up dead tuples inside a page when the next `UPDATE` comes along (Module 16, section 7)?
 
 </details>
 
@@ -155,14 +155,18 @@ What does "cancel the current statement" do to a session that has no current sta
 
 ## Exercise 9 ★★: Find the query that spills
 
-Reset `pg_stat_statements`, then run this report twice (as two separate statements):
+Reset `pg_stat_statements`, then run this report (the first page of "each seller's three biggest delivered or shipped orders") twice, as two separate statements:
 
 ```sql
-SELECT p.seller_id, p.category_id, count(*) AS items, sum(oi.quantity) AS units
-FROM order_items oi
-JOIN products p ON p.id = oi.product_id
-GROUP BY p.seller_id, p.category_id
-ORDER BY units DESC
+SELECT seller_id, id, total, rn
+FROM (
+    SELECT seller_id, id, total,
+           row_number() OVER (PARTITION BY seller_id ORDER BY total DESC) AS rn
+    FROM orders
+    WHERE status IN ('delivered', 'shipped')
+) ranked
+WHERE rn <= 3
+ORDER BY seller_id, rn
 LIMIT 10;
 ```
 
@@ -188,7 +192,7 @@ Measure what checkpoints cost in WAL. Using `pg_stat_wal` (`wal_records`, `wal_f
 
 For each run, record the WAL bytes, the number of full-page images, and the bytes per updated row. Explain the numbers, then estimate how much WAL the same update would generate per hour if it ran every minute with `checkpoint_timeout = 5min` vs. `30min`.
 
-**Self-check:** runs 1 and 3 have thousands of full-page images and generate several times more WAL than run 2, which has very few.
+**Self-check:** runs 1 and 3 have thousands of full-page images and generate clearly more WAL (around 1.5 times) than run 2, which has none.
 
 <details><summary>Hint</summary>
 

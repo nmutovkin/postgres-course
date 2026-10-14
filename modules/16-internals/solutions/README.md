@@ -442,7 +442,6 @@ SELECT * FROM pg_get_multixact_members(
      WHERE lp = (SELECT (ctid::text::point)[1]::int FROM inventory WHERE product_id = 42)));
 ```
 
-
 ```text
  A       |              57559
  B       |              57560
