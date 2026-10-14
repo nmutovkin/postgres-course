@@ -334,7 +334,7 @@ Write `refresh_sales_report() RETURNS text` that refreshes the matview and retur
 
 1. Show it with two sessions: A runs `BEGIN; SELECT refresh_sales_report();` and keeps the transaction open; B calls the function.
 2. Which advisory lock function did you choose (session or transaction level, waiting or `try`), and why?
-3. The function cannot simply be called as `REFRESH ... CONCURRENTLY` inside a function in every case. Find out whether yours works when called in an explicit transaction block, and explain the result.
+3. A's refresh finished long ago, but A's transaction is still open. Is B's `skipped` the right answer? What does this tell you about where to call the function from?
 
 **Self-check:** while A's transaction is open, B gets `skipped` instantly. After A commits, B gets `refreshed`. `pg_locks` shows one `advisory` lock while A is open and none afterwards.
 

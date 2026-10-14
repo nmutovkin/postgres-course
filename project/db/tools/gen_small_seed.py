@@ -482,8 +482,8 @@ Deliberate features worth querying:
     {', '.join(map(str, never_products_sorted))}
     (15 is an active, in-stock product of an active seller that nobody bought).
   * Inventory for every product; some out of stock (quantity 0); reserved =
-    units in pending/paid orders. Product {fully_booked} is fully reserved (available 0).
-  * 120 orders 2024-01-01..2025-06-30, ids in chronological order, every status
+    units in pending/paid orders. Products {' and '.join(str(pid) for pid in sorted(PRODUCTS) if PRODUCTS[pid].stock > 0 and reserved[pid] == PRODUCTS[pid].stock)} are fully reserved (available 0).
+  * 120 orders 2024-01-12..2025-06-30, ids in chronological order, every status
     represented; paid_at/shipped_at/delivered_at consistent with status.
   * order_items.unit_price is the price at order time: products
     {', '.join(map(str, sorted(PRICE_CHANGES)))} changed price, so older orders show the old price.

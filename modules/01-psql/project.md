@@ -22,7 +22,7 @@ Start from a cluster without `bazaar`, so your script really creates it:
 ./project/bin/psql.sh postgres -c 'DROP DATABASE IF EXISTS bazaar'
 ```
 
-Then run your script. With the container's psql (stdin, since `workspace/` isn't mounted in the container):
+Then run your script. With the container's psql, either feed it through stdin as shown here, or run `\i /course/workspace/01/setup_bazaar.sql` from an interactive session (`workspace/` is mounted read-only at `/course/workspace`):
 
 ```bash
 docker exec -i course-pg psql -X -U postgres -d postgres < workspace/01/setup_bazaar.sql

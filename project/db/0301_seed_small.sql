@@ -22,8 +22,8 @@
 --     14, 15, 28, 55, 57, 58, 59, 60, 61
 --     (15 is an active, in-stock product of an active seller that nobody bought).
 --   * Inventory for every product; some out of stock (quantity 0); reserved =
---     units in pending/paid orders. Product 3 is fully reserved (available 0).
---   * 120 orders 2024-01-01..2025-06-30, ids in chronological order, every status
+--     units in pending/paid orders. Products 3 and 13 are fully reserved (available 0).
+--   * 120 orders 2024-01-12..2025-06-30, ids in chronological order, every status
 --     represented; paid_at/shipped_at/delivered_at consistent with status.
 --   * order_items.unit_price is the price at order time: products
 --     1, 7, 10, 19, 29, 34, 37, 52 changed price, so older orders show the old price.

@@ -23,8 +23,6 @@ def find_user_safe(conn: psycopg.Connection, email: str) -> list[tuple]:
 attacks = {
     "normal input": "lukas.meyer10462@example.org",
     "always true": "x' OR '1'='1",
-    "UNION exfiltration": "x' UNION SELECT 0, rolname || ' ' || left(rolpassword, 30)"
-    " FROM pg_authid WHERE rolname = 'bazaar_app' --",
     "stacked statement": "x'; UPDATE products SET price = 0.01 WHERE id = 16; --",
 }
 

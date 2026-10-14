@@ -313,6 +313,15 @@ SELECT (SELECT count(*) FROM users)       AS users,
 
 From here on, every example uses this dataset. Whenever an experiment leaves the data in a strange state, `./project/bin/reset.sh 04` puts it back in a second or two.
 
+A quick tour of what's in it, so that results in the rest of the module make sense (the full list is in [`NOTES.md`](../../project/db/NOTES.md)):
+
+- **Users 1–6 own the six shops.** TechTrove (US) sells laptops, monitors and headphones; Bookworm Corner (GB) books; Casa Cucina (IT) cookware and knives; Threadbare Co. (DE) T-shirts and hoodies; Maple & Pine (CA) planters, and has never sold anything; Sakura Gadgets (JP) has no products at all yet.
+- **Users 9, 22 and 28 are inactive**, and nine users (6, 7, 15, 16, 21, 24, 28, 29, 30) have never ordered. The data contains the usual real-world awkwardness on purpose: an apostrophe (`Liam O'Connor`), accents (`Chloé`, `Zoë`, `Sofía`), and a mixed-case email (`Zoe.Martin@Example.COM`).
+- **Products** have every status (54 active, 4 draft, 4 archived). Eight have no description, one is free (product 62, a sticker pack), and the most expensive is product 3 at 2,199.99. Some titles contain `'` or `"`.
+- **Orders** run from 2024-01-12 to 2025-06-30, ids in chronological order, with every status: mostly delivered, plus open orders (pending 115–119, paid 110–114 and 120, shipped 105–107 and 109), ten cancelled and four refunded. The paid, shipped and delivered timestamps are filled in according to each order's status.
+- **Inventory** has one row per product. Nine products are out of stock, and `reserved` equals the units in pending and paid orders.
+
+
 ---
 
 ## 2. `SELECT` fundamentals
@@ -380,7 +389,17 @@ SELECT 2 + 2 AS four, upper('bazaar') AS shout, date '2025-06-30' - date '2025-0
     4 | BAZAAR |  180
 ```
 
-### 2.2 The logical order of a query
+### 2.2 Writing readable SQL
+
+A few conventions make queries easier to read, and they're the ones this course uses:
+
+- **Keywords in upper case, names in lower case:** `SELECT title FROM products`. SQL doesn't care (keywords and unquoted names are case-insensitive), but readers do.
+- **One clause per line** for anything longer than a line, with conditions indented under `WHERE`.
+- **Comments:** `--` starts a comment that runs to the end of the line; `/* ... */` can span lines. Use them to explain *why* a condition is there, especially the non-obvious ones (`-- status IS NOT NULL: drafts imported before 2024 have no status`).
+- **Quotes:** single quotes for values (`'active'`), double quotes only for identifiers that need them, which with snake_case names is never. A double-quoted value is a classic beginner error: `WHERE status = "active"` looks for a *column* named `active`.
+- **End statements with `;`.** psql sends a statement to the server when it sees the semicolon. Without one, it waits for more input, and the prompt changes from `=#` to `-#`.
+
+### 2.3 The logical order of a query
 
 A `SELECT` is *written* in one order and *evaluated*, logically, in another:
 
@@ -864,7 +883,7 @@ ORDER BY seller_id, price DESC, id;
 (17 rows)
 ```
 
-You can sort by any expression, by an output alias (section 2.2), or by the output column's position (`ORDER BY 2 DESC`). Positions are handy at the prompt but fragile in code, since they break silently when someone edits the select list.
+You can sort by any expression, by an output alias (section 2.3), or by the output column's position (`ORDER BY 2 DESC`). Positions are handy at the prompt but fragile in code, since they break silently when someone edits the select list.
 
 ### 5.2 Where do `NULL`s go?
 
@@ -1554,6 +1573,8 @@ ROLLBACK;
 
 All expressions on the right-hand side see the row as it was **before** the update, so `SET a = b, b = a` swaps two columns. `updated_at` has to be set by hand for now. Module 09 adds a trigger that does it automatically.
 
+> **Under the hood:** PostgreSQL never overwrites a row in place. An `UPDATE` writes a complete new version of the row and marks the old one as dead, a design called MVCC that lets readers keep seeing the old version until the change commits (module 10). Dead versions are cleaned up later by `VACUUM` (module 16). One practical consequence: `UPDATE products SET price = price * 1.1` on a 10 GB table writes roughly another 10 GB, plus index entries and write-ahead log. Updating "everything" is never free.
+
 An `UPDATE` must satisfy every constraint, just like an `INSERT`. Product 3 is fully reserved, so reserving one more unit violates the check from module 02:
 
 ```sql
@@ -1659,6 +1680,8 @@ ROLLBACK;
 ```
 
 A `DELETE` that matches several rows is all-or-nothing too: `DELETE FROM products WHERE status = 'archived'` fails as a whole because of product 5, and the three deletable archived products stay as well. Exercise 11 asks you to delete exactly the ones that can go.
+
+> **In production:** a `DELETE` of millions of rows in one statement holds its row locks until it commits, generates a lot of write-ahead log (which replicas must replay, module 19), and leaves millions of dead rows for `VACUUM`. Large clean-ups are usually done in batches (`DELETE ... WHERE id IN (SELECT id ... LIMIT 10000)`, repeated until `DELETE 0`), each in its own short transaction. For time-based data, partitioning (module 14) turns "delete last year" into dropping a partition, which is instant.
 
 ### 10.4 `TRUNCATE` versus `DELETE`
 
