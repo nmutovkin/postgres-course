@@ -125,7 +125,7 @@ async def small_queries() -> None:
 
 async def large_fetch() -> None:
     aconn = await asyncpg.connect(DSN)
-    n = await aconn.fetchval(f"SELECT count(*) FROM ({FETCH}) t")
+    n = await aconn.fetchval("SELECT count(*) FROM order_items WHERE order_id <= 200000")
     print(f"(b) fetch {n:,} rows x 4 columns into Python, one connection")
 
     async def apg():

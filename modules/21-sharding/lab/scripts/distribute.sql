@@ -24,6 +24,12 @@ SET search_path = bazaar, public;
 -- password in .pgpass or in pg_dist_authinfo.)
 ALTER ROLE bazaar_owner LOGIN;
 
+-- Module 15's seller policies read the setting app.seller_id (SET LOCAL by the
+-- seller portal). Citus does not forward settings to the workers by default,
+-- so on the shards the setting is empty and a seller sees NOTHING. 'local'
+-- forwards every SET LOCAL to the worker connections of the transaction.
+ALTER DATABASE bazaar SET citus.propagate_set_commands = 'local';
+
 -- 32 shards per distributed table (the default, written out for clarity):
 -- many more shards than nodes, so shards can later be MOVED to new nodes.
 SET citus.shard_count = 32;

@@ -3,8 +3,6 @@
 import asyncio
 import time
 
-import asyncpg
-
 from bazaar.aio.db import create_asyncpg_pool
 
 REVENUE = """

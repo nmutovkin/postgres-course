@@ -77,7 +77,7 @@ async def main() -> None:
               f"missing: {[k for k, v in partial.items() if v is None]}")  # fmt: skip
         async with pool.connection() as conn:
             cur = await conn.execute(
-                "SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'SELECT pg_sleep(3)%%'"
+                "SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'SELECT pg_sleep(3)%'"
                 " AND state = 'active'"
             )
             print("pg_sleep still running on the server:", (await cur.fetchone())[0])

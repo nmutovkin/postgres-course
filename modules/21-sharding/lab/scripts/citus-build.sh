@@ -2,7 +2,7 @@
 # One-shot build of the Citus lab: load Bazaar, register the workers,
 # distribute the tables and install the Citus-adapted views and checkout.
 #   ./scripts/citus-build.sh small     # seconds; the dataset most sections use
-#   ./scripts/citus-build.sh large     # ~6 minutes, ~4 GB of disk across the nodes
+#   ./scripts/citus-build.sh large     # ~6 minutes, ~5 GB of disk across the nodes
 set -euo pipefail
 SIZE="${1:-small}"
 HERE="$(cd "$(dirname "$0")" && pwd)"

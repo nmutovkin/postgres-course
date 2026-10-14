@@ -27,7 +27,7 @@ docker compose up -d                    # Citus: m21-coord, m21-worker1, m21-wor
 docker exec -it m21-coord psql -U postgres -d bazaar
 ```
 
-`citus-build.sh small` runs four steps that sections 13 and 14 explain one by one: `load-bazaar.sh` (`reset.sh 11` plus the schema-only migrations of modules 11–15, then `project/db/sharding/2101_schema_shard_prep.sql`), `citus-init-nodes.sh` (registers the workers), `distribute.sql` and `citus-adapt.sql`. The **small** dataset (30 users, 6 sellers, 120 orders) keeps outputs readable and is what most examples use. `citus-build.sh large` loads the 500,000-order dataset of modules 12–20 instead. It takes about 6 minutes and roughly 4 GB of disk across the containers. The timings in sections 4, 14 and 16 come from that large run. A few sections use the second lab, which you start when you get there:
+`citus-build.sh small` runs four steps that sections 13 and 14 explain one by one: `load-bazaar.sh` (`reset.sh 11` plus the schema-only migrations of modules 11–15, then `project/db/sharding/2101_schema_shard_prep.sql`), `citus-init-nodes.sh` (registers the workers), `distribute.sql` and `citus-adapt.sql`. The **small** dataset (30 users, 6 sellers, 120 orders) keeps outputs readable and is what most examples use. `citus-build.sh large` loads the 500,000-order dataset of modules 12–20 instead. It takes about 6 minutes and roughly 5 GB of disk across the containers (including WAL). The timings in sections 4, 14 and 16 come from that large run. A few sections use the second lab, which you start when you get there:
 
 | Container | Profile | Role |
 |---|---|---|
@@ -263,7 +263,7 @@ seller_id ──hash──▶ logical shard (fixed count, e.g. 32 or 256) ──
 
 The number of logical shards is fixed forever (choose it generously). Only the small *map* from shard to node changes. Adding a node means moving *some whole shards* to it, typically 1/(N+1) of the data, and nothing is re-hashed. In Citus, every distributed table has 32 shards by default (`citus.shard_count`), and with two workers each worker holds 16 of them. Section 16 adds a third worker and moves about a third of the shards there.
 
-How many logical shards? Enough that you can spread them over the largest cluster you expect (a few per node, or many more for finer balancing), but not so many that per-shard overhead dominates. Each shard is a real table with its own indexes, files and statistics, and every multi-shard query opens one task per shard. Citus's default of 32 is a sensible start for clusters of up to about 16 workers. `events` in section 14.6 shows how quickly shard counts multiply: one partitioned table with 25 partitions and 32 shards each becomes 832 tables.
+How many logical shards? Enough that you can spread them over the largest cluster you expect (a few per node, or many more for finer balancing), but not so many that per-shard overhead dominates. Each shard is a real table with its own indexes, files and statistics, and every multi-shard query opens one task per shard. Citus's default of 32 is a sensible start for clusters of up to about 16 workers. Exercise 11 shows how quickly shard counts multiply: distributing the monthly-partitioned `events` table (a parent plus 25 partitions) with 32 shards each creates 832 shard tables.
 
 > **Under the hood:** *consistent hashing* (a hash ring with virtual nodes, used by Cassandra and Dynamo) solves the same problem differently: each node owns many small arcs of the ring, so adding a node steals a few arcs from each existing node. Fixed logical shards plus a map achieve the same result with less machinery, and they are what PostgreSQL-based systems use.
 
@@ -910,3 +910,727 @@ The client was told that the transaction failed, yet order 40 now has 100.00 mor
 
 These limits are exactly what Citus was built to remove.
 
+---
+
+## 12. Approach 3: Citus architecture
+
+**Citus** is an open-source PostgreSQL extension (originally from Citus Data, now Microsoft) that turns a group of PostgreSQL servers into one distributed database. It plugs into the planner and executor through PostgreSQL's hooks, so clients talk to it with ordinary SQL and ordinary drivers.
+
+```text
+            clients (psql, the app, PgBouncer)
+                         │
+                ┌────────┴────────┐
+                │   coordinator   │  m21-coord: metadata (pg_dist_*), distributed planner,
+                │                 │  copies of reference tables, local tables
+                └──┬───────────┬──┘
+     SQL per shard │           │ SQL per shard      (workers also hold the metadata,
+         ┌─────────┴──┐     ┌──┴─────────┐           so they can run queries too)
+         │  worker 1  │     │  worker 2  │
+         │ orders_102076    │ orders_102077 ...    shards = ordinary tables named <table>_<shardid>
+         │ users_102008│    │ users_102008│        reference table: one shard, a copy on every node
+         └────────────┘     └────────────┘
+```
+
+- The **coordinator** holds the metadata and plans queries. Applications connect to it.
+- **Workers** store **shards**: ordinary PostgreSQL tables named `<table>_<shardid>`, with ordinary indexes, constraints and triggers. Each worker is a full PostgreSQL server, so `EXPLAIN` on a worker shows ordinary plans.
+- A **distributed table** is hash-partitioned on its distribution column into `citus.shard_count` shards (default 32), spread across the workers.
+- A **reference table** has a single shard, replicated to every node, including the coordinator.
+- **Co-location groups**: distributed tables with the same distribution column type, shard count and placement share a `colocation_id`. Their shard *n* always covers the same hash range and lives on the same node.
+- Since Citus 11, the metadata is synchronised to every worker, so any node can plan and run queries ("query from any node"). In this lab we only use the coordinator.
+
+The metadata lives in catalog tables that you can query. After `citus-build.sh small`:
+
+```sql
+SELECT nodeid, nodename, groupid, noderole, shouldhaveshards FROM pg_dist_node ORDER BY nodeid;
+```
+
+```text
+ nodeid |  nodename   | groupid | noderole | shouldhaveshards
+--------+-------------+---------+----------+------------------
+      1 | m21-coord   |       0 | primary  | f
+      2 | m21-worker1 |       1 | primary  | t
+      3 | m21-worker2 |       2 | primary  | t
+```
+
+```sql
+SELECT logicalrelid, partmethod, column_to_column_name(logicalrelid, partkey) AS dist_col,
+       colocationid, repmodel
+FROM pg_dist_partition
+WHERE logicalrelid IN ('orders'::regclass, 'users'::regclass, 'cart_items'::regclass);
+```
+
+```text
+ logicalrelid | partmethod | dist_col  | colocationid | repmodel
+--------------+------------+-----------+--------------+----------
+ users        | n          |           |            1 | t
+ orders       | h          | seller_id |            2 | s
+ cart_items   | h          | user_id   |            3 | s
+```
+
+`partmethod` `h` is hash distribution, `n` none (reference). `repmodel` `t` means a two-phase-commit-replicated reference table, and `s` means streaming (one copy of each shard; use PostgreSQL replication for redundancy). `pg_dist_shard` holds each shard's hash range (section 5), and `pg_dist_placement` says which node group holds it. The friendlier views `citus_tables` and `citus_shards` join it all together:
+
+```sql
+SELECT table_name, shardid, shard_name, nodename, shard_size
+FROM citus_shards
+WHERE table_name IN ('orders'::regclass, 'users'::regclass)
+ORDER BY shardid
+LIMIT 6;
+```
+
+```text
+ table_name | shardid |      shard_name      |  nodename   | shard_size
+------------+---------+----------------------+-------------+------------
+ users      |  102008 | bazaar.users_102008  | m21-worker1 |      49152
+ users      |  102008 | bazaar.users_102008  | m21-worker2 |      49152
+ users      |  102008 | bazaar.users_102008  | m21-coord   |      49152
+ orders     |  102076 | bazaar.orders_102076 | m21-worker1 |      32768
+ orders     |  102077 | bazaar.orders_102077 | m21-worker2 |      73728
+ orders     |  102078 | bazaar.orders_102078 | m21-worker1 |      32768
+```
+
+`get_shard_id_for_distribution_column('orders', 1)` returns 102077: seller 1's orders live in `orders_102077` on `m21-worker2`, next to `products_102013`, `order_items_102109` and so on: the shards with the same index in the co-location group.
+
+> **Under the hood:** on a worker, `\dt` doesn't list the shard tables. Since Citus 11, shards are hidden from catalog queries so that tools and ORMs connected to a worker don't see thousands of tables. `SET citus.override_table_visibility = off` shows them.
+
+---
+
+## 13. Preparing Bazaar for Citus
+
+### 13.1 What `2101_schema_shard_prep.sql` changes, and why
+
+Citus imposes the rules from section 3 as hard errors. The prep migration rewrites Bazaar's keys so that all seller tables can be distributed by `seller_id` and co-located. Here is each change with the error you get without it (all errors are real, from the lab).
+
+**1. Primary keys, unique and exclusion constraints must include the distribution column.** A shard can only check uniqueness among its own rows. `orders.id` alone could be duplicated across shards without any shard noticing, so Citus refuses:
+
+```text
+ERROR:  cannot create constraint on "products"
+DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
+```
+
+So 2101 changes `products`, `orders`, `payments`, `reviews` and `promotions` to `PRIMARY KEY (seller_id, id)`. `inventory` becomes `(seller_id, product_id)`, `order_items` `(seller_id, order_id, product_id)` and `product_price_history` `(seller_id, product_id, valid_from)`. The unique "one review per buyer and product" becomes `UNIQUE (seller_id, product_id, user_id)`. That is equivalent, because a product has exactly one seller. The exclusion constraint against overlapping promotions becomes `EXCLUDE USING gist (seller_id WITH =, product_id WITH =, active_during WITH &&)`: Citus accepts an exclusion constraint only if it compares the distribution column with `=`. The ids stay identity columns and remain unique in practice, but the database no longer *enforces* uniqueness of `id` alone (section 7).
+
+**2. A foreign key between distributed tables must include the distribution column on both sides**, so the check never leaves the shard. 2101 adds `seller_id` to `inventory`, `order_items`, `payments`, `reviews`, `product_price_history` and `promotions`, backfills it from the parent (`UPDATE order_items t SET seller_id = o.seller_id FROM orders o WHERE o.id = t.order_id`), makes it `NOT NULL`, and replaces the single-column FKs with composite ones:
+
+```sql
+ALTER TABLE order_items ADD CONSTRAINT order_items_order_fkey
+    FOREIGN KEY (seller_id, order_id) REFERENCES orders (seller_id, id) ON DELETE CASCADE;
+```
+
+A composite FK needs a unique constraint on exactly those referenced columns, which is why the parents' primary keys had to change first. And because `(seller_id, order_id)` is now the lookup path, the old single-column FK indexes from Module 11 are replaced by `(seller_id, ...)` indexes.
+
+**3. Foreign keys from distributed tables to reference tables are fine** in any form. `orders.user_id → users`, `products.category_id → categories` and `orders.shipping_address_id → addresses` stay unchanged, because every node has a full copy of `users`, `categories` and `addresses`.
+
+**4. `cart_items` does not fit.** It belongs to a buyer and holds products of many sellers, so it will be distributed by `user_id`. It can't keep a foreign key to `products` (distributed by `seller_id`), because Citus does not support FKs between tables in different co-location groups:
+
+```text
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+```
+
+So 2101 drops `cart_items_product_id_fkey`. Checkout validates every product anyway. A cart may now contain a product that has since been deleted, and the cart UI must cope with that.
+
+**5. Compatibility triggers.** Code written before 2101, such as `place_order()`, inserts `order_items` without `seller_id`. 2101 adds `BEFORE INSERT` triggers that fill `seller_id` from the parent row. Its own comment warns that on Citus you should drop them and pass `seller_id` explicitly. We do that in a moment.
+
+**6. Shard-local `orders.total` maintenance and simpler RLS.** The totals trigger now updates `orders` by `(seller_id, id)`, and the row-level security policies on `inventory` and `order_items` compare their own `seller_id` instead of running a subquery against the parent.
+
+2101 is an offline migration: it rewrites large tables and takes `ACCESS EXCLUSIVE` locks (about 45 s on the large dataset). Module 26 shows how to make such changes online.
+
+### 13.2 Distributing the tables
+
+With the schema prepared, `lab/scripts/distribute.sql` assigns every table a role. The core of it:
+
+```sql
+SET citus.shard_count = 32;
+SET citus.multi_shard_modify_mode = 'sequential';
+SET citus.enable_local_reference_table_foreign_keys = off;
+SET citus.enable_unsafe_triggers = on;
+
+SELECT create_reference_table('users');
+SELECT create_reference_table('sellers');
+SELECT create_reference_table('categories');
+SELECT create_reference_table('addresses');
+
+SELECT create_distributed_table('products',              'seller_id');
+SELECT create_distributed_table('inventory',             'seller_id', colocate_with => 'products');
+SELECT create_distributed_table('orders',                'seller_id', colocate_with => 'products');
+SELECT create_distributed_table('order_items',           'seller_id', colocate_with => 'products');
+SELECT create_distributed_table('payments',              'seller_id', colocate_with => 'products');
+SELECT create_distributed_table('reviews',               'seller_id', colocate_with => 'products');
+SELECT create_distributed_table('product_price_history', 'seller_id', colocate_with => 'products');
+SELECT create_distributed_table('promotions',            'seller_id', colocate_with => 'products');
+
+SELECT create_distributed_table('cart_items', 'user_id', colocate_with => 'none');
+```
+
+`create_reference_table` and `create_distributed_table` create the shards on the workers, copy the existing rows into them, and leave the original table on the coordinator as an empty "shell" that the planner rewrites queries against. (The copied rows stay on the coordinator's disk until `truncate_local_data_after_distributing_table()`, which the script calls at the end.) `colocate_with => 'products'` puts every seller table into products' co-location group. Without it, Citus would still co-locate tables with the same distribution column type and shard count, but writing it down protects you from surprises. `colocate_with => 'none'` gives `cart_items` its own group. On the large dataset, the whole script took 90 seconds; `order_items` (1.27 million rows) alone took 24.6 s.
+
+`events`, `audit_log` and `jobs` remain ordinary local tables on the coordinator. Queries that touch only them are plain PostgreSQL. Exercise 11 distributes `events`.
+
+### 13.3 What broke on the way
+
+The settings, the dropped triggers and the two `ALTER` statements at the top of `distribute.sql` each exist because of a problem we hit. These are the kind of surprises a real migration to Citus produces.
+
+1. **Automatic "Citus managed" local tables.** After `create_reference_table('users')`, Citus noticed that local tables (`orders`, `reviews`, ...) have foreign keys to the new reference table and silently added them to its metadata as *Citus local tables*. When we then distributed `products`, the conversion failed with `ERROR: cannot complete operation on a table with identity column`. `SET citus.enable_local_reference_table_foreign_keys = off` disables the automatic conversion. That's safe here because every table gets an explicit role within the same script. The same trap catches **new** tables later: `CREATE TABLE ... REFERENCES users (id)` makes the new table a Citus local table on the spot. On a running cluster, create a new table without foreign keys, distribute it, and then add its foreign keys with one `ALTER TABLE ... ADD CONSTRAINT` each (exercise 9).
+2. **Parallel DDL and reference-table foreign keys.** With the default parallel mode, Citus refused: `cannot execute parallel DDL on table "inventory" after DDL command on reference table "categories" because there is a foreign key between them`. When distributed tables have FKs to reference tables, Citus must use a single connection per worker to keep the FK checks consistent. `citus.multi_shard_modify_mode = 'sequential'` tells it to do so.
+3. **Triggers.** `cannot distribute relation "products" because it has triggers`. A trigger on a distributed table runs **on the worker, against one shard**, and Citus cannot verify what it does. `citus.enable_unsafe_triggers = on` allows them, and then it is on you to keep only safe ones:
+   - `products_audit` and `orders_audit` insert into `audit_log`, which exists only on the coordinator. On a worker: `ERROR: relation "audit_log" does not exist`. Dropped (auditing moves to CDC from the WAL, Module 19, or into the application).
+   - The `orders.total` triggers are statement-level triggers with **transition tables** (`REFERENCING NEW TABLE AS new_items`). Citus cannot run them on shards: `ERROR: executor could not find named tuplestore "new_items"`. Dropped. The new checkout computes the total itself.
+   - The six 2101 `fill_seller_id_*` triggers look up the parent row in another distributed table: a hidden distributed query inside every row insert. Dropped. The application passes `seller_id`.
+   - The three `set_updated_at` triggers only modify `NEW`. Kept.
+4. **The NOLOGIN owner.** Citus opens connections to the workers **as the current role**. Our migrations run as `SET ROLE bazaar_owner` (Module 15), and `REFRESH MATERIALIZED VIEW` runs as the view's owner, which is also `bazaar_owner`. Both failed with `FATAL: role "bazaar_owner" is not permitted to log in` on the workers. The script runs `ALTER ROLE bazaar_owner LOGIN` (Citus propagates roles and `ALTER ROLE` to all nodes). In production, every role that runs distributed queries also needs credentials on the workers, through `.pgpass` or Citus's `pg_dist_authinfo`.
+
+5. **Settings don't reach the workers.** Module 15's seller policies compare `seller_id` with `current_seller_id()`, which reads the setting `app.seller_id` that the seller portal sets with `SET LOCAL`. The policies were distributed along with the tables, but the setting wasn't: as `bazaar_seller` with `app.seller_id = '2'`, `SELECT count(*) FROM orders` returned **0** instead of 36, because on the worker connections the setting was empty. `citus.propagate_set_commands = 'local'` makes Citus forward every `SET LOCAL` to the workers taking part in the transaction. The script sets it for the whole database with `ALTER DATABASE bazaar SET ...`.
+
+Then `lab/scripts/citus-adapt.sql` fixes the SQL that no longer runs. That is section 14.5 and section 15.
+
+---
+
+## 14. Querying Citus
+
+### 14.1 Router queries
+
+When a query filters every distributed table on the distribution column with `=`, Citus prunes it to one shard and sends the whole query to that shard's node. This is a **router query**, and it is how the hot path should look. On the large dataset (seller 42):
+
+```sql
+EXPLAIN (COSTS OFF)
+SELECT status, count(*) FROM orders WHERE seller_id = 42 GROUP BY status;
+```
+
+```text
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=m21-worker2 port=5432 dbname=bazaar
+         ->  HashAggregate
+               Group Key: status
+               ->  Bitmap Heap Scan on orders_102103 orders
+                     Recheck Cond: (seller_id = 42)
+                     ->  Bitmap Index Scan on orders_pkey_102103
+                           Index Cond: (seller_id = 42)
+```
+
+`Custom Scan (Citus Adaptive)` is Citus's executor node. `Task Count: 1` means one shard. Below the `Task` is an ordinary PostgreSQL plan, as executed on `m21-worker2` against `orders_102103`. Router queries support all of SQL that PostgreSQL supports, because the worker runs the query as it is: window functions, CTEs, `FOR UPDATE`, anything. Joins between co-located tables on the same seller stay router queries too (small dataset, seller 3):
+
+```sql
+EXPLAIN (COSTS OFF)
+SELECT p.id, p.title, sum(i.quantity) AS units
+FROM order_items i
+JOIN orders o   ON o.seller_id = i.seller_id AND o.id = i.order_id
+JOIN products p ON p.seller_id = i.seller_id AND p.id = i.product_id
+WHERE i.seller_id = 3 AND o.status = 'delivered'
+GROUP BY p.id, p.title
+ORDER BY units DESC
+LIMIT 3;
+```
+
+```text
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=m21-worker2 port=5432 dbname=bazaar
+         ->  Limit
+               ->  Sort
+                     Sort Key: (sum(i.quantity)) DESC
+                     ->  GroupAggregate
+                           ...
+                                       ->  Nested Loop
+                                             ->  Index Scan using products_pkey_102027 on products_102027 p
+                                                   Index Cond: (seller_id = 3)
+                                             ->  Bitmap Heap Scan on orders_102091 o
+                                                   Recheck Cond: (seller_id = 3)
+                                                   Filter: (status = 'delivered'::order_status)
+                                                   ...
+                                       ->  Index Scan using order_items_seller_id_product_id_idx_102123 on order_items_102123 i
+                                             Index Cond: ((seller_id = 3) AND (product_id = p.id))
+```
+
+Three co-located shards (`products_102027`, `orders_102091`, `order_items_102123`), all on `m21-worker2`, joined locally. The `LIMIT` runs on the worker too.
+
+### 14.2 Multi-shard queries
+
+Without a distribution-column filter, Citus sends one task per shard and combines the results on the coordinator:
+
+```sql
+EXPLAIN (COSTS OFF)
+SELECT status, count(*) FROM orders GROUP BY status;
+```
+
+```text
+ HashAggregate
+   Group Key: remote_scan.status
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 32
+         Tasks Shown: One of 32
+         ->  Task
+               Node: host=m21-worker1 port=5432 dbname=bazaar
+               ->  HashAggregate
+                     Group Key: status
+                     ->  Seq Scan on orders_102076 orders
+```
+
+Read it bottom-up. Each of the 32 tasks aggregates its shard. The coordinator's `HashAggregate` over `remote_scan` combines the partial counts. Unlike postgres_fdw, Citus **does** push partial aggregates for any `GROUP BY`. It also pushes `ORDER BY ... LIMIT` into each task:
+
+```sql
+EXPLAIN (COSTS OFF)
+SELECT o.id, o.total FROM orders o ORDER BY o.total DESC LIMIT 3;
+```
+
+```text
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.total DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 32
+               Tasks Shown: One of 32
+               ->  Task
+                     Node: host=m21-worker1 port=5432 dbname=bazaar
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: total DESC
+                                 ->  Seq Scan on orders_102076 o
+```
+
+Each shard returns its own top 3, so the coordinator sorts 96 rows. A `GROUP BY` on the distribution column needs no combine step at all: `SELECT o.seller_id, sum(...) ... GROUP BY o.seller_id` shows just a `Custom Scan` with 32 tasks, because every seller's group is complete within its shard. `count(DISTINCT user_id)` is the expensive case from section 8: each task returns its distinct `user_id`s, and the coordinator counts distinct values across all of them.
+
+The executor is *adaptive*: for a multi-shard query it opens several connections per worker and runs tasks in parallel, bounded by `citus.max_adaptive_executor_pool_size` (per query) and `citus.max_shared_pool_size` (per worker, for all sessions together).
+
+### 14.3 Reference tables join locally
+
+Every node has a full copy of a reference table, so joining a distributed table to it never moves data:
+
+```sql
+EXPLAIN (COSTS OFF)
+SELECT s.id, s.shop_name, count(*) AS orders, sum(o.total) AS revenue
+FROM orders o
+JOIN sellers s ON s.id = o.seller_id
+WHERE o.created_at >= '2025-01-01' AND o.created_at < '2026-01-01'
+GROUP BY s.id, s.shop_name
+ORDER BY revenue DESC
+LIMIT 5;
+```
+
+```text
+ Limit
+   ->  Sort
+         Sort Key: (sum(remote_scan.revenue)) DESC
+         ->  HashAggregate
+               Group Key: remote_scan.id, remote_scan.shop_name
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 32
+                     Tasks Shown: One of 32
+                     ->  Task
+                           Node: host=m21-worker1 port=5432 dbname=bazaar
+                           ->  HashAggregate
+                                 Group Key: s.id
+                                 ->  Hash Join
+                                       Hash Cond: (o.seller_id = s.id)
+                                       ->  Seq Scan on orders_102076 o
+                                             Filter: ...
+                                       ->  Hash
+                                             ->  Seq Scan on sellers_102009 s
+```
+
+`sellers_102009` is the worker's local copy. The price of reference tables is paid on writes: every `INSERT`, `UPDATE` or `DELETE` on a reference table is applied on every node in a distributed transaction. That is fine for `categories` and `sellers`. Whether it is fine for `users` (100,000 rows, a new row at every sign-up, an update at every login if you store `last_login_at` there) is a judgement call. Section 18 comes back to it.
+
+### 14.4 Joins that are not co-located
+
+A join between distributed tables on anything other than their distribution columns needs data moved between nodes. Citus refuses by default. `cart_items` is distributed by `user_id`, `orders` by `seller_id`:
+
+```sql
+SELECT count(*) FROM cart_items c JOIN orders o ON o.user_id = c.user_id;
+```
+
+```text
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+```
+
+With `SET citus.enable_repartition_joins = on`, Citus runs a **repartition join**: every shard of both tables is re-hashed on the join key (a *map* step writing intermediate files), the pieces are shuffled between workers, and matching pieces are joined (*merge* tasks). The plan shows `MapMergeJob` with 32 map tasks per side and 12 merge tasks. On the large dataset it took **7.0 s** and returned 99,178 rows. It works, but it is a batch-analytics tool, not something for a request handler.
+
+The same idea also fails for the *same* tables joined without the distribution column. On the small dataset, `orders JOIN order_items ON i.order_id = o.id` (no `seller_id`) raises the same repartition error. Add `AND i.seller_id = o.seller_id` and it becomes a co-located join with 32 independent tasks. **Every join between seller tables must carry `seller_id`.**
+
+Often a query can be rephrased so that the non-co-located part is small. "Buyers who have something in their cart and have ordered from seller 42 before" as a join needs repartitioning (4.7 s). Written with a CTE:
+
+```sql
+WITH buyers AS MATERIALIZED (
+    SELECT DISTINCT user_id FROM orders WHERE seller_id = 42
+)
+SELECT count(DISTINCT c.user_id)
+FROM cart_items c
+JOIN buyers b ON b.user_id = c.user_id;
+```
+
+```text
+ count
+-------
+   130
+```
+
+it took **231 ms**. Citus runs the CTE first as a separate router query (it shows up as `Distributed Subplan 3_1` in `EXPLAIN`), ships its result to the workers as an *intermediate result*, and joins it to each `cart_items` shard locally (`read_intermediate_result` in the worker plan). This technique, **recursive planning**, is how Citus handles most subqueries and CTEs it can't push down whole: plan the inner part separately, then treat its result like a small reference table.
+
+### 14.5 SQL that needs rewriting
+
+These are the failures we met on Bazaar's existing SQL, with the fixes `citus-adapt.sql` and `queries.sql` use:
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `active_products`: `complex joins are only supported when all distributed tables are co-located and joined on their distribution columns` | `LEFT JOIN inventory i ON i.product_id = p.id` | add `i.seller_id = p.seller_id` to the join |
+| `seller_sales_daily` matview: the same error | subquery groups `order_items` by `order_id` only | group and join by `(seller_id, order_id)` |
+| `recursive CTEs are only supported when they contain a filter on the distribution column` | `WITH RECURSIVE` over `categories` joined to distributed tables | join a fixed number of levels (`LEFT JOIN categories c2 ON c2.id = c1.parent_id ...`), or compute the tree in a `MATERIALIZED` CTE that is recursively planned first |
+| `correlated subqueries are not supported when the FROM clause contains a reference table` | `SELECT s.shop_name, (SELECT count(*) FROM products p WHERE p.seller_id = s.id) FROM sellers s`, and `EXISTS (...)` per user | rewrite as a join with `GROUP BY`, or a non-correlated `IN (SELECT ...)` |
+| `modifying the partition value of rows is not allowed` | `UPDATE orders SET seller_id = ...` | a row cannot change shards; delete and re-insert |
+| `could not run distributed query with FOR UPDATE/SHARE commands` | `place_order()` locks inventory by `product_id` only | section 15 |
+
+Notice the pattern: in each case, the query already *meant* "within one seller", but it didn't *say* so in a way the planner can prove. On a single node the extra `seller_id = seller_id` is redundant; on Citus it is the difference between a local join and an error.
+
+### 14.6 Measuring: the seller dashboard and the global report
+
+`lab/scripts/queries.sql` holds four representative queries, written shard-aware: Q1 and Q2 are the seller dashboard (monthly revenue; top products of the quarter, a three-table join), Q3 is a global report (2025 revenue per root category: all orders, all items, all products) and Q4 is the top five sellers of 2025 with their shop names. We ran them three times each, on the large dataset, first on a single PostgreSQL 17 node (the same data after 2101, before distribution) and then on the Citus cluster with two workers. Both results are identical row for row.
+
+| Query | Single node | Citus, 2 workers |
+|---|---|---|
+| Q1 dashboard, seller 42 (1,402 orders) | 5–12 ms | 17–23 ms |
+| Q2 top products, seller 42 | 7–11 ms | 8–13 ms |
+| Q1 dashboard, seller 1 (69,805 orders) | 40–56 ms | 36–52 ms |
+| Q2 top products, seller 1 | 146–199 ms | 77–118 ms |
+| Q3 revenue per root category (all sellers) | 0.87–1.02 s | 1.83–2.42 s |
+| Q4 top 5 sellers with shop names | 58–92 ms | 145–200 ms |
+
+Read this table honestly. All four containers share **one 4-vCPU machine**, so the "cluster" has no more CPU, memory or disk than the single node; it only adds network hops, planning and coordination. Router queries cost a few milliseconds of extra overhead (Q1 for a small seller). Queries over a large seller can even get faster, because the seller's data sits in smaller tables and indexes (Q2 for seller 1). Global reports got about twice as slow, because 32 tasks compete for the same four cores and every partial result passes through the coordinator. On real hardware, each worker brings its own cores, RAM and disks, and the global reports scale out: that is the point of the exercise. Sharding is not an optimisation for one machine. It is a way to use *more* machines.
+
+> **In production:** measure on a cluster sized like production, with production-like concurrency. A distributed database's single-query latency is usually slightly worse than a single node's. What improves is throughput under load and the ceiling on data size.
+
+---
+
+## 15. Writes and distributed transactions in Citus
+
+### 15.1 Checkout: what happens to `place_order()`
+
+`place_order()` from Module 10 is the heart of Bazaar. On the distributed schema it fails immediately:
+
+```sql
+SELECT * FROM place_order(8, '[{"product_id": 1, "quantity": 1}]');
+```
+
+```text
+ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
+HINT:  Consider using an equality filter on the distributed table's partition column.
+CONTEXT:  SQL statement "SELECT i.product_id, i.quantity, i.reserved, q.quantity AS wanted, p.status
+        FROM inventory i
+        JOIN unnest(v_pids, v_qtys) AS q (product_id, quantity) ON q.product_id = i.product_id
+        JOIN products p ON p.id = i.product_id
+        ORDER BY i.product_id
+        FOR UPDATE OF i"
+```
+
+Its stock-locking query names inventory rows by `product_id` only. Citus would have to lock rows on every shard, and it doesn't support `FOR UPDATE` in multi-shard queries. Even past that point, the function would fail twice more: it inserts `order_items` without `seller_id` (the fill trigger is gone, so `NOT NULL` fails), and it relies on the `orders.total` trigger, which is gone too.
+
+`lab/scripts/citus-adapt.sql` adds **`place_order_sharded()`**, which keeps the original contract (same arguments, same `SETOF bigint` result with one order per seller, same SQLSTATEs `BZ001`–`BZ004` and `22023`) and changes four things:
+
+1. **Items carry the shard key**: `[{"seller_id": 1, "product_id": 1, "quantity": 2}, ...]`. The cart UI knows each product's seller. Lines without `seller_id` still work: the function looks them up with one `SELECT ... FROM products WHERE id = ANY (...)`, a multi-shard query (32 tasks), the expensive path.
+2. **It works one seller at a time, in `seller_id` order.** For each seller, the lock query filters on `i.seller_id = v_seller`, so it is a router query, and Citus allows `FOR UPDATE` there:
+
+   ```sql
+   FOR r IN
+       SELECT i.product_id, i.quantity, i.reserved, q.quantity AS wanted, p.status
+       FROM inventory i
+       JOIN products p ON p.seller_id = i.seller_id AND p.id = i.product_id
+       JOIN unnest(v_pids, v_qtys) AS q (product_id, quantity) ON q.product_id = i.product_id
+       WHERE i.seller_id = v_seller
+       ORDER BY i.product_id
+       FOR UPDATE OF i
+   LOOP
+   ```
+
+   Locks are taken in `(seller_id, product_id)` order across the whole checkout, the distributed version of Module 10's deadlock-avoidance rule.
+3. **It computes `orders.total`** from the same rows it inserts, then inserts the order with `INSERT ... VALUES`, which Citus routes straight to the shard. (Our first version used `INSERT ... SELECT ... FROM unnest(...)`: Citus evaluated the `SELECT` on the coordinator and shipped the row as an intermediate result first. It works, but costs an extra round trip.)
+4. **It inserts `order_items` one `INSERT ... VALUES` per line, with `seller_id`.** The original single `INSERT ... SELECT` worked when we tested as `postgres`. Run as `bazaar_app` (the role the application uses, subject to Module 15's row-level security), it failed: Citus evaluated the `SELECT` on the coordinator and sent the rows to the shard with `COPY`, and the worker refused with `COPY FROM not supported with row-level security`. A few router inserts per order avoid both the coordinator detour and the `COPY`.
+
+The `RETURN NEXT` loop and the `SETOF` result work unchanged: the function itself runs on the coordinator, and every statement inside it is planned by Citus like any other query. All the error cases behave as before (`insufficient stock for product 3`, `product 5 is not available for sale`, `product(s) {999} do not exist`). Under concurrency it stays correct: in section 16.2, four pgbench clients ran 3,710 checkouts of one product of seller 1 in 30 s (124 per second) while that seller's shard was being moved to another node, and afterwards `inventory.reserved` was exactly the sum of the ordered quantities.
+
+### 15.2 Two-phase commit under the hood
+
+A cart with products of sellers 1 and 2 touches shards on both workers. Turn on `citus.log_remote_commands` to see what Citus sends:
+
+```sql
+SET citus.log_remote_commands = on;
+BEGIN;
+SELECT * FROM place_order_sharded(8, '[{"seller_id":1,"product_id":1,"quantity":1},{"seller_id":2,"product_id":24,"quantity":2}]');
+COMMIT;
+```
+
+```text
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(0, 269, '2026-10-14 09:35:06.861406+00');
+DETAIL:  on server postgres@m21-worker2:5432 connectionId: 1
+NOTICE:  issuing SELECT i.product_id, i.quantity, i.reserved, ... FROM ((bazaar.inventory_102045 i JOIN bazaar.products_102013 p ... FOR UPDATE OF i
+...
+NOTICE:  issuing INSERT INTO bazaar.orders_102077 (id, user_id, seller_id, status, total, ...) VALUES ('123'::bigint, '8'::bigint, '1'::bigint, 'pending'::bazaar.order_status, 999.00::numeric(12,2), ...) RETURNING id
+NOTICE:  issuing INSERT INTO bazaar.order_items_102109 (order_id, product_id, quantity, unit_price, seller_id) VALUES ('123'::bigint, '1'::bigint, 1, 999.00::numeric(12,2), '1'::bigint)
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(0, 269, '2026-10-14 09:35:06.861406+00');
+DETAIL:  on server postgres@m21-worker1:5432 connectionId: 2
+...
+NOTICE:  issuing INSERT INTO bazaar.orders_102100 (...) VALUES ('124'::bigint, '8'::bigint, '2'::bigint, 'pending'::bazaar.order_status, 23.98::numeric(12,2), ...) RETURNING id
+NOTICE:  issuing INSERT INTO bazaar.order_items_102132 (...) VALUES ('124'::bigint, '24'::bigint, 2, 11.99::numeric(12,2), '2'::bigint)
+NOTICE:  issuing PREPARE TRANSACTION 'citus_0_8288_269_0'
+DETAIL:  on server postgres@m21-worker2:5432 connectionId: 1
+NOTICE:  issuing PREPARE TRANSACTION 'citus_0_8288_269_1'
+DETAIL:  on server postgres@m21-worker1:5432 connectionId: 2
+NOTICE:  issuing COMMIT PREPARED 'citus_0_8288_269_0'
+DETAIL:  on server postgres@m21-worker2:5432 connectionId: 1
+NOTICE:  issuing COMMIT PREPARED 'citus_0_8288_269_1'
+DETAIL:  on server postgres@m21-worker1:5432 connectionId: 2
+COMMIT
+```
+
+This is section 9's protocol, run by Citus:
+
+- The id `123` was generated on the coordinator and sent as a literal: that is section 7's sequence handling.
+- Each worker transaction is tagged with a **distributed transaction id** (`assign_distributed_transaction_id`). Citus uses it for **distributed deadlock detection**: the maintenance daemon builds a cluster-wide wait-for graph from all nodes and cancels a transaction in a cycle, which no single node could detect.
+- At `COMMIT`, Citus prepares on every worker that did writes, then **records the commit decision in `pg_dist_transaction`** in the coordinator's local commit (one row per participant, with the `gid`), and only then sends `COMMIT PREPARED`.
+- A transaction that wrote to a single worker (a one-seller checkout) skips 2PC entirely: one ordinary `COMMIT`.
+
+If the coordinator crashes after preparing, or a worker is unreachable during phase 2, prepared transactions are left behind on the workers. Citus's maintenance daemon runs `recover_prepared_transactions()` regularly (every `citus.recover_2pc_interval`, 1 minute by default). It compares each worker's `pg_prepared_xacts` with `pg_dist_transaction`: a prepared transaction *with* a commit record is committed, one *without* is rolled back. To see it work, prepare a transaction on `m21-worker1` with a Citus-style gid that has no commit record:
+
+```sql
+-- on m21-worker1
+CREATE TABLE public.scratch (id int);
+BEGIN;
+INSERT INTO public.scratch VALUES (1);
+PREPARE TRANSACTION 'citus_0_424242_7_0';
+```
+
+```sql
+-- on m21-coord
+SELECT recover_prepared_transactions();
+```
+
+```text
+ recover_prepared_transactions
+-------------------------------
+                             1
+```
+
+`pg_prepared_xacts` on the worker is empty again and `public.scratch` has no rows: rolled back, because the coordinator never decided to commit.
+
+> **Pitfall:** Citus's 2PC makes multi-shard writes **atomic**, but not **isolated** across nodes. Each worker runs its own MVCC, and there is no cluster-wide snapshot: a multi-shard `SELECT` running during the checkout above can see seller 1's new order on worker 2 and not yet seller 2's on worker 1. For Bazaar's dashboards that is acceptable. For a report that must balance to the cent, either read from one consistent point (a restore point, a replica stopped at the same LSN) or design the data so the invariant lives inside one shard.
+
+### 15.3 Delegating a whole function to a worker
+
+`place_order_sharded()` runs on the coordinator and sends every statement to a worker separately: about eight round trips per seller. For functions that work on a **single** tenant, Citus can ship the *call itself* to the worker that holds the tenant:
+
+```sql
+CREATE FUNCTION seller_open_orders(p_seller_id bigint)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+AS $$
+BEGIN
+    RETURN (SELECT jsonb_object_agg(status, n)
+            FROM (SELECT o.status, count(*) AS n
+                  FROM orders o
+                  WHERE o.seller_id = p_seller_id AND o.status IN ('pending', 'paid', 'shipped')
+                  GROUP BY o.status) s);
+END;
+$$;
+
+SELECT create_distributed_function('seller_open_orders(bigint)', 'p_seller_id', colocate_with => 'orders');
+
+SET citus.log_remote_commands = on;
+SELECT seller_open_orders(42);
+```
+
+```text
+NOTICE:  issuing SELECT bazaar.seller_open_orders('42'::bigint) AS seller_open_orders
+DETAIL:  on server postgres@m21-worker2:5432 connectionId: 2
+```
+
+One round trip: the whole function runs on `m21-worker2`, next to seller 42's shards. Delegation applies to calls of the form `SELECT f(...)` (or `CALL p(...)` for procedures) whose distribution argument is a constant. When we tried the same body as a set-returning **SQL** function called as `SELECT * FROM f(42)`, Citus refused (`parameterized queries for SQL functions referencing distributed tables are not supported`) and recommended PL/pgSQL. A per-seller variant of the checkout (`place_seller_order(seller_id, items)`) would be a natural candidate.
+
+---
+
+## 16. Growing the cluster: rebalancing and tenant isolation
+
+### 16.1 Adding a worker and rebalancing
+
+The large cluster had 128 seller shards on each of two workers (8 co-located tables × 16 shards). Adding a node takes three commands:
+
+```bash
+docker compose --profile scale up -d worker3
+./scripts/citus-init-nodes.sh m21-worker3      # database + extension, then citus_add_node()
+```
+
+```sql
+SELECT * FROM citus_rebalance_start();
+```
+
+```text
+NOTICE:  Scheduled 18 moves as job 1
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
+```
+
+A new node gets no shards by itself: `citus_add_node()` only registers it (reference tables are copied to it when the first shard arrives). `get_rebalance_table_shards_plan()` shows what the rebalancer would do without doing it. `citus_rebalance_start()` schedules the moves as **background tasks** and returns immediately. Each move handles a whole **shard group** (shard *n* of all eight co-located tables), so co-location is never broken. `citus_rebalance_status()` reports progress per move, including the phase and the replication lag:
+
+```text
+{"LSN": {"lag": "7984 bytes", "source": "0/443388F8", "target": "0/443369C8"},
+ "size": {"source": "61 MB", "target": "51 MB"}, "hosts": {"source": "m21-worker1:5432", "target": "m21-worker3:5432"},
+ "phase": "Creating Constraints", "state": "running",
+ "command": "SELECT pg_catalog.citus_move_shard_placement(102018,2,4,'auto')", ...}
+```
+
+A move is **online** when `wal_level = logical` (the lab sets it): Citus creates the shard on the target, copies the data, streams the changes made in the meantime through **logical replication**, briefly blocks writes to that shard to catch up the last changes, switches the metadata, and drops the old copy later. Writes to the shard continue during the copy. While the rebalancer ran, four pgbench clients kept checking out one product of seller 42 without a single failed transaction, until all 299 units were sold (exactly 299 orders, `reserved` = 299). All 18 moves (8 seller shard groups and 10 `cart_items` shards) took **38 seconds**:
+
+```text
+  nodename   | seller_shards | cart_shards
+-------------+---------------+-------------
+ m21-worker1 |            96 |          11
+ m21-worker2 |            96 |          11
+ m21-worker3 |            64 |          10
+```
+
+The default strategy, `by_disk_size`, balances bytes rather than shard counts, within a 10% threshold. Its result here was 268 MB, 207 MB and 380 MB of distributed data per worker: worker 3 received the four largest shard groups, including seller 1's 103 MB group (the average group is 27 MB). Shard groups are lumpy, and a single huge tenant can make any bin-packing imperfect. That is the next problem to solve.
+
+### 16.2 Isolating a hot tenant
+
+`isolate_tenant_to_new_shard` splits a shard so that one distribution value gets a shard of its own, for all co-located tables at once (`'CASCADE'`):
+
+```sql
+SELECT isolate_tenant_to_new_shard('orders', 1, 'CASCADE', shard_transfer_mode => 'block_writes');
+```
+
+```text
+ isolate_tenant_to_new_shard
+-----------------------------
+                      102331
+Time: 5215.337 ms (00:05.215)
+```
+
+```sql
+SELECT shardid, shardminvalue, shardmaxvalue
+FROM pg_dist_shard
+WHERE shardid = get_shard_id_for_distribution_column('orders', 1);
+```
+
+```text
+ shardid | shardminvalue | shardmaxvalue
+---------+---------------+---------------
+  102331 | -1905060026   | -1905060026
+```
+
+The old shard's hash range was split into three: the hashes below `hashint8(1)`, exactly `hashint8(1)` (seller 1 alone), and the hashes above. `orders` now has 34 shards. Seller 1's shard group can be moved like any other, for example to a node of its own:
+
+```sql
+SELECT citus_move_shard_placement(102331, 'm21-worker3', 5432, 'm21-worker1', 5432,
+                                  shard_transfer_mode => 'force_logical');
+```
+
+That move took 7.5 s, online, while four pgbench clients placed 3,710 orders for seller 1 (section 15.1).
+
+> **Pitfall:** we first ran the isolation with `shard_transfer_mode => 'force_logical'` (online) while checkouts were updating seller 1's inventory. It never finished: on the target worker, the logical replication apply worker failed every five seconds with `publisher did not send replica identity column expected by the logical replication target relation "bazaar.inventory_102304"`. We cancelled it after 5 minutes and cleaned up with `CALL citus_cleanup_orphaned_resources()`. It happened again on the small dataset and on a freshly created two-column table, every time rows were updated during the split, with Citus 14.2.0 on PostgreSQL 17.10. Online *moves* worked every time. With `block_writes`, the split blocked writes to seller 1's shard group for about 5 s. Test shard splits under write load on your own version before relying on them, and schedule them for a quiet period.
+
+---
+
+## 17. More Citus features
+
+### 17.1 Schema-based sharding
+
+Row-based sharding ("every table has `seller_id`") is the model of this module. Since Citus 12 there is a second model for applications that use **one schema per tenant**: each schema becomes a unit of distribution, and all its tables live together on one node, with no distribution column and no schema changes.
+
+```sql
+SET citus.enable_schema_based_sharding = on;
+CREATE SCHEMA shop_acme;
+CREATE TABLE shop_acme.products (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                                 title text NOT NULL, price numeric(12,2) NOT NULL);
+CREATE TABLE shop_acme.orders (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                               product_id bigint NOT NULL REFERENCES shop_acme.products (id),
+                               user_id bigint NOT NULL REFERENCES bazaar.users (id),
+                               qty int NOT NULL);
+RESET citus.enable_schema_based_sharding;
+
+SELECT table_name, citus_table_type, colocation_id, shard_count
+FROM citus_tables WHERE table_name::text LIKE 'shop_%';
+```
+
+```text
+     table_name     | citus_table_type | colocation_id | shard_count
+--------------------+------------------+---------------+-------------
+ shop_acme.orders   | schema           |             4 |           1
+ shop_acme.products | schema           |             4 |           1
+```
+
+Each schema gets its own co-location group with one shard per table. Joins within the schema and to reference tables (`bazaar.users` here) are router queries on the schema's node, and the rebalancer moves whole schemas. `citus_schema_distribute('name')` converts an existing schema. This model fits applications with few, large, independent tenants whose tables may even differ per tenant. With 2,000 sellers sharing one schema, Bazaar fits the row-based model better: thousands of schemas mean thousands of copies of every table and index, and every migration runs thousands of times.
+
+### 17.2 Columnar storage
+
+The `citus_columnar` extension (installed separately: `CREATE EXTENSION citus_columnar`) adds a `columnar` table access method. It stores data column by column in compressed stripes. It suits append-mostly analytical data such as old orders:
+
+```sql
+CREATE TABLE orders_archive_2023 (LIKE orders INCLUDING DEFAULTS) USING columnar;
+SELECT create_distributed_table('orders_archive_2023', 'seller_id', colocate_with => 'orders');
+INSERT INTO orders_archive_2023 SELECT * FROM orders WHERE created_at < '2024-01-01';
+```
+
+The 95,976 orders of 2023 took 4,272 kB as a distributed columnar table and 12 MB as an identical heap table, about a third. Columnar tables have historically had restrictions on `UPDATE`/`DELETE` and indexes, so use them for data you write once and scan often. The typical pattern combines them with Module 14: the current months of a partitioned table in heap, old partitions converted to columnar.
+
+---
+
+## 18. Limitations checklist
+
+What Citus supports, conditionally supports and does not support, as met in this module:
+
+| Feature | On distributed tables |
+|---|---|
+| PK / UNIQUE / EXCLUDE | only if they include the distribution column (with `=` for EXCLUDE) |
+| FK distributed → reference | yes |
+| FK distributed → distributed | only between co-located tables, including the distribution column on both sides |
+| FK reference → distributed, local → distributed | no |
+| Changing the distribution column of a row | no (delete and re-insert) |
+| Triggers | only with `citus.enable_unsafe_triggers`. Row triggers that touch only `NEW` are fine. Triggers with transition tables or that touch other tables are not. |
+| `FOR UPDATE` | router queries only |
+| Joins | co-located on the distribution column, or with reference tables. Others need `enable_repartition_joins` or a rewrite. |
+| Correlated subqueries, recursive CTEs | when they can be pushed to shards; otherwise rewrite (section 14.5) |
+| Identity and sequences | yes, `bigint` (per-node ranges on workers) |
+| Materialized views | as local objects on the coordinator, built by a distributed query |
+| Transactions | atomic across shards via 2PC; no cluster-wide snapshot isolation |
+| DDL | propagated automatically (`ALTER TABLE`, `CREATE INDEX`, roles, functions, types); `CREATE DATABASE` is not propagated by default |
+
+**Reference tables** have a cost too: every write is a distributed transaction to all nodes, so keep them small and rarely written. And if one is very large (`users` at 100 million rows), a copy on every node multiplies its storage.
+
+This list is also why `2101` exists: almost every row of the table is a reason why Bazaar's original keys could not be distributed as they were.
+
+---
+
+## 19. The operational cost of sharding
+
+Before you shard, add up what you will run every day afterwards:
+
+- **More servers, each needing everything a single server needed.** Every worker is a primary that needs streaming replicas, failover (a Patroni cluster per worker, Module 20), monitoring, OS patching and capacity planning. A 1 + 4-node Citus cluster with one replica each is 10 PostgreSQL servers.
+- **Backups and restores across nodes.** A backup of each node taken at a slightly different moment does not restore to a consistent cluster. With Citus, take continuous WAL archiving (Module 18) on every node and create cluster-wide restore points with `citus_create_restore_point('name')`, then recover every node to that same named point. Test it. A restore drill now involves N servers.
+- **Schema migrations.** Citus propagates DDL, but a migration now locks and rewrites shards on every node, and the "2101-style" rules apply to every new table and constraint. Migration tools (Module 26) must know which tables to distribute.
+- **Connections.** Each client connection to the coordinator can open several connections to each worker for multi-shard queries. Put PgBouncer in front of the coordinator, and size `citus.max_shared_pool_size` and the workers' `max_connections` together.
+- **Authentication.** Nodes connect to each other as the user running the query: every role needs to log in on every node, with credentials in `.pgpass` or `pg_dist_authinfo`. The lab's `trust` setting is for the lab only.
+- **Observability per node and per shard.** `pg_stat_statements` on each node, `citus_stat_tenants`, `citus_shards` sizes, `citus_rebalance_status()`, orphaned resources (`pg_dist_cleanup`), and alerts on `pg_prepared_xacts` older than a few minutes.
+- **Upgrades.** A Citus upgrade means upgrading the extension on every node in the right order, and PostgreSQL major upgrades cover the whole cluster.
+- **People.** Developers must learn the shard-key rules (section 14.5) and review every query for them. Support engineers need to know which node holds which tenant.
+
+None of this is a reason not to shard when the numbers demand it. It is the reason section 1 asks you to exhaust the alternatives first.
+
+---
+
+## Summary
+
+- Shard only when write throughput, working set or data size of one logical database will outgrow the largest machine you are willing to run, after scaling up, read replicas, partitioning, archiving and caching. Most applications never get there.
+- The **shard key** decides everything: high cardinality, even load, **query locality** (hot-path queries carry the key) and **co-location** of related tables. For Bazaar, `seller_id` makes checkout, fulfilment and the seller dashboard single-shard, and buyer history a scatter-gather.
+- Skew is about load, not key count. Seller 1 has 14% of all orders, so its shard holds 5.3× the average in 32 shards, and more shards make that ratio *worse*. Isolate and move hot tenants, and watch per-tenant load.
+- Use **hash** sharding into many **logical shards** mapped to fewer nodes. Rebalancing then moves whole shards and never re-hashes.
+- Per-shard identity columns collide. Use offset sequences, snowflake IDs, UUIDv7 or Citus's per-node ranges, and remember that uniqueness of `id` alone is no longer enforced.
+- Cross-shard queries are scatter-gather: push filters, partial aggregates and limits down, and accept that latency is the slowest shard's. Cross-shard transactions need **2PC** (`PREPARE TRANSACTION`, `max_prepared_transactions`), whose orphans hold locks and block VACUUM until resolved, or **sagas** with compensations.
+- **Application-level sharding** gives full control and costs engineering on every query path. **`postgres_fdw` + partitioning** routes and prunes, pushes co-located joins and aggregates with partition-wise settings, but has no atomic commit, no partial aggregate pushdown, no global constraints and no rebalancing.
+- **Citus** distributes tables (`create_distributed_table`), replicates reference tables, co-locates related tables, runs router and multi-shard queries, commits multi-node writes with 2PC and recovers them automatically, and rebalances online. It requires shard-key-aware keys (hence `2101`), shard-key-aware joins, and adapted triggers and functions (hence `place_order_sharded()`).
+- Measured on one 4-vCPU host, Citus added a few ms to router queries and made global reports about twice as slow. Sharding buys capacity on *more* hardware, not speed on the same hardware.
+
+## What's next
+
+You have scaled Bazaar's database as far as this course goes: indexed, partitioned, secured, replicated, highly available and sharded. [Module 22: psycopg 3](../22-psycopg/) starts Part IV, where you build the Python service on top of it. The ordinary, unsharded schema comes back (`reset.sh 22` never applies `2101`), but the habit of passing the tenant's key explicitly in every query will serve you there too.

@@ -236,10 +236,20 @@ BEGIN
         VALUES (p_user_id, v_seller, p_shipping_address_id, v_total)
         RETURNING id INTO v_order_id;
 
-        INSERT INTO order_items (seller_id, order_id, product_id, quantity, unit_price)
-        SELECT v_seller, v_order_id, p.id, q.quantity, p.price
-        FROM unnest(v_pids, v_qtys) AS q (product_id, quantity)
-        JOIN products p ON p.seller_id = v_seller AND p.id = q.product_id;
+        -- One INSERT ... VALUES per line: each is a router insert. (A single
+        -- INSERT ... SELECT FROM unnest(...) is evaluated on the coordinator and
+        -- shipped to the shard with COPY, and Citus refuses COPY into a table
+        -- with row-level security when the caller is subject to RLS, e.g.
+        -- bazaar_app: "COPY FROM not supported with row-level security".)
+        FOR r IN
+            SELECT p.id, q.quantity, p.price
+            FROM unnest(v_pids, v_qtys) AS q (product_id, quantity)
+            JOIN products p ON p.seller_id = v_seller AND p.id = q.product_id
+            ORDER BY p.id
+        LOOP
+            INSERT INTO order_items (seller_id, order_id, product_id, quantity, unit_price)
+            VALUES (v_seller, v_order_id, r.id, r.quantity, r.price);
+        END LOOP;
 
         RETURN NEXT v_order_id;
     END LOOP;
