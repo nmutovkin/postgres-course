@@ -152,8 +152,8 @@ What the numbers mean: product 1 is in every cart, so it sells out first: exactl
 ./project/bin/psql.sh < modules/10-transactions-concurrency/solutions/acceptance_cancel.sql   # 9 x PASS
 
 # after a fresh bench_setup.sql and pgbench_place_order.sql run:
-LO=$(./project/bin/psql.sh bazaar -Atc "SELECT max_order_id + 1 FROM bench.order_watermark")
-HI=$(./project/bin/psql.sh bazaar -Atc "SELECT max(id) FROM bazaar.orders")
+LO=$(docker exec course-pg psql -U postgres -d bazaar -Atc "SELECT max_order_id + 1 FROM bench.order_watermark")
+HI=$(docker exec course-pg psql -U postgres -d bazaar -Atc "SELECT max(id) FROM bazaar.orders")
 docker exec course-pg pgbench -U postgres -d bazaar -n -c 8 -j 4 -t 100 -D lo=$LO -D hi=$HI \
     -f /course/modules/10-transactions-concurrency/solutions/pgbench_cancel_orders.sql@3 \
     -f /course/modules/10-transactions-concurrency/solutions/pgbench_place_order.sql@1
