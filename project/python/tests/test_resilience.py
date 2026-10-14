@@ -52,6 +52,12 @@ FAST = RetryPolicy(attempts=5, base_delay=0.001, max_delay=0.01, deadline=None)
             psycopg.OperationalError("server closed the connection unexpectedly"),
             ErrorKind.CONNECTION,
         ),
+        (
+            psycopg.OperationalError(
+                'connection failed: FATAL:  password authentication failed for user "bazaar_app"'
+            ),
+            ErrorKind.PERMANENT,
+        ),
         (psycopg_pool.PoolTimeout("couldn't get a connection after 10 sec"), ErrorKind.OVERLOADED),
         (asyncpg.exceptions.SerializationError("x"), ErrorKind.SERIALIZATION),
         (asyncpg.exceptions.ConnectionDoesNotExistError("x"), ErrorKind.CONNECTION),

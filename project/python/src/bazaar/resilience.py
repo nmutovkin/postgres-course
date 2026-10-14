@@ -74,6 +74,15 @@ _SQLSTATES: dict[str, ErrorKind] = {
 }
 
 
+_PERMANENT_CONNECT_ERRORS = (
+    "password authentication failed",
+    "no pg_hba.conf entry",
+    "does not exist",  # database "x" / role "x" does not exist
+    "permission denied for database",
+    "certificate verify failed",
+)
+
+
 def _unwrap(exc: BaseException) -> BaseException:
     """SQLAlchemy wraps driver errors (DBAPIError.orig); look at the driver's."""
     orig = getattr(exc, "orig", None)
@@ -105,6 +114,12 @@ def classify(exc: BaseException) -> ErrorKind:
     # ConnectionDoesNotExistError, SQLAlchemy's invalidated connections).
     if getattr(exc, "connection_invalidated", False):
         return ErrorKind.CONNECTION
+    # Connection attempts that the server refused for good reasons fail on the
+    # client side without a SQLSTATE (psycopg puts the server's message in the
+    # exception text). Retrying a wrong password only locks the account sooner.
+    text = str(inner)
+    if any(fragment in text for fragment in _PERMANENT_CONNECT_ERRORS):
+        return ErrorKind.PERMANENT
     mro = {c.__name__ for c in type(inner).__mro__}
     if mro & {
         "OperationalError",  # psycopg (incl. ConnectionTimeout), DB-API in general
