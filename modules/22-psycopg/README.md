@@ -934,7 +934,7 @@ What you can do next depends on the error and the transaction state:
 
 ### 8.5 Notices
 
-Not everything the server says is an error. `RAISE NOTICE` in PL/pgSQL, and informational messages like "table does not exist, skipping", arrive as **notices**. By default psycopg logs them through Python's `logging` (logger `psycopg`). A handler lets you route them yourself:
+Not everything the server says is an error. `RAISE NOTICE` in PL/pgSQL, and informational messages like "table does not exist, skipping", arrive as **notices**. By default psycopg **discards** them. Register a handler to see them:
 
 ```python
 conn.add_notice_handler(lambda n: print(f"   notice [{n.severity}] {n.message_primary}"))
@@ -1330,7 +1330,7 @@ When the database does something you didn't expect, find out what was actually s
 - **`application_name`** on every connection, so `pg_stat_activity` and the server log identify your process (2.2).
 - **The server log**: for a debugging session, `options="-c log_statement=all"` on your own connection logs everything it sends (superuser only; `log_min_duration_statement` is the production-safe cousin, Module 17). The trace in section 3.2 was produced this way.
 - **The libpq protocol trace**: `conn.pgconn.trace(fileno)` plus `set_trace_flags(psycopg.pq.Trace.SUPPRESS_TIMESTAMPS)`, as in sections 1.2 and 11. Nothing is more precise: it shows exactly which messages, types and formats crossed the wire, including prepared statement names and pipelined batches.
-- **Python logging**: psycopg logs notices and connection events to the `psycopg` logger and pool activity to `psycopg.pool`; `logging.basicConfig(level=logging.DEBUG)` shows them.
+- **Python logging**: psycopg logs internal problems to the `psycopg` logger, and the pool logs its activity (connections opened, discarded, reset failures like the one in 14.4) to `psycopg.pool`; `logging.basicConfig(level=logging.DEBUG)` shows them. Server notices are *not* logged unless you add a notice handler (8.5) that logs them.
 - **`conn.info`**: `backend_pid` (to find yourself in `pg_stat_activity`, or to terminate a stuck session), `transaction_status`, `server_version`, `parameter_status("TimeZone")`, `dsn` (without password).
 - **`ClientCursor.mogrify()`** or `sql.Composed.as_string(conn)` to print a statement with its values or identifiers rendered, for logs. Never execute a mogrified string you built for logging.
 
