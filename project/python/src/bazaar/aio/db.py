@@ -57,17 +57,16 @@ async def create_pool(
     s = settings or get_settings()
     kw = connect_kwargs(s)
     conninfo = kw.pop("conninfo")
-    pool = AsyncConnectionPool(
-        conninfo,
-        kwargs=kw,
-        min_size=s.pool_min_size,
-        max_size=s.pool_max_size,
-        configure=configure,
-        check=AsyncConnectionPool.check_connection,
-        name="bazaar-async",
-        open=False,
-        **overrides,
-    )
+    params: dict[str, Any] = {
+        "kwargs": kw,
+        "min_size": s.pool_min_size,
+        "max_size": s.pool_max_size,
+        "configure": configure,
+        "check": AsyncConnectionPool.check_connection,  # cheap liveness check on checkout
+        "name": "bazaar-async",
+    }
+    params.update(overrides)  # e.g. create_pool(max_size=20, timeout=5)
+    pool = AsyncConnectionPool(conninfo, open=False, **params)
     if open:
         await pool.open(wait=True, timeout=10)
     return pool
