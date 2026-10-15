@@ -551,7 +551,7 @@ ERROR:  value too long for type character varying(5)
 The course uses `text` everywhere, and when a real business rule limits the length, it says so in a **`CHECK` constraint** (section 11.2):
 
 ```sql
-title text NOT NULL CHECK (length(title) BETWEEN 1 AND 200)
+title text NOT NULL CONSTRAINT products_title_length CHECK (length(title) BETWEEN 1 AND 200)
 ```
 
 The reasons:
@@ -1154,7 +1154,7 @@ Constraints can be written in two places:
 - as a **column constraint**, right after the column's type: `price numeric(12,2) NOT NULL CHECK (price >= 0)`;
 - as a **table constraint**, as a separate item in the column list: `CONSTRAINT products_seller_id_sku_key UNIQUE (seller_id, sku)`. A constraint that involves several columns must be a table constraint.
 
-Either way, `CONSTRAINT name` gives it a name. Without one, PostgreSQL makes one up: `<table>_<column>_check`, `<table>_<column>_key` for `UNIQUE`, `<table>_pkey`, `<table>_<column>_fkey`. The generated names are fine for keys. For `CHECK`s, Bazaar uses explicit names that say what the rule is, because the name is what shows up in error messages and in application code that maps errors to user messages.
+Either way, `CONSTRAINT name` gives it a name. Without one, PostgreSQL makes one up: `<table>_<column>_check` (or just `<table>_check` for a check on several columns), `<table>_<column>_key` for `UNIQUE`, `<table>_pkey`, `<table>_<column>_fkey`. The generated names are fine for keys. For `CHECK`s, Bazaar uses explicit names that say what the rule is, because the name is what shows up in error messages and in application code that maps errors to user messages.
 
 ### 11.1 `NOT NULL`
 
@@ -1189,6 +1189,38 @@ CREATE TABLE products (
 ```
 
 (`...` marks columns left out here.) `CONSTRAINT products_price_nonnegative` is the name; `CHECK (price >= 0)` is the rule.
+
+**Naming is optional.** `CONSTRAINT name` can be left out, and a `CHECK` can sit right after its column instead of at the end of the list. All of these are valid:
+
+```sql
+CREATE TABLE stock_demo (
+    id        int PRIMARY KEY,
+    quantity  int NOT NULL CHECK (quantity >= 0),                                       -- column constraint, no name
+    reserved  int NOT NULL CONSTRAINT stock_demo_reserved_nonnegative CHECK (reserved >= 0),  -- column constraint, named
+    CHECK (reserved <= quantity)                                                         -- table constraint, no name
+);
+\d stock_demo
+```
+
+```text
+Check constraints:
+    "stock_demo_check" CHECK (reserved <= quantity)
+    "stock_demo_quantity_check" CHECK (quantity >= 0)
+    "stock_demo_reserved_nonnegative" CHECK (reserved >= 0)
+```
+
+Where you don't give a name, PostgreSQL makes one up: `<table>_<column>_check` for a check on one column, and just `<table>_check` for one that spans several columns. That last name says nothing about the rule, and it's what the error shows:
+
+```sql
+INSERT INTO stock_demo VALUES (1, 5, 9);
+```
+
+```text
+ERROR:  new row for relation "stock_demo" violates check constraint "stock_demo_check"
+DETAIL:  Failing row contains (1, 5, 9).
+```
+
+Where the check goes doesn't change how it works: a column constraint is only a shorthand, and it ends up as an ordinary constraint of the table. A rule that compares two columns must be written as a table constraint. Short examples in this course often skip the name; Bazaar's own tables name every `CHECK`. Clean up with `DROP TABLE stock_demo;`.
 
 **What the name is for.** A constraint is a database object of its own, and its name is how you and your programs refer to it. To see it at work, build a small scratch table:
 
