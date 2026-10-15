@@ -33,7 +33,7 @@ Everything here was verified on PostgreSQL 17.11 (`course-pg`). `./project/bin/r
 | `tools/gen_small_seed.py` | | Deterministic generator for 0301/0702/0802 (`python3 project/db/tools/gen_small_seed.py`) |
 | `tools/check.sql` | | Sanity checks that work at every state |
 
-## Small dataset (states 03–11)
+## Small dataset (states 04–11)
 
 Row counts at state 07 (0201+0301 only): users 30, sellers 6, categories 23, products 62, inventory 62, orders 120, order_items 235. Module 07 adds addresses 32, payments 140, reviews 78, cart_items 14 and product_price_history 71. Module 08 adds promotions 9.
 
@@ -114,7 +114,7 @@ Row counts at state 07 (0201+0301 only): users 30, sellers 6, categories 23, pro
    - Run migrations as `SET ROLE bazaar_owner` so that default privileges apply.
 8. **Search (13+).** `search_vector` includes tags (weight C) through `tags_to_text(text[])`, a function declared IMMUTABLE. `to_jsonb(products)` rows in `audit_log` now include `search_vector`.
 
-## Spec deviations and issues to resolve
+## Design notes
 
 - **2101 is opt-in.** It lives in `project/db/sharding/`, so `reset.sh` (which only applies top-level files) never applies it, including `reset.sh all`. Module 21 applies it explicitly, on top of `reset.sh 21` or `reset.sh all`. It changes the primary key of orders, products, payments, reviews and promotions to `(seller_id, id)` and adds `seller_id` columns to child tables. Python modules (22+) therefore run against the ordinary, unsharded schema.
 - **2101 choices.**
@@ -123,14 +123,14 @@ Row counts at state 07 (0201+0301 only): users 30, sellers 6, categories 23, pro
   - `cart_items` keeps PK `(user_id, product_id)` and its FK to products is **dropped** (it would be distributed by user).
   - events, audit_log and jobs are unchanged.
   - The FK indexes `order_items_product_id_idx` and `payments_order_id_idx` are replaced by `(seller_id, …)` versions.
-- **Tables without `created_at`.** `cart_items` (has `added_at`), `product_price_history` (has `valid_from`), `inventory` (has `updated_at`) and `events` (has `occurred_at`) have no `created_at`. This follows the detailed spec, not the README's blanket rule.
-- **Extra objects beyond the spec:**
+- **Tables without `created_at`.** `cart_items` (has `added_at`), `product_price_history` (has `valid_from`), `inventory` (has `updated_at`) and `events` (has `occurred_at`) have no `created_at`; they carry their own time columns instead (see `project/README.md`).
+- **Extra objects worth knowing about:**
   - CHECKs: `sellers_country_code_upper`, `categories_not_own_parent`, `products_attributes_is_object`, `promotions_range_not_empty`
   - index `jobs_ready_idx`
   - functions `tags_to_text`, `current_seller_id`, `refresh_seller_sales_daily`
   - the optional `p_lease` parameter of `dequeue_jobs`
 - **Products/sellers statistics.** `CREATE STATISTICS` is on `addresses(country_code, city)` only. Statistics on products `(seller_id, category_id)` made the GROUP BY estimate worse, so they were left out.
-- **0702 data changed.** It was regenerated after WIP commit b19aa92 (street names now match countries), so payment and review rows differ from that commit. The ids above are current.
+- **0702 data.** Street names in `addresses` match each address's country. The payment and review ids above are current.
 
 
 ## Pointers added later

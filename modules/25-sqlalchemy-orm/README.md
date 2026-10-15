@@ -875,7 +875,7 @@ A plain session sends the `UPDATE` and PostgreSQL refuses. `bazaar.orm.session.B
 
 ### 11.2 Calling `place_order()`
 
-Business logic that lives in the database is called like any SQL function. The checkout service from [`bazaar/orm/services.py`](../../project/python/src/bazaar/orm/services.py):
+Business logic that lives in the database is called like any SQL function. The checkout service from [`bazaar/orm/services.py`](../../project/python/src/bazaar/orm/services.py) (as of this module; Module 27 extends it with an idempotency key):
 
 ```python
 def checkout(session, user_id, items, shipping_address_id=None) -> list[Order]:

@@ -217,7 +217,7 @@ Test it inside a transaction: ship order 110, cancel order 115, pay order 116, t
 
 <details><summary>Hint</summary>
 
-`AFTER UPDATE OF status ... FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status)`. Aggregate the order's lines per product (an order may in principle list a product twice) and apply them in one `UPDATE inventory ... FROM (...)`. The `CHECK (reserved <= quantity)` on inventory is your safety net.
+`AFTER UPDATE OF status ... FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status)`. Take the order's lines per product (the primary key `(order_id, product_id)` guarantees one line per product) and apply them in one `UPDATE inventory ... FROM (...)`. The `CHECK (reserved <= quantity)` on inventory is your safety net.
 
 </details>
 

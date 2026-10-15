@@ -1,6 +1,6 @@
 # Authoring guide
 
-These are the conventions every module follows, so the course reads as one book. They apply both to people extending the course and to the agents that wrote it.
+These are the conventions every module follows, so the course reads as one book. They apply to anyone extending the course.
 
 <!-- toc:start -->
 **Contents**
@@ -68,6 +68,13 @@ Depth: heavy modules (indexes, performance, internals, concurrency, replication,
 - States the goal in business terms, then the concrete requirements: tables, columns, constraints, functions, and acceptance checks.
 - Says which reference file(s) in `project/db/` (or `project/python/`) contain the reference solution.
 - Includes acceptance checks: queries or tests the learner runs to confirm the milestone is done.
+
+## Heading conventions
+
+- **What you'll learn** and **Before you start** are bold paragraph labels (`**What you'll learn**`), not `##` headings.
+- Exercise headings are `## Exercise N ★…: Title`. The solution for each exercise repeats the same ★ marks and title.
+- The exercise and solution files are titled `# Module NN: Exercises` and `# Module NN: Solutions`.
+- A module may run some examples or exercises at a later reset state when it needs its own milestone's objects (for example `./project/bin/reset.sh NN+1`), provided it says so where it does it, and says how to return to the module's own state.
 
 ## SQL style
 

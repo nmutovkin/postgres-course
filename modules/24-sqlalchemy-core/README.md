@@ -437,7 +437,7 @@ Use `.one()` when your logic assumes exactly one row: a silent `None` from `.fir
 
 ### 4.1 A table
 
-The expression language needs to know your tables: their names, columns and types. You describe them as `Table` objects collected in a `MetaData`. Here is `products` as it exists after Module 13, from [`bazaar/sa/tables.py`](../../project/python/src/bazaar/sa/tables.py):
+The expression language needs to know your tables: their names, columns and types. You describe them as `Table` objects collected in a `MetaData`. Here is `products` as it exists after Module 13, from [`bazaar/sa/tables.py`](../../project/python/src/bazaar/sa/tables.py) (as of this module; Module 26 adds `slug`):
 
 ```python
 metadata = sa.MetaData(naming_convention=NAMING_CONVENTION)

@@ -100,7 +100,8 @@ See [`project/README.md`](project/README.md) for the project spec and [`modules/
 
 ```bash
 git clone <this repo> && cd postgres-course
-docker compose up -d                 # PostgreSQL 17 on localhost:5432
+mkdir -p workspace                   # your own files; mounted into the container
+docker compose up -d --wait          # PostgreSQL 17 on localhost:5432, waits until it's ready
 ./project/bin/reset.sh 01            # create the (empty) bazaar database
 ./project/bin/psql.sh                # open psql connected to bazaar
 ```

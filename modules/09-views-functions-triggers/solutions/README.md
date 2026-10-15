@@ -176,7 +176,9 @@ HINT:  Reactivate the product first.
 
 UPDATE products SET price = price WHERE id = 5;                  -- UPDATE 1 (not a change)
 UPDATE products SET title = 'AeroBook 13 (2023)' WHERE id = 5;   -- UPDATE 1
+BEGIN;
 UPDATE products SET status = 'archived', price = 899.00 WHERE id = 1;   -- UPDATE 1 (OLD.status was active)
+ROLLBACK;
 ```
 
 **The seller-wide markdown.** `UPDATE products SET price = price * 0.9 WHERE seller_id = 2` touches product 23, which is archived. The error aborts the *whole statement*, so none of seller 2's 14 other products is repriced either. Statements are atomic. The fix is to say what you mean: `... WHERE seller_id = 2 AND status <> 'archived'` (`UPDATE 14`).
@@ -250,7 +252,7 @@ VALUES (6, 6, 'SG-AUD-001', 'Sakura Earbuds', 59.00);   -- id 63: initial price
 
 ```text
 ERROR:  duplicate key value violates unique constraint "product_price_history_pkey"
-DETAIL:  Key (product_id, valid_from)=(12, 2026-10-14 08:55:41.601438+00) already exists.
+DETAIL:  Key (product_id, valid_from)=(11, 2026-10-14 08:55:41.601438+00) already exists.
 ```
 
 What *should* the history say? From the outside, the transaction is atomic: nobody ever saw 209.00. So "199.00 from this moment on" is the correct record, and that's what `DO UPDATE SET price = EXCLUDED.price` produces. (Using `clock_timestamp()` instead of `now()` would record both prices a few microseconds apart. That's technically a history of states nobody could observe, and it wouldn't match `products.updated_at`, which `set_updated_at` sets to `now()`.)

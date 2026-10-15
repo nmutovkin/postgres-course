@@ -39,7 +39,7 @@ If you prefer the real thing, `./project/bin/reset.sh 15` builds the same schema
 
 > **Roles are cluster-wide.** `reset.sh` drops and recreates the `bazaar` *database*, but roles live in the cluster, not in a database, so they survive. That is why `1501` guards every `CREATE ROLE` and re-asserts attributes with `ALTER ROLE`: you can apply it any number of times. It also means that to start the roles truly from scratch you must drop them yourself — see [`lab/README.md`](lab/README.md).
 
-You have met pieces of this before: roles and the `public` schema in [Module 01](../01-psql/#4-roles-briefly), the `SECURITY DEFINER` / `search_path` teaser in [Module 01 §3.4](../01-psql/), views in [Module 09](../09-views-functions-triggers/), SCRAM's cost in [Module 16](../16-internals/), and per-role settings and `pg_hba.conf` reloads in [Module 17](../17-operations/). This module makes all of it precise.
+You have met pieces of this before: roles and the `public` schema in [Module 01](../01-psql/#4-roles-briefly), the `SECURITY DEFINER` / `search_path` teaser in [Module 01 §3.4](../01-psql/), and views in [Module 09](../09-views-functions-triggers/). This module makes all of it precise, and later modules build on it: SCRAM's cost in [Module 16](../16-internals/), and per-role settings and `pg_hba.conf` reloads in [Module 17](../17-operations/).
 
 ---
 
@@ -120,9 +120,9 @@ Two principles fall out of the table.
 
 PostgreSQL gives you three independent layers, and this module covers all three:
 
-```
+```text
                       ┌──────────────────────────────────────────┐
-  a connection  ───▶  │ 1. Authentication  (pg_hba.conf, §14-15)  │  who are you? (and is the
+  a connection  ───▶  │ 1. Authentication  (pg_hba.conf, §13-15)  │  who are you? (and is the
                       │    which role, from where, how proven     │     channel encrypted?)
                       └──────────────────┬───────────────────────┘
                                          ▼
@@ -355,7 +355,7 @@ SELECT email FROM users WHERE id = 17;      --> Zoe.Martin@Example.COM  (reads A
 INSERT INTO categories (name) VALUES ('x'); --> ERROR: permission denied for table categories
 ```
 
-Note the trade-off: `pg_read_all_data` reads *every* column of *every* table, so it is not a fit for the analyst who must not see `users.email`. That is why Bazaar uses a custom `bazaar_readonly` bundle with column-level control instead (§5, §7). Predefined roles are blunt; custom roles are precise. Use predefined roles when "all data" or "all stats" is genuinely what you mean.
+Note the trade-off: `pg_read_all_data` reads *every* column of *every* table, so it is not a fit for the analyst who must not see `users.email`. That is why Bazaar uses a custom `bazaar_readonly` bundle with column-level control instead (§5.5, §6). Predefined roles are blunt; custom roles are precise. Use predefined roles when "all data" or "all stats" is genuinely what you mean.
 
 ---
 
@@ -430,12 +430,12 @@ Only `bazaar_owner` has `CREATE` on the schema (it owns it). The application can
 | `INSERT` | add rows |
 | `UPDATE` | change rows (implies the right to read the row being updated only via a `SELECT` grant for the `WHERE`) |
 | `DELETE` | remove rows |
-| `TRUNCATE` | empty the table (a fast, non-logged bulk delete; separate from `DELETE`) |
+| `TRUNCATE` | empty the table (a fast bulk delete that WAL-logs the file swap, not each row; separate from `DELETE`) |
 | `REFERENCES` | create a foreign key referencing this table |
 | `TRIGGER` | create a trigger on this table |
 | `MAINTAIN` (**PG 17**) | `VACUUM`/`ANALYZE`/`CLUSTER`/`REINDEX`/`REFRESH`/`LOCK` this table |
 
-`SELECT`, `INSERT`, `UPDATE`, `DELETE` are the four you use daily. `TRUNCATE` is deliberately separate from `DELETE`: Bazaar grants the app `DELETE` but never `TRUNCATE`, so the app can remove rows one by one (firing triggers, respecting foreign keys) but cannot wipe a table in one non-logged statement that also bypasses the `orders.total` trigger. The application grants:
+`SELECT`, `INSERT`, `UPDATE`, `DELETE` are the four you use daily. `TRUNCATE` is deliberately separate from `DELETE`: Bazaar grants the app `DELETE` but never `TRUNCATE`, so the app can remove rows one by one (firing triggers, respecting foreign keys) but cannot wipe a table in one statement that skips per-row processing and also bypasses the `orders.total` trigger. The application grants:
 
 ```sql
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA bazaar TO bazaar_app;
@@ -556,7 +556,7 @@ PostgreSQL 15 removed the default `CREATE` grant to `PUBLIC` on the `public` sch
         |                   | =U/pg_database_owner                   |
 ```
 
-The `=U/...` line is the grant to `PUBLIC`: `USAGE` only, no `CREATE`. Bazaar keeps all its objects in a dedicated `bazaar` schema, which grants *nothing* to `PUBLIC` by default, so this hardening is belt-and-braces for Bazaar — but it is why `bazaar_app` cannot create a table even in `public` (you saw the error in §4).
+The `=U/...` line is the grant to `PUBLIC`: `USAGE` only, no `CREATE`. Bazaar keeps all its objects in a dedicated `bazaar` schema, which grants *nothing* to `PUBLIC` by default, so this hardening is belt-and-braces for Bazaar — but it is why `bazaar_app` cannot create a table even in `public` (§4 showed the same refusal for the `bazaar` schema).
 
 ### 5.8 Reading privileges: \dp, aclexplode, has_*_privilege
 
@@ -603,9 +603,11 @@ ORDER BY 1, 2;
 **`has_table_privilege`**, `has_column_privilege`, `has_schema_privilege`, `has_database_privilege`, `has_function_privilege`, `has_sequence_privilege` answer a yes/no question for any role, following membership and `PUBLIC`. They are the building blocks of the privilege-matrix query you will write in the exercises:
 
 ```sql
-SELECT has_table_privilege('bazaar_seller', 'bazaar.orders', 'UPDATE') AS can_update,  --> t (it has column UPDATE)
+SELECT has_table_privilege('bazaar_seller', 'bazaar.orders', 'UPDATE') AS can_update,  --> f (its UPDATE is column-level only)
        has_table_privilege('bazaar_seller', 'bazaar.orders', 'DELETE') AS can_delete;  --> f
 ```
+
+`has_table_privilege` looks only at table-level grants, so the seller's column `UPDATE` on `orders` does not count. To ask "may it update *some* column?" use `has_any_column_privilege('bazaar_seller', 'bazaar.orders', 'UPDATE')`, which returns `t`.
 
 ---
 
@@ -613,7 +615,7 @@ SELECT has_table_privilege('bazaar_seller', 'bazaar.orders', 'UPDATE') AS can_up
 
 Putting §2–§5 together, here is the reference design, which you will reproduce in the milestone. Each role has a job and exactly the privileges that job needs.
 
-```
+```text
                          bazaar_owner  (NOLOGIN)
                          owns schema + every object; subject to no RLS
                          migrations run as: SET ROLE bazaar_owner
@@ -636,7 +638,7 @@ Putting §2–§5 together, here is the reference design, which you will reprodu
 | Role | Login | Owns | Can do | Cannot |
 |---|---|---|---|---|
 | `bazaar_owner` | no | the schema and everything in it | anything (owner) | — (used only via `SET ROLE` for migrations) |
-| `bazaar_app` | yes (≤50) | nothing | `SELECT/INSERT/UPDATE/DELETE` all tables, `EXECUTE` functions, use sequences | `DROP`, `TRUNCATE`, `ALTER`, DDL, write `audit_log` (milestone §13) |
+| `bazaar_app` | yes (≤50) | nothing | `SELECT/INSERT/UPDATE/DELETE` all tables, `EXECUTE` functions, use sequences | `DROP`, `TRUNCATE`, `ALTER`, DDL; write `audit_log` directly once milestone requirement 6 revokes it (`1501` alone still grants full DML on it) |
 | `bazaar_readonly` | no (group) | nothing | `SELECT` all tables (except `users.email`, milestone) | anything that writes |
 | `bazaar_analyst` | yes | nothing | everything `bazaar_readonly` can, by membership | read `users.email`; write |
 | `bazaar_seller` | yes | nothing | see/edit *only its own* products, inventory, orders (fulfilment columns), via RLS | see other sellers; `DELETE` products; touch non-fulfilment order columns |
@@ -652,8 +654,9 @@ Sometimes a role must do something it does not itself have the privilege for, bu
 A **`SECURITY DEFINER`** function is the tool. By default a function is `SECURITY INVOKER`: it runs with the *caller's* privileges. A `SECURITY DEFINER` function runs with the *owner's* privileges instead — like Unix setuid. The caller borrows the owner's rights for the duration of the call, but only to do exactly what the function's body does. Bazaar uses it in three places:
 
 ```sql
--- audit rows get written no matter who changes a product/order, but only the
--- owner may write audit_log directly:
+-- audit rows get written no matter who changes a product/order, even by roles
+-- that may not write audit_log directly (milestone requirement 6 makes that
+-- include bazaar_app):
 ALTER FUNCTION audit_trigger() SECURITY DEFINER SET search_path = bazaar, pg_temp;
 
 -- the app can prepare next month's partition (requires owning the parent):
@@ -670,7 +673,7 @@ GRANT EXECUTE ON FUNCTION refresh_seller_sales_daily() TO bazaar_app;
 
 Notice the pattern around each one: `SET search_path = ...`, `OWNER TO bazaar_owner`, `REVOKE ... FROM PUBLIC`, `GRANT ... TO` the specific role. The first of these is not optional, and the next section explains the attack it blocks.
 
-### 8. The search_path hijack, and the fix
+## 8. The search_path hijack, and the fix
 
 > **This is the most important security pitfall in all of PostgreSQL. Read it twice.**
 
@@ -714,6 +717,8 @@ The exact same attack works through a hijacked **operator** (operators are funct
 **The fix** is to pin the function's `search_path` so the caller cannot influence name resolution:
 
 ```sql
+\c - postgres
+UPDATE bazaar.products SET price = 2199.99 WHERE id = 3;   -- first undo the attack's damage
 ALTER FUNCTION bazaar.email_taken(text) SET search_path = pg_catalog, bazaar, pg_temp;
 ```
 
@@ -870,7 +875,7 @@ ROLLBACK;
 
 The seller sees and edits only seller 2's rows (`USING`), cannot reassign a product to seller 1 or insert one for them (`WITH CHECK`), and an `UPDATE` touching an invisible row simply affects zero rows rather than erroring — the row isn't there, from the seller's point of view.
 
-> **Pitfall — this is critical with connection pools.** Use `SET LOCAL`, not `SET`. A plain `SET app.seller_id = '2'` lasts for the whole *session*. Behind a transaction-mode pooler like PgBouncer ([Module 17 §11](../17-operations/#11-connection-pooling-with-pgbouncer)), the next request — *for a different seller* — may reuse the same backend and inherit the leftover setting, showing seller 2's data to seller 3. `SET LOCAL` is reset automatically at the end of the transaction, so it cannot leak across requests. Demonstrated:
+> **Pitfall:** this is critical with connection pools. Use `SET LOCAL`, not `SET`. A plain `SET app.seller_id = '2'` lasts for the whole *session*. Behind a transaction-mode pooler like PgBouncer ([Module 17 §11](../17-operations/#11-connection-pooling-with-pgbouncer)), the next request — *for a different seller* — may reuse the same backend and inherit the leftover setting, showing seller 2's data to seller 3. `SET LOCAL` is reset automatically at the end of the transaction, so it cannot leak across requests. Demonstrated:
 >
 > ```sql
 > -- WRONG, on a pooled connection:
@@ -930,9 +935,9 @@ A session can also turn RLS off *for itself* with `SET row_security = off` — b
 
 ---
 
-## 11. (Covered above) — tenant scoping and pooling
+## 11. Tenant scoping and connection pools
 
-The pooling hazard in §10.3 is important enough that it is worth restating as its own rule, because it is where real multi-tenant RLS systems break: **the tenant setting lives in the transaction (`SET LOCAL`), the connection string, or a per-request `SET ROLE` to a tenant-specific role — never in session state that a pooled backend carries to the next client.** [Module 17 §11](../17-operations/#11-connection-pooling-with-pgbouncer) lists every kind of session state that leaks in transaction mode; RLS tenant GUCs are one more, and the most dangerous because the failure is silent and cross-tenant. [Module 27](../27-python-production/) builds the Python side.
+The pooling hazard in §10.3 is important enough to restate as its own rule, because it is where real multi-tenant RLS systems break: **the tenant setting lives in the transaction (`SET LOCAL`), the connection string, or a per-request `SET ROLE` to a tenant-specific role — never in session state that a pooled backend carries to the next client.** [Module 17 §11](../17-operations/#11-connection-pooling-with-pgbouncer) lists every kind of session state that leaks in transaction mode; RLS tenant GUCs are one more, and the most dangerous because the failure is silent and cross-tenant. [Module 27](../27-python-production/) builds the Python side.
 
 ---
 
@@ -943,8 +948,10 @@ The pooling hazard in §10.3 is important enough that it is worth restating as i
 A policy's `USING` expression is `AND`ed into *every* query against the table, as an extra filter. You can see it in the plan — here `bazaar_seller` counting its orders on the large dataset:
 
 ```sql
-SET app.seller_id = '1';
+BEGIN;
+SET LOCAL app.seller_id = '1';
 EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM orders;
+COMMIT;
 ```
 
 ```text
@@ -955,7 +962,7 @@ EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM orders;
  Execution Time: 14.2 ms
 ```
 
-Two lessons. First, **the policy predicate must be indexable**, or RLS turns every query into a full scan. `orders` has `(seller_id, created_at)`, so the `seller_id = ...` predicate becomes an index scan: 14 ms for a seller with 70k orders, 0.04 ms for a small seller. Without that index it would be a 500k-row seq scan on every seller query. **RLS raises the importance of indexing the tenant key.** The same `orders` query run as `bazaar_owner` (not subject to RLS) does a parallel seq scan + sort because there is no `seller_id` filter to exploit — the policy actually makes the seller's own view *faster*.
+Two lessons. First, **the policy predicate must be indexable**, or RLS turns every query into a full scan. `orders` has `(seller_id, created_at)`, so the `seller_id = ...` predicate becomes an index scan: 14 ms for a seller with 70k orders, 0.04 ms for a small seller. Without that index it would be a 500k-row seq scan on every seller query. **RLS raises the importance of indexing the tenant key.** The same `orders` query run as `bazaar_owner` (not subject to RLS) has to count all 500k rows because there is no `seller_id` filter to exploit — the policy actually makes the seller's own view *faster*.
 
 Second, the subquery policies (`inventory`, `order_items`) can be expensive. `SELECT count(*) FROM order_items` as a seller becomes a seq scan of 1.27M rows with a hashed subquery, ~500 ms for a big seller, because `order_items` has no `seller_id` of its own. The exercises measure this and explore two fixes: a `SECURITY DEFINER` function returning the seller's order-id array (fast for small sellers, planning-heavy for big ones), and **denormalizing `seller_id` onto `order_items`** with an index, which turns the policy into a plain indexable `seller_id = current_seller_id()` and the count into a 22 ms index-only scan. In a real multi-tenant schema, carrying the tenant key on every table is usually worth the storage precisely so RLS stays indexable.
 
@@ -1021,7 +1028,7 @@ Everything above assumes you are already connected *as* some role. Deciding whic
 
 Each non-comment line is a rule with five fields:
 
-```
+```text
 # TYPE    DATABASE   USER         ADDRESS         METHOD [options]
 local     all        all                          peer
 host       bazaar     bazaar_app   10.0.0.0/8      scram-sha-256
@@ -1064,7 +1071,7 @@ An `error` value flags a malformed line (the default course container's own file
 | Method | How it proves identity | Use when |
 |---|---|---|
 | `trust` | no check at all; the claimed role is accepted | Only a socket/loopback on a single-user machine. The course container uses it for `local`. **Never** on a network. |
-| `peer` | the client's OS username (from the kernel, for `local` only) must match (or map to) the DB role | Local admin on the server host. The official image's entrypoint relies on `peer` for `postgres` over the socket. |
+| `peer` | the client's OS username (from the kernel, for `local` only) must match (or map to) the DB role | Local admin on the server host. Many packaged installs use it for `postgres` over the socket; the official Docker image uses `trust` for `local` instead (see the rules above). |
 | `scram-sha-256` | SCRAM challenge-response; the password is never sent, only a proof | The default and correct choice for password auth. The server stores a non-reversible verifier. |
 | `md5` | legacy challenge-response over an MD5 hash | **Deprecated.** Weaker; the stored hash is effectively password-equivalent and the scheme has known weaknesses. Only for old clients that can't do SCRAM. |
 | `cert` | a client TLS certificate whose CN (or a mapped name) is the role; no password | `hostssl` only. Mutual TLS: the client proves identity with a key, not a secret the server stores. |
@@ -1225,4 +1232,4 @@ The hard part is never the cipher; it is **key management**. If the key sits in 
 
 ## What's next
 
-You can now lock Bazaar down. [Module 16](../16-internals/) you have already seen referenced throughout (SCRAM's cost, pages, MVCC); [Module 17](../17-operations/) turns the per-role timeouts and connection limits of §16 into a full operational toolkit and builds the PgBouncer lab whose pooling hazard we met in §10.3. The row-level security you built here reappears in [Module 27](../27-python-production/), wired to a connection pool from Python, and in the [capstone](../28-capstone/)'s seller portal. First, the milestone: build the whole role and RLS layout yourself, and pass the acceptance tests.
+You can now lock Bazaar down. [Module 16](../16-internals/) comes next and opens up the internals referenced throughout (SCRAM's cost, pages, MVCC); [Module 17](../17-operations/) turns the per-role timeouts and connection limits of §16 into a full operational toolkit and builds the PgBouncer lab whose pooling hazard we met in §10.3. The row-level security you built here reappears in [Module 27](../27-python-production/), wired to a connection pool from Python, and in the [capstone](../28-capstone/)'s seller portal. First, the milestone: build the whole role and RLS layout yourself, and pass the acceptance tests.

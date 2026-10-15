@@ -1382,7 +1382,7 @@ recovery_target_action = 'promote'
 
 `archive-get` is pgBackRest's `restore_command`. These leftover lines are harmless once recovery has finished (they are only read when a signal file exists), but remove them after the incident so that nobody is confused later.
 
-Note what this restore did to production: **everything after 08:07:02 is gone**, on the server itself. That was acceptable here only because nothing else happened in between. With real traffic, restore to a separate location (`--pg1-path=/some/other/dir`, or another host) and copy the table back, as in section 7.5. Other useful restore options: `--set=<label>` to restore a specific backup, `--type=immediate` for the backup's consistent point, `--type=lsn`/`xid`/`name`, `--target-timeline`, and `--db-include=bazaar` to restore only one database of a cluster.
+Note what this restore did to production: **everything after the target, 08:28:55.612545, is gone**, on the server itself. That was acceptable here only because nothing else happened in between. With real traffic, restore to a separate location (`--pg1-path=/some/other/dir`, or another host) and copy the table back, as in section 7.5. Other useful restore options: `--set=<label>` to restore a specific backup, `--type=immediate` for the backup's consistent point, `--type=lsn`/`xid`/`name`, `--target-timeline`, and `--db-include=bazaar` to restore only one database of a cluster.
 
 > **In production:** after any point-in-time restore, take a new **full backup** promptly. The server is on a new timeline, and while restoring along timelines works, a fresh full backup is the simplest guarantee that the next restore starts from the current history.
 
@@ -1523,7 +1523,7 @@ What it does, step by step:
 5. Waits for promotion, then counts again on the restored server.
 6. Compares: the `restored` column must equal `expected` (the moment of the restore point), *not* `current`. Tables that changed afterwards (`orders`, `order_items`, `audit_log`) prove that recovery stopped at the right place, not at the end of the WAL.
 
-Row counts are a coarse check. A thorough drill adds: `pg_amcheck` on the restored server to verify table and index structure; a few application-level queries ("the latest paid order has a payment", "every order's total equals the sum of its items"); and recording the elapsed time.
+Row counts are a coarse check. A thorough drill adds: `pg_amcheck` on the restored server to verify table and index structure; a few application-level queries ("the latest paid order has a payment", "every order's total equals the sum of its items"); and recording the elapsed time. The command below runs `pg_amcheck` on `m18-primary` to show what it reports; in a drill you run the same command on the restored server (`m18-drill`).
 
 ```bash
 docker exec -u postgres m18-primary pg_amcheck -d bazaar --install-missing --heapallindexed --progress
@@ -1556,6 +1556,8 @@ docker exec -u postgres m18-primary /lab/scripts/check-backup-freshness.sh
 BACKUP OK: last backup base-20261014T080401Z 234s ago; last WAL 000000020000000000000018.00000028.backup archived 24s ago
 ```
 
+(These lines were captured in a separate run of the lab, not in sequence with the sections above: the `00000002...` WAL name shows that this server was already on timeline 2 after a point-in-time restore, so the backup ages do not match the timestamps earlier in the module.)
+
 With a tighter threshold (to simulate a missed nightly run) and with the archive made unwritable again:
 
 ```text
@@ -1563,7 +1565,7 @@ BACKUP WARNING: last backup base-20261014T080401Z is 234s old; last WAL 00000002
 BACKUP CRITICAL: last backup base-20261014T080401Z 239s ago; archiver is FAILING (last success: 000000020000000000000018.00000028.backup)
 ```
 
-The thresholds (`BACKUP_WARN=26h`, `BACKUP_CRIT=50h`, `ARCHIVE_WARN=5min`, `ARCHIVE_CRIT=15min` by default) express the RPO: if archiving is stuck for 15 minutes, the RPO promise is already broken.
+The thresholds are environment variables in seconds; the defaults are `BACKUP_WARN=93600` (26 h), `BACKUP_CRIT=180000` (50 h), `ARCHIVE_WARN=300` (5 min) and `ARCHIVE_CRIT=900` (15 min). They express the RPO: if archiving is stuck for 15 minutes, the RPO promise is already broken.
 
 ## 11. A backup strategy for Bazaar, and the checklist
 

@@ -6,8 +6,13 @@ FROM woblerr/pgbackrest:2.54.2 AS pgbackrest
 FROM postgres:17
 
 COPY --from=pgbackrest /usr/bin/pgbackrest /usr/bin/pgbackrest
-COPY --from=pgbackrest /usr/lib/x86_64-linux-gnu/libssh2.so.1 /usr/lib/x86_64-linux-gnu/libssh2.so.1
-RUN pgbackrest version
+# The library lives in the multiarch directory (x86_64-linux-gnu, aarch64-linux-gnu, ...):
+# the wildcard picks whichever the image has, and the RUN moves it to this machine's one.
+COPY --from=pgbackrest /usr/lib/*-linux-gnu/libssh2.so.1 /tmp/pgbackrest-libs/
+RUN set -eux; \
+    mv /tmp/pgbackrest-libs/libssh2.so.1 "/usr/lib/$(uname -m)-linux-gnu/libssh2.so.1"; \
+    rmdir /tmp/pgbackrest-libs; \
+    pgbackrest version
 
 RUN set -eux; \
     mkdir -p /archive/wal /backups/base /var/lib/pgbackrest /var/log/pgbackrest /var/spool/pgbackrest /etc/pgbackrest; \
