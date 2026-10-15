@@ -31,7 +31,7 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
     "ruff>=0.6",
-    "pydantic>=2",  # only for the row-factory examples of module 22
+    "pydantic>=2",  # module 22 row-factory examples; the module 28 API uses it too (via fastapi)
     "pytest-xdist>=3.6",  # module 27: pytest -n 4
     "testcontainers[postgres]>=4.8",  # module 27: tests/test_containers.py (opt-in)
     "bazaar[otel]",  # module 27: the tracing test

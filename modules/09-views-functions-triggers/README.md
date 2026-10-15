@@ -463,7 +463,7 @@ IMMUTABLE
 RETURN round(p_price * (1 + p_rate), 2);
 ```
 
-- **Parameters** have a name and a type, and optionally a `DEFAULT`. A `p_` prefix is a common convention that avoids collisions with column names, which matters in PL/pgSQL (section 7.6).
+- **Parameters** have a name and a type, and optionally a `DEFAULT`. A `p_` prefix is a common convention that avoids collisions with column names, which matters in PL/pgSQL (section 7.5).
 - **`RETURNS`** gives the result type: a scalar, a composite type, `SETOF type` for a set of rows, `TABLE (...)` for a set of rows with named columns, or `void`.
 - **`LANGUAGE`** is `sql`, `plpgsql`, or one of the others (`plpython3u` and friends, C).
 - **Attributes** such as `IMMUTABLE`, `STRICT` and `PARALLEL SAFE` tell the planner what it may assume (section 6).
@@ -1606,7 +1606,7 @@ ROLLBACK;
 (1 row)
 ```
 
-One alert, for the crossing only. `WHEN` can't refer to `NEW` in a `DELETE` trigger or `OLD` in an `INSERT` trigger, and statement-level triggers can't have a `WHEN` at all. The most common `WHEN` of all is `WHEN (OLD.x IS DISTINCT FROM NEW.x)`, "only if x actually changed", which you'll use in the exercises. Note `IS DISTINCT FROM` rather than `<>`, which would be NULL (and so not true) when either side is NULL.
+One alert, for the crossing only. `WHEN` can't refer to `NEW` in a `DELETE` trigger or `OLD` in an `INSERT` trigger, and a statement-level trigger's `WHEN` can't refer to `NEW` or `OLD` at all, since there is no single row. The most common `WHEN` of all is `WHEN (OLD.x IS DISTINCT FROM NEW.x)`, "only if x actually changed", which you'll use in the exercises. Note `IS DISTINCT FROM` rather than `<>`, which would be NULL (and so not true) when either side is NULL.
 
 ### 13.2 `INSTEAD OF` triggers: making a join view writable
 
@@ -1708,14 +1708,18 @@ The design decisions:
 - **`session_user`, not `current_user`.** Module 15 makes this function `SECURITY DEFINER`, and inside such a function `current_user` is the function's *owner*. `session_user` is the role that logged in. In a real application, every request uses the same database role, so you'd also record the application's user id, typically from a setting like `current_setting('app.user_id', true)` that the application sets per transaction.
 
 ```sql
+BEGIN;
 UPDATE products SET price = 219.00 WHERE id = 10;
 UPDATE products SET price = price WHERE id = 11;                     -- no-op: not audited
 INSERT INTO products (seller_id, category_id, sku, title, price)
-VALUES (6, 6, 'SG-AUD-001', 'Sakura Earbuds', 59.00);                 -- id 63
-DELETE FROM products WHERE id = 63;
+VALUES (6, 6, 'SG-AUD-001', 'Sakura Earbuds', 59.00)
+RETURNING id AS new_id \gset
+DELETE FROM products WHERE id = :new_id;
 
 SELECT id, table_name, operation, row_pk, changed_by FROM audit_log ORDER BY id;
 ```
+
+`\gset` stores the new product's id in the psql variable `new_id`. Here it's 63. If you ran the rolled-back `INSERT` of section 3, yours is 64, because a rollback doesn't give sequence values back.
 
 ```text
  id | table_name | operation |   row_pk   | changed_by
@@ -1733,6 +1737,7 @@ SELECT key, old_row -> key AS old_value, new_row -> key AS new_value
 FROM audit_log, jsonb_object_keys(new_row) AS key
 WHERE id = 1
   AND old_row -> key IS DISTINCT FROM new_row -> key;
+ROLLBACK;
 ```
 
 ```text

@@ -1114,7 +1114,7 @@ COPY 180
 
 (The `WHERE` clause repeats the mistaken `DELETE`'s condition, evaluated at the moment of the mistake. Passed with `psql -c`, a `\copy` may span lines as shown; typed interactively in psql, it must be on one line.)
 
-The first time this lab was written, the obvious `INSERT ... SELECT` into `orders` and then into `order_items` produced 180 orders whose `total` was **doubled** for 176 of them. Remember Module 09: `orders.total` is maintained by a statement-level trigger on `order_items` that *adds* each inserted item to its order's total. The restored orders already carried their correct totals, and inserting their items added them again. Restoring rows into a live schema runs its triggers; think about each one. The correct version resets the totals before inserting the items, inside one transaction:
+Beware the obvious `INSERT ... SELECT` into `orders` and then into `order_items`: in this lab it produces 180 orders whose `total` is **doubled** for 176 of them. Remember Module 09: `orders.total` is maintained by a statement-level trigger on `order_items` that *adds* each inserted item to its order's total. The restored orders already carried their correct totals, and inserting their items added them again. Restoring rows into a live schema runs its triggers; think about each one. The correct version resets the totals before inserting the items, inside one transaction:
 
 ```sql
 BEGIN;
@@ -1159,7 +1159,7 @@ DROP SCHEMA recovery CASCADE;
                   0
 ```
 
-All 300 original orders, plus order 301, with correct totals. (The audit trigger also logged 180 `INSERT`s into `audit_log`; that is an honest record of the repair.) Remove the restore server with `docker rm -f m18-restore && docker volume rm m18-restore-pgdata`.
+All 300 original orders, plus order 301, with correct totals. (The audit trigger also logged the repair in `audit_log`: the 180 `INSERT`s, plus the `UPDATE`s of those orders' totals, both the reset to 0 and the `order_items` trigger adding the items back. That is an honest record of the repair.) Remove the restore server with `docker rm -f m18-restore && docker volume rm m18-restore-pgdata`.
 
 > **In production:** for larger repairs, connect the restored server to production with `postgres_fdw` (Module 21 introduces it) and run the `INSERT ... SELECT` directly across servers instead of piping `\copy`. And write the repair down in the incident report: what was restored, from which point, and how it was verified.
 
