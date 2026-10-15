@@ -1,13 +1,13 @@
 """orders.total must not be negative (naive)
 
 Revision ID: 2605
-Revises: 2701
+Revises: 2801
 """
 
 from alembic import op
 
 revision = "2605"
-down_revision = "2701"
+down_revision = "2801"
 branch_labels = None
 depends_on = None
 

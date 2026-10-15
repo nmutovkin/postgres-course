@@ -1,13 +1,13 @@
-# Module 26 exercises: Migrations with Alembic
+# Module 26: Exercises
 
 <!-- nav:start -->
 > [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
 > [← 25 SQLAlchemy ORM](../25-sqlalchemy-orm/README.md) · [Course home](../../README.md) · [27 Production Python and Postgres →](../27-python-production/README.md)
 <!-- nav:end -->
 
-**Setup.** `./project/bin/reset.sh 26`, then in `project/python`: `alembic stamp 2600 && alembic upgrade head` (the module's milestone). The database must be back at `2701` after every exercise: the test suite refuses to run otherwise.
+**Setup.** `./project/bin/reset.sh 26`, then in `project/python`: `alembic stamp 2600 && alembic upgrade head` (the module's milestone). The database must be back at the head after every exercise (2801: 2701 was the head at the end of Module 27; Module 28 adds 2801). Otherwise the tests marked `migrated` are skipped, and the project's revisions don't know your exercise's.
 
-Exercises that add a revision number it `2605` (and `2606`) on top of `2701`. You can put your file into `migrations/versions/` while you work on it and remove it (after `alembic downgrade 2701`) when you're done. The reference solutions use [`solutions/scratch_alembic.py`](solutions/scratch_alembic.py) instead: it copies `alembic.ini` and `migrations/` to a temporary directory, adds the exercise's revision there, and runs Alembic on that copy, against an empty scratch database or the reference one. Feel free to use it too.
+Exercises that add a revision number it `2605` (and `2606`) on top of the current head: check it with `alembic heads` and use it as `down_revision` (the solutions use `2801`). You can put your file into `migrations/versions/` while you work on it and remove it (after `alembic downgrade 2801`) when you're done. The reference solutions use [`solutions/scratch_alembic.py`](solutions/scratch_alembic.py) instead: it copies `alembic.ini` and `migrations/` to a temporary directory, adds the exercise's revision there, and runs Alembic on that copy, against an empty scratch database or the reference one. Feel free to use it too.
 
 Measure, don't guess: [`examples/lock_probe.py`](examples/lock_probe.py) runs DDL statements against `orders` (or another table) under concurrent traffic and reports locks and the worst latency.
 
@@ -55,7 +55,7 @@ Payments flagged by fraud screening go **on hold** before they're shipped. Write
 3. What should `downgrade()` do?
 4. On the upgraded database, insert an order with status `on_hold` and read it with the module-22 code (`bazaar.db.connect()`, which registers the `OrderStatus` enum). What does that teach about deployment order?
 
-**Self-check:** the naive version fails with `unsafe use of new value "on_hold" of enum type order_status`, and the database is still at 2701 with the old labels. The fixed version leaves `enum_range(NULL::order_status)` = `{pending,paid,on_hold,shipped,delivered,cancelled,refunded}` and a valid partial index.
+**Self-check:** the naive version fails with `unsafe use of new value "on_hold" of enum type order_status`, and the database is still at 2801 with the old labels. The fixed version leaves `enum_range(NULL::order_status)` = `{pending,paid,on_hold,shipped,delivered,cancelled,refunded}` and a valid partial index.
 
 <details><summary>Hint</summary>
 
@@ -75,7 +75,7 @@ psql -d bazaar_mystery -c "DROP TABLE bazaar.alembic_version" \
 
 Write a script that finds the revision whose schema is closest to the mystery database, prints the remaining differences, stamps the database, and upgrades it to head.
 
-**Self-check:** the closest revision is 2604, with exactly one difference (`only in mystery: index:orders_status_idx`); revisions 2603 and 2701 are 4 and 26 differences away. After `stamp 2604` and `upgrade head`, `alembic current` says `2701 (head)`.
+**Self-check:** the closest revision is 2604, with exactly one difference (`only in mystery: index:orders_status_idx`); revisions 2603, 2701 and 2801 are 4, 26 and 30 differences away. After `stamp 2604` and `upgrade head`, `alembic current` says `2801 (head)`.
 
 <details><summary>Hint</summary>
 
@@ -94,7 +94,7 @@ from sqlalchemy.dialects import postgresql as pg
 from bazaar.orm.models import Order  # noqa: F401  (for "type hints")
 
 revision = "2605"
-down_revision = "2701"
+down_revision = "2801"
 
 
 def upgrade() -> None:
@@ -183,7 +183,7 @@ The product team now says "basket", not "cart". Rename `cart_items` to `basket_i
 
 Prove, connected as `bazaar_app`, that at 2605 both the old code's upsert (`INSERT INTO cart_items ... ON CONFLICT (user_id, product_id) DO UPDATE ...`) and the new code's (on `basket_items`) work, and that at 2606 only the new one does.
 
-**Self-check:** at 2605 both upserts succeed and change the same row; at 2606 the old one fails with `relation "cart_items" does not exist`; downgrading to 2701 restores `cart_items`, `cart_items_pkey` and `cart_items_product_id_idx`.
+**Self-check:** at 2605 both upserts succeed and change the same row; at 2606 the old one fails with `relation "cart_items" does not exist`; downgrading to 2801 restores `cart_items`, `cart_items_pkey` and `cart_items_product_id_idx`.
 
 <details><summary>Hint</summary>
 
@@ -192,18 +192,18 @@ A simple view (`SELECT * FROM basket_items`) is automatically updatable, `ON CON
 
 ## Exercise 9 ★★: Two heads
 
-Two developers branch off at head 2701. One writes revision 2702 ("add wishlist"), the other 2703 ("add gift wrap"); both say `down_revision = "2701"`. Both branches get merged.
+Two developers branch off at head 2801. One writes revision 2802 ("add wishlist"), the other 2803 ("add gift wrap"); both say `down_revision = "2801"`. Both branches get merged.
 
 1. In a scratch copy of the migrations, create both revisions (as Alembic would on each branch). What do `alembic heads` and `alembic upgrade head` say?
 2. Write the CI check that fails in this situation, with a message that tells the developer what to do.
 3. Resolve it twice: by **rebasing** the second revision, and by a **merge revision**. Print the history for both.
-4. When is a merge revision the right answer, and what does it *not* guarantee about the order of 2702 and 2703?
+4. When is a merge revision the right answer, and what does it *not* guarantee about the order of 2802 and 2803?
 
-**Self-check:** with two heads, `alembic upgrade head` fails with "Multiple head revisions are present"; after either fix there's exactly one head (2703 or 2704), and the merge revision has `down_revision = ('2702', '2703')`.
+**Self-check:** with two heads, `alembic upgrade head` fails with "Multiple head revisions are present"; after either fix there's exactly one head (2803 or 2804), and the merge revision has `down_revision = ('2802', '2803')`.
 
 <details><summary>Hint</summary>
 
-`command.revision(cfg, ..., head="2701", splice=True)` creates a revision on a non-head parent (that's what the second branch did). `ScriptDirectory.from_config(cfg).get_heads()` for the check. If you rewrite revision files in a script, beware of Python's cached `.pyc` files.
+`command.revision(cfg, ..., head="2801", splice=True)` creates a revision on a non-head parent (that's what the second branch did). `ScriptDirectory.from_config(cfg).get_heads()` for the check. If you rewrite revision files in a script, beware of Python's cached `.pyc` files.
 </details>
 
 ## Exercise 10 ★★★: Prove that writers were never blocked
@@ -213,7 +213,7 @@ Two developers branch off at head 2701. One writes revision 2702 ("add wishlist"
 - a traffic thread reads and updates random orders by primary key, recording latencies, and
 - a sampler thread polls `pg_locks` every couple of milliseconds for the **migration's** backend (identify it by `application_name`) and its locks on `orders`,
 
-and then reports the longest time the migration held a lock that conflicts with `ROW EXCLUSIVE` (what writers need), plus traffic latency percentiles. It must exit non-zero when that time exceeds a threshold (default 50 ms), and downgrade back to 2701 afterwards.
+and then reports the longest time the migration held a lock that conflicts with `ROW EXCLUSIVE` (what writers need), plus traffic latency percentiles. It must exit non-zero when that time exceeds a threshold (default 50 ms), and downgrade back to 2801 afterwards.
 
 Use it on two versions of a revision that adds `CHECK (total >= 0)` to `orders`: `op.create_check_constraint(...)`, and the online version.
 
@@ -246,9 +246,9 @@ Years later, the team wants new databases to start from a recent snapshot instea
 
 1. Produce the new snapshot from a database at 2604 (what must the dump leave out that `make_baseline.sh` didn't need to?).
 2. Prove that a fresh database built from the squashed chain equals one built from the original chain.
-3. What happens to an existing database at 2701? At 2603?
+3. What happens to an existing database at the head? At 2603?
 
-**Self-check:** the squashed history is `<base> -> 2700 -> 2701 (head)`; the two fresh databases have no catalog differences; a database at 2701 is unaffected; one at 2603 fails with `Can't locate revision identified by '2603'`.
+**Self-check:** the squashed history is `<base> -> 2700 -> 2701 -> 2801 (head)`; the two fresh databases have no catalog differences; a database at the head is unaffected; one at 2603 fails with `Can't locate revision identified by '2603'`.
 
 <details><summary>Hint</summary>
 

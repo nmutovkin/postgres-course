@@ -1,4 +1,4 @@
-# Module 27 exercises: Production Python and Postgres
+# Module 27: Exercises
 
 <!-- nav:start -->
 > [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  

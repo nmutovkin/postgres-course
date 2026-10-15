@@ -67,7 +67,7 @@ def main() -> None:
             with psycopg.connect(DSN) as c:  # the trigger decrements on delete
                 c.execute("DELETE FROM reviews WHERE title = %s", (MARK,))
                 c.commit()
-            mig.downgrade(DSN, "2701")
+            mig.downgrade(DSN, "2801")
 
 
 if __name__ == "__main__":

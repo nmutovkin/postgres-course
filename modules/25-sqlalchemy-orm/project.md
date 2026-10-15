@@ -1,4 +1,4 @@
-# Module 25 project: ORM models, sessions and services
+# Module 25: Project milestone — ORM models, sessions and services
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
@@ -73,7 +73,7 @@ pytest tests/test_orm.py -v
 pytest                                    # everything, modules 22-25
 ```
 
-Expected: ruff passes; the 17 tests of `test_orm.py` pass; the whole suite has 52 tests and passes in a few seconds.
+Expected: ruff passes; the 17 tests of `test_orm.py` pass; with Modules 22–24's, that's 52 tests (`test_repo`, `test_aio`, `test_worker`, `test_sa_core`, `test_orm`), passing in a few seconds. (The finished reference package has more, from Modules 26–28.)
 
 A quick look at the services:
 

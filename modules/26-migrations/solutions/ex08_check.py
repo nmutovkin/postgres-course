@@ -46,7 +46,7 @@ def run(dsn: str, label: str, sql: str) -> None:
 def main() -> None:
     files = [HERE / "ex08_2605_rename_cart_expand.py", HERE / "ex08_2606_rename_cart_contract.py"]
     with scratch_migrations(*files) as mig, scratch_db() as dsn:
-        mig.upgrade(dsn, "2701")
+        mig.upgrade(dsn, "2801")
         with psycopg.connect(dsn, autocommit=True) as c:
             c.execute("INSERT INTO users (email, full_name) VALUES ('c@example.com', 'C')")
             c.execute(
@@ -65,7 +65,7 @@ def main() -> None:
         print("at 2606 (contract):")
         run(dsn, "old code (cart_items)  ", OLD)
         run(dsn, "new code (basket_items)", NEW)
-        mig.downgrade(dsn, "2701")
+        mig.downgrade(dsn, "2801")
         with psycopg.connect(dsn) as c:
             print(
                 "after downgrade:",

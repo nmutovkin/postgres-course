@@ -1,4 +1,4 @@
-# Module 27 project: a production-ready data layer
+# Module 27: Project milestone — a production-ready data layer
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
@@ -55,9 +55,9 @@ Update `project/python/README.md`: module table, settings table, layout, running
 ```bash
 cd project/python && source .venv/bin/activate
 export BAZAAR_DSN=postgresql://postgres:postgres@localhost:5432/bazaar
-alembic upgrade head && alembic current          # 2701 (head)
+alembic upgrade head && alembic current          # 2801 (head): 2701 was the head at the end of Module 27; Module 28 adds 2801
 ruff check src tests migrations && ruff format --check src tests migrations
-pytest -q                                        # 126 passed, 1 skipped (the container test)
+pytest -q                                        # 146 passed, 1 skipped (the container test)
 pytest -q -n 4                                   # the same, about 2-2.5x faster
 BAZAAR_TEST_DOCKER=1 pytest -q -m docker         # 1 passed (needs Docker)
 python ../../modules/27-python-production/examples/outbox_demo.py

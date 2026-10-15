@@ -1,4 +1,4 @@
-# Module 27 solutions
+# Module 27: Solutions
 
 <!-- nav:start -->
 > [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
@@ -27,7 +27,7 @@ All solutions ran against PostgreSQL 17.11 with the large dataset at revision 27
 
 <!-- toc:end -->
 
-## Exercise 1: Classify real failures
+## Exercise 1 ★: Classify real failures
 
 [`ex01_classify.py`](ex01_classify.py):
 
@@ -47,7 +47,7 @@ That's the output **after** the fix. The first run classified the wrong password
 
 Notes on the others: `BZ002` is a custom SQLSTATE from `place_order()`, so psycopg raises the generic `DatabaseError` with `sqlstate = 'BZ002'` (`bazaar.errors.translate()` turns it into `ProductUnavailable`). The `REPEATABLE READ` case produces `40001` because the second transaction's snapshot predates the first's committed update. Under `READ COMMITTED` the same pair would simply wait and then update the new version.
 
-## Exercise 2: Timeouts for one slow endpoint
+## Exercise 2 ★: Timeouts for one slow endpoint
 
 [`ex02_report_timeouts.py`](ex02_report_timeouts.py):
 
@@ -79,7 +79,7 @@ afterwards: 5s / 0
 - The synchronous caller's deadline only stopped the *waiting*. The thread and the server kept going for another 0.8 s, holding a pooled connection, and the result was thrown away. In synchronous code, the server-side `statement_timeout` is the real limit; the async version (psycopg's `AsyncConnection` under `asyncio.timeout()`) sends a cancel request (section 4).
 - Counting active backends needs `backend_type = 'client backend'`: the first version counted 3, because the report ran as a parallel query with two worker processes that share its `application_name`.
 
-## Exercise 3: Timeouts that survive PgBouncer
+## Exercise 3 ★: Timeouts that survive PgBouncer
 
 [`ex03_role_defaults.sql`](ex03_role_defaults.sql), then [`ex03_check.py`](ex03_check.py):
 
@@ -101,7 +101,7 @@ a client-sent application_name wins: bazaar-worker
 
 Where should these statements live? They're per-environment configuration with cluster-wide reach, so provisioning (the same place that sets the passwords) is the natural home. A migration could run them only as a role with `CREATEROLE` and admin rights on these roles, which the migration role shouldn't need for anything else.
 
-## Exercise 4: A retry decorator with jitter, proven
+## Exercise 4 ★★: A retry decorator with jitter, proven
 
 [`ex04_retry.py`](ex04_retry.py):
 
@@ -148,7 +148,7 @@ def retry_transaction(
 
 **Alternatives.** The `tenacity` library provides this decorator (`retry_if_exception_type`, `wait_random_exponential`, `stop_after_attempt`). The value of writing it once is knowing what to configure: retry only the transaction-owning function, on the right errors, with jitter and a cap.
 
-## Exercise 5: How much faster are template databases?
+## Exercise 5 ★★: How much faster are template databases?
 
 [`ex05_test_template_speed.py`](ex05_test_template_speed.py), each configuration run twice:
 
@@ -161,7 +161,7 @@ The slowest setup per test: 0.56–0.86 s with migrations, 0.36–0.38 s with th
 
 The gap grows with the schema: every new revision adds to the migration time and nothing to the clone time, and seed data in the template is free per test. Direct measurement of the clone itself: `CREATE DATABASE ... TEMPLATE` 104–158 ms with `STRATEGY WAL_LOG`, 152–194 ms with `FILE_COPY`; `DROP DATABASE` 14–26 ms and 58–87 ms respectively.
 
-## Exercise 6: Pools and `fork()`
+## Exercise 6 ★★: Pools and `fork()`
 
 [`ex06_fork.py`](ex06_fork.py), two runs:
 
@@ -192,7 +192,7 @@ Each worker inherited the parent's pooled connection: one socket, one PostgreSQL
 
 `dispose_after_fork()` registers `engine.dispose(close=False)` to run in every child right after `fork()`. `close=False` drops the child's references to the inherited connections **without** closing them: closing would send a Terminate message over the shared socket and end the *parent's* session. Each child then opens its own connections (three different backends). One worker in the first run happened to get its own connection anyway (the pool replaced a connection it considered broken); you can't rely on that.
 
-## Exercise 7: A concurrency test that can fail
+## Exercise 7 ★★: A concurrency test that can fail
 
 [`ex07_test_cancel.py`](ex07_test_cancel.py) (`pytest -s` to see the prints):
 
@@ -206,7 +206,7 @@ The naive version reads `pending` in all ten sessions (a barrier after the read 
 
 Two design points. With only one order in the fixture, the over-release would stop at 0, and the final `reserved` (0) would be *correct*: a test that checked only the end state would pass on the buggy code. The second order makes the damage visible. And the template for this test has the function installed (`fingerprint + "-cancel"` makes it a different template from the project's), so each test gets a database with it in ~0.2 s.
 
-## Exercise 8: A projection fed by the outbox
+## Exercise 8 ★★: A projection fed by the outbox
 
 [`ex08_projection.py`](ex08_projection.py):
 
@@ -218,7 +218,7 @@ projection vs. orders, mismatches: []
 
 40 checkouts produced 81 orders (carts span up to three sellers) and 81 events. The broker delivered 108 times (every third message twice); the consumer applied 81 and skipped 27, and the projection matches the orders exactly. The handler is an increment (`ON CONFLICT ... DO UPDATE SET orders = orders + 1, revenue = revenue + EXCLUDED.revenue`), which is not idempotent by itself: `processed_messages` is what makes it safe. An alternative is a handler that is idempotent by construction, for example recomputing the seller's day from `orders` on every event (`INSERT ... SELECT count(*), sum(total) ... ON CONFLICT DO UPDATE SET ... = EXCLUDED...`). That needs no dedup table, at the cost of a query per event, and only works when the consumer can read the source data.
 
-## Exercise 9: Database time per request
+## Exercise 9 ★★: Database time per request
 
 [`ex09_request_db_time.py`](ex09_request_db_time.py):
 
@@ -232,7 +232,7 @@ one log line: {"ts": "2026-10-14T11:55:50.489", "level": "INFO", "logger": "baza
 
 Two engine listeners accumulate into a `RequestStats` object held in a `ContextVar` that `request()` sets and resets. The report is what a query over the JSON logs gives: the old handler, an N+1 pattern (1 query for the orders, 1 per order for its items, 1 per distinct product), sends 34 times as many statements as the service and costs nearly 4 times its database time, while the service's 2 statements per request don't depend on the data. This per-request count is the production counterpart of Module 25's `count_statements()` test: it finds N+1 patterns in code paths no test covers. Note that database time is less than request time (88.2 ms versus 45.1 ms here): the rest is Python building objects.
 
-## Exercise 10: Size a pool, and prove the size
+## Exercise 10 ★★★: Size a pool, and prove the size
 
 [`ex10_pool_sizing.py`](ex10_pool_sizing.py):
 
@@ -253,7 +253,7 @@ pool 16: 1293 requests, latency p50    5.4 ms, p99    21.2 ms; pool wait p99    
 
 Deploy 4 (per process): about 3× the average need, for bursts. Doubling it buys almost nothing here and costs server connections (Module 17's budget). In the first attempt the query was too fast (W = 1.3 ms at 150 requests/s, L = 0.2) and every pool size looked the same: load tests need a load that matters. Also note the open loop: with a closed loop (each worker waiting for its previous request), the one-connection pool would simply have served fewer requests per second, and the overload would have been invisible.
 
-## Exercise 11: Exactly once, under every crash
+## Exercise 11 ★★★: Exactly once, under every crash
 
 [`ex11_failure_matrix.py`](ex11_failure_matrix.py):
 
@@ -275,7 +275,7 @@ Who makes each crash harmless:
 
 251 deliveries for 166 messages, 37 rounds (a relay round ends at the first rejected publish, to keep order), and in the end exactly one email per order. Remove `consume_once()` and C2 and R2 produce duplicate emails; move `outbox.record()` out of the order's transaction and P produces emails for orders that don't exist.
 
-## Exercise 12: Checkout through failovers
+## Exercise 12 ★★★: Checkout through failovers
 
 [`ex12_failover_checkout.py`](ex12_failover_checkout.py):
 

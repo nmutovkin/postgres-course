@@ -1,7 +1,7 @@
 """reviews.helpful_votes, and an index for "most helpful first"
 
 Revision ID: 2605
-Revises: 2701
+Revises: 2801
 Create Date: 2026-10-14
 
 Module 26, exercise 5: autogenerate's draft, reviewed.
@@ -23,7 +23,7 @@ from bazaar.migrate import (
 )
 
 revision: str = "2605"
-down_revision: str | Sequence[str] | None = "2701"
+down_revision: str | Sequence[str] | None = "2801"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

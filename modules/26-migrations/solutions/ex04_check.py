@@ -27,16 +27,16 @@ def snap(dsn: str) -> dict[str, str]:
 
 def main() -> None:
     with scratch_migrations(HERE / "ex04_fixed_2605.py") as mig, scratch_db() as dsn:
-        mig.upgrade(dsn, "2701")
+        mig.upgrade(dsn, "2801")
         before = snap(dsn)
         mig.upgrade(dsn, "2605")
         after = snap(dsn)
         print("2605 adds:", [d.split(": ", 1)[1] for d in diff(before, after) if "only in" in d])
-        mig.downgrade(dsn, "2701")
-        print("downgrade restores 2701:", diff(before, snap(dsn)) == [])
+        mig.downgrade(dsn, "2801")
+        print("downgrade restores 2801:", diff(before, snap(dsn)) == [])
         mig.upgrade(dsn, "2605")
         print("re-upgrade is identical:", diff(after, snap(dsn)) == [])
-        sql = mig.sql("2701:2605")
+        sql = mig.sql("2801:2605")
         print(
             "statements outside a transaction:",
             sql.count("CONCURRENTLY"),

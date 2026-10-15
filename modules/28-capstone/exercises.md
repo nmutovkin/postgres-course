@@ -1,4 +1,4 @@
-# Module 28 exercises: Capstone: the Bazaar Service
+# Module 28: Exercises
 
 <!-- nav:start -->
 > [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  

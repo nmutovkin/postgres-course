@@ -1,7 +1,7 @@
 """orders: tracking token, status index, required shipping address, non-negative total
 
 Revision ID: 2605
-Revises: 2701
+Revises: 2801
 Create Date: 2026-10-14
 
 Module 26, exercise 4: the reviewed version. No statement holds a lock that
@@ -22,7 +22,7 @@ from bazaar.migrate import (
 )
 
 revision: str = "2605"
-down_revision: str | Sequence[str] | None = "2701"
+down_revision: str | Sequence[str] | None = "2801"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

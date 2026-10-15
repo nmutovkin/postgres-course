@@ -24,7 +24,7 @@ On Black Friday 2025, Bazaar took 3,527 orders in one day. Somewhere in that day
 cd project/python && uv sync && source .venv/bin/activate
 export BAZAAR_DSN=postgresql://postgres:postgres@localhost:5432/bazaar
 alembic stamp 2600 && alembic upgrade head      # includes revision 2701 (this module's outbox)
-pytest -n 4                                     # 126 tests, about 11 s
+pytest -n 4                                     # 146 passed, 1 skipped, about 14 s
 ```
 
 You need Module 26's migrations and `bazaar.testing`; the outbox builds on Module 10's job queue and Module 23's worker. The PgBouncer lab in [`lab/`](lab/) needs Docker (section 5.3). Outputs come from PostgreSQL 17.11, psycopg 3.3.6, asyncpg 0.32.0, SQLAlchemy 2.1.4, pytest-xdist 3.8.0, testcontainers 4.15.0 and OpenTelemetry 1.45.1.

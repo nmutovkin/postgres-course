@@ -1,4 +1,4 @@
-# Module 28 project: the Bazaar service (capstone)
+# Module 28: Project milestone — the Bazaar service (capstone)
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

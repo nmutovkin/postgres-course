@@ -117,10 +117,10 @@ def main() -> None:
             diff(snap(old_db), snap(new_db), labels=("original", "squashed")) == [],
         )
 
-        # 5. Existing databases: at 2701 nothing changes; below 2604 they are stuck.
+        # 5. Existing databases: at head nothing changes; below 2604 they are stuck.
         e = sa.create_engine(old_db.replace("postgresql://", "postgresql+psycopg://"))
         with e.connect() as c:
-            print("database at 2701, squashed scripts: current =", migrate.current_revisions(c))
+            print("database at head, squashed scripts: current =", migrate.current_revisions(c))
         e.dispose()
         migrate.upgrade(stale_db, "2603")
         try:

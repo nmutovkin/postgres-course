@@ -1,7 +1,7 @@
 """payments: (provider, provider_ref) unique, so provider webhooks can upsert
 
 Revision ID: 2605
-Revises: 2701
+Revises: 2801
 Create Date: 2026-10-14
 
 Module 26, exercise 7.
@@ -26,7 +26,7 @@ from alembic import op
 from bazaar.migrate import create_index_concurrently
 
 revision: str = "2605"
-down_revision: str | Sequence[str] | None = "2701"
+down_revision: str | Sequence[str] | None = "2801"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

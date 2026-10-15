@@ -60,7 +60,7 @@ def main() -> None:
             except Exception as e:  # noqa: BLE001
                 print("old code reading the row:", type(e).__name__, "-", e)
         try:
-            mig.downgrade(dsn, "2701")
+            mig.downgrade(dsn, "2801")
         except NotImplementedError as e:
             print("downgrade:", e)
 

@@ -21,7 +21,7 @@ from scratch_alembic import scratch_db  # noqa: E402
 from bazaar import migrate  # noqa: E402
 from bazaar.catalog import diff, snapshot  # noqa: E402
 
-REVISIONS = ["2600", "2601", "2602", "2603", "2604", "2701"]
+REVISIONS = ["2600", "2601", "2602", "2603", "2604", "2701", "2801"]
 
 
 def snap(dsn: str) -> dict[str, str]:

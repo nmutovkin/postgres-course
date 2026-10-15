@@ -186,8 +186,10 @@ def downgrade() -> None:
 Revisions form a **directed graph** through `down_revision`. The **base** is "no revision"; a **head** is a revision that no other revision names as its parent. Normally there's exactly one head, and the graph is a straight line:
 
 ```text
-<base> -> 2600 -> 2601 -> 2602 -> 2603 -> 2604 -> 2701 (head)
+<base> -> 2600 -> 2601 -> 2602 -> 2603 -> 2604 -> 2701 -> 2801 (head)
 ```
+
+This module writes 2600–2604. The package already contains the later ones too: 2701 was the head at the end of Module 27; Module 28 adds 2801.
 
 The database's `alembic_version` table holds the revision it's at. `alembic upgrade head` reads it, computes the path from there to the head, and runs each revision's `upgrade()` in order, updating `alembic_version` after each one. `alembic downgrade 2602` walks backwards, calling `downgrade()`. The ids are opaque strings: Alembic orders revisions *only* by the graph, never by comparing ids. By default it generates random 12-hex-digit ids (`3f1a9c0d2b7e`). Bazaar uses `--rev-id` with the module number and a sequence (`2601`, `2602`), like `project/db/`, which makes the history readable; section 5.1 discusses what that costs.
 
@@ -299,14 +301,14 @@ from bazaar import migrate
 migrate.upgrade(dsn)                    # alembic -x dsn=... upgrade head
 migrate.downgrade(dsn, "2602")
 migrate.upgrade_sql("2601:2604")        # offline SQL, as a string
-migrate.current_revisions(conn)         # ('2701',)
+migrate.current_revisions(conn)         # ('2801',)
 migrate.check_schema(conn)              # raises SchemaOutOfDate unless at head
 ```
 
-`check_schema()` is what the test session runs first (`tests/conftest.py`) and what the Module 28 service runs at startup. Code that expects revision 2701 refuses to start against a database at 2604, instead of failing on the first request that touches the outbox:
+`check_schema()` is what the Module 28 service runs at startup (and the test suite checks the reference database with it). Code that expects revision 2801 refuses to start against a database at 2604, instead of failing on the first request that touches the outbox:
 
 ```text
-schema not at head: database is at ['2603'], code expects ['2701']: run `alembic upgrade head` (or `alembic stamp 2600` first on a database built by project/bin/reset.sh)
+schema not at head: database is at ['2603'], code expects ['2801']: run `alembic upgrade head` (or `alembic stamp 2600` first on a database built by project/bin/reset.sh)
 ```
 
 ---
@@ -357,7 +359,7 @@ Each edit has a reason:
 - **The `SET`s at the top.** `pg_dump` starts with `SET statement_timeout = 0; SET lock_timeout = 0; ... SELECT pg_catalog.set_config('search_path', '', false);`. Those are *session* settings: executed on the migration connection, they'd outlive the baseline and silently switch off the `lock_timeout` that `env.py` set for every later revision in the same run. Everything in the dump is schema-qualified (`CREATE TABLE bazaar.products`), so the empty `search_path` isn't needed. The one setting that matters, `check_function_bodies = false` (functions may reference objects created later in the file), is set transaction-locally by the revision instead.
 - **`CREATE SCHEMA IF NOT EXISTS`**, because `env.py` has already created the schema to hold `alembic_version`.
 
-The cleaned dump of the reference state is 4,102 lines. It must be taken **before** anything else touches the database: in the course, before `sql/2301_notify.sql` is applied, because that becomes revision 2601. It's generated once, on adoption day, and committed. Never regenerate it: databases built from a newer snapshot would differ from the ones that were stamped.
+The cleaned dump of the reference state is 4,102 lines. It must be taken **before** anything else touches the database: in the course, on a fresh `reset.sh 26` database, before the NOTIFY triggers of `sql/2301_notify.sql` are added, because they become revision 2601. It's generated once, on adoption day, and committed. Never regenerate it: databases built from a newer snapshot would differ from the ones that were stamped.
 
 ### 4.3 The baseline revision
 
@@ -437,9 +439,10 @@ INFO  [bazaar.migrate] backfill products: 200000 rows in 23.5s (batches of 10000
 INFO  [alembic.runtime.migration] Running upgrade 2602 -> 2603, products.slug NOT NULL, contract phase, without a long ACCESS EXCLUSIVE scan
 INFO  [alembic.runtime.migration] Running upgrade 2603 -> 2604, orders.idempotency_key: a client-chosen key that makes checkout safe to retry
 INFO  [alembic.runtime.migration] Running upgrade 2604 -> 2701, transactional outbox: outbox + processed_messages (module 27)
+INFO  [alembic.runtime.migration] Running upgrade 2701 -> 2801, storefront: search_products() from module 13, its trigram index, a browse index
 ```
 
-(Revision 2701 belongs to Module 27; it's already in the reference package, so `head` includes it.) A brand-new database needs no stamp:
+(Revisions 2701 and 2801 belong to Modules 27 and 28; they're already in the reference package, so `head` includes them.) A brand-new database needs no stamp:
 
 ```bash
 createdb bazaar_new        # or CREATE DATABASE in psql
@@ -470,7 +473,7 @@ The baseline takes under a second on an empty database; the slug backfill has no
 
 It covers relations (kind, owner, ACL, RLS flags, partition key and bounds, comments), columns (position, `format_type`, `NOT NULL`, default, identity, generated, collation, column ACLs), constraints (`pg_get_constraintdef` and whether they're validated), indexes (`pg_get_indexdef` and validity), functions (`pg_get_functiondef`, owner, ACL), triggers (`pg_get_triggerdef` and whether enabled), views, policies, enum labels in order, domains, sequences, extended statistics, the schema's ACL, default privileges and extensions. OIDs, physical column numbers, statistics and data are deliberately left out. `diff()` reports differences per object.
 
-Comparing the reference database (stamped at 2600, `sql/2301_notify.sql` applied by hand back in Module 23) with a fresh database at 2600 found exactly what you'd expect:
+Comparing a reference database stamped at 2600 that also had `sql/2301_notify.sql` applied by hand (the way Module 23 first introduced the file) with a fresh database at 2600 found exactly what you'd expect:
 
 ```text
 646 642
@@ -480,11 +483,11 @@ only in bazaar: trigger:jobs.jobs_notify_ready
 only in bazaar: trigger:orders.orders_notify_new
 ```
 
-The baseline is the state *before* module 23's file; revision 2601 adds those four objects. After upgrading both to head (2701, including Module 27's outbox), the comparison found 679 objects on each side and no differences. `tests/test_migrations.py::test_fresh_database_equals_reference` runs this check on every test run.
+The baseline is the state *before* module 23's file; revision 2601 adds those four objects. After upgrading both to head (2801, including Module 27's outbox and Module 28's search function), the comparison found 683 objects on each side and no differences. `tests/test_migrations.py::test_fresh_database_equals_reference` runs this check on every test run.
 
 ### 4.6 Revision 2601: a SQL file becomes a migration
 
-Module 23 applied `sql/2301_notify.sql` by hand with psql. [`2601_notify_triggers.py`](../../project/python/migrations/versions/2601_notify_triggers.py) contains the same SQL, copied in rather than read from the file: a revision must not change when someone edits a file later. It uses `CREATE OR REPLACE FUNCTION` and `CREATE OR REPLACE TRIGGER` (PostgreSQL 14+), so it's safe on databases where the file was already applied. Stamping at 2600 and upgrading converges either way.
+Module 23 introduced the triggers as `sql/2301_notify.sql`, a file applied by hand with psql. [`2601_notify_triggers.py`](../../project/python/migrations/versions/2601_notify_triggers.py) contains the same SQL, copied in rather than read from the file: a revision must not change when someone edits a file later. It uses `CREATE OR REPLACE FUNCTION` and `CREATE OR REPLACE TRIGGER` (PostgreSQL 14+), so it's safe on databases where the file was already applied. Stamping at 2600 and upgrading converges either way.
 
 The first version indented the SQL inside the Python string, and the catalog comparison failed:
 
@@ -502,7 +505,7 @@ AS $function$
             PERFORM pg_notify('new_order', json_build_object(
 ```
 
-PostgreSQL stores a function body **verbatim**, whitespace included. Both versions behave identically, but they are different source code, and a later `CREATE OR REPLACE` from the other path would show up as a change. The revision now keeps the SQL flush left in module-level constants. The file `sql/2301_notify.sql` stays in the repository for learners of Modules 23–25, with a note that it's superseded; the test suite no longer applies it.
+PostgreSQL stores a function body **verbatim**, whitespace included. Both versions behave identically, but they are different source code, and a later `CREATE OR REPLACE` from the other path would show up as a change. The revision now keeps the SQL flush left in module-level constants. The file `sql/2301_notify.sql` stays in the repository, with a note that it's superseded; the test suite no longer applies it.
 
 ---
 
@@ -541,7 +544,8 @@ alembic upgrade 2601:2604 --sql  # offline: SQL for that range, no database need
 
 ```text
 $ alembic history
-2604 -> 2701 (bazaar) (head), transactional outbox: outbox + processed_messages (module 27)
+2701 -> 2801 (bazaar) (head), storefront: search_products() from module 13, its trigram index, a browse index
+2604 -> 2701 (bazaar), transactional outbox: outbox + processed_messages (module 27)
 2603 -> 2604 (bazaar), orders.idempotency_key: a client-chosen key that makes checkout safe to retry
 2602 -> 2603 (bazaar), products.slug NOT NULL, contract phase, without a long ACCESS EXCLUSIVE scan
 2601 -> 2602 (bazaar), products.slug, expand phase: nullable column, slug trigger, batched backfill, unique index
@@ -553,7 +557,7 @@ $ alembic history
 
 ### 5.3 Branches and merges
 
-Two developers start from head 2701. One adds a wishlist table (2702), the other gift wrapping (2703); both revisions say `down_revision = "2701"`. After both branches are merged in Git, the graph has two heads. This was run in a scratch copy of the migrations, against a scratch database:
+Two developers start from head 2701. One adds a wishlist table (2702), the other gift wrapping (2703); both revisions say `down_revision = "2701"`. After both branches are merged in Git, the graph has two heads. This was run in a scratch copy of the migrations when 2701 was still the head (exercise 9 repeats it on 2801), against a scratch database:
 
 ```text
 $ alembic heads

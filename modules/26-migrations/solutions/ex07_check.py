@@ -59,7 +59,7 @@ def main() -> None:
                 "quarantined:",
                 c.execute("SELECT id, provider, provider_ref FROM payments_quarantine").fetchall(),
             )
-        mig.downgrade(DSN, "2701")
+        mig.downgrade(DSN, "2801")
     with psycopg.connect(DSN, autocommit=True) as c:  # leave the reference database as it was
         c.execute("DROP TABLE payments_quarantine")
 

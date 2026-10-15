@@ -5,7 +5,7 @@
 > [← 21 Sharding](../21-sharding/README.md) · [Course home](../../README.md) · [23 Async Python: psycopg async and asyncpg →](../23-async-python/README.md)
 <!-- nav:end -->
 
-**Starting state.** `./project/bin/reset.sh 22` (the large dataset), plus the virtual environment from the module's *Before you start* section. Write each solution as a Python script, run it from `project/python` with the venv active, and point it at the database with `BAZAAR_DSN` (default `postgresql://postgres:postgres@localhost:5432/bazaar`):
+**Starting state.** `./project/bin/reset.sh 22` (the large dataset), plus the virtual environment and the `alembic` line from the module's *Before you start* section. Write each solution as a Python script, run it from `project/python` with the venv active, and point it at the database with `BAZAAR_DSN` (default `postgresql://postgres:postgres@localhost:5432/bazaar`):
 
 ```bash
 cd project/python && source .venv/bin/activate

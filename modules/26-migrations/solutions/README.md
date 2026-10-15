@@ -1,13 +1,13 @@
-# Module 26 solutions
+# Module 26: Solutions
 
 <!-- nav:start -->
 > [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
 > [← 25 SQLAlchemy ORM](../../25-sqlalchemy-orm/README.md) · [Course home](../../../README.md) · [27 Production Python and Postgres →](../../27-python-production/README.md)
 <!-- nav:end -->
 
-All solutions ran against PostgreSQL 17.11 with the large dataset (`reset.sh 26`, stamped at 2600 and upgraded to 2701), Alembic 1.20.0, SQLAlchemy 2.1.4, psycopg 3.3.6. Run them from `project/python` with the venv active, for example `python ../../modules/26-migrations/solutions/ex02_check.py`.
+All solutions ran against PostgreSQL 17.11 with the large dataset (`reset.sh 26`, stamped at 2600 and upgraded to the head, 2801), Alembic 1.20.0, SQLAlchemy 2.1.4, psycopg 3.3.6. Run them from `project/python` with the venv active, for example `python ../../modules/26-migrations/solutions/ex02_check.py`.
 
-Most solutions use [`scratch_alembic.py`](scratch_alembic.py): `scratch_migrations(*files)` copies `alembic.ini` and `migrations/` to a temporary directory and adds the exercise's revision files; `scratch_db()` creates an empty database and drops it afterwards. Solutions that need the large dataset run against the reference database and downgrade back to 2701 at the end. Timings depend on the machine and on what's cached; the ratios are what matter.
+The exercise revisions build on 2801, the head of the finished package (2701 was the head at the end of Module 27; Module 28 adds 2801). Most solutions use [`scratch_alembic.py`](scratch_alembic.py): `scratch_migrations(*files)` copies `alembic.ini` and `migrations/` to a temporary directory and adds the exercise's revision files; `scratch_db()` creates an empty database and drops it afterwards. Solutions that need the large dataset run against the reference database and downgrade back to 2801 at the end. Timings depend on the machine and on what's cached; the ratios are what matter.
 
 ---
 
@@ -29,7 +29,7 @@ Most solutions use [`scratch_alembic.py`](scratch_alembic.py): `scratch_migratio
 
 <!-- toc:end -->
 
-## Exercise 1: Review the locks of a release
+## Exercise 1 ★: Review the locks of a release
 
 `alembic upgrade 2601:2604 --sql` prints the release. [`ex01_lock_modes.py`](ex01_lock_modes.py) runs each table-level statement in its own transaction on an empty database at 2601 and reads `pg_locks` for its own backend before committing:
 
@@ -52,14 +52,14 @@ Six statements take `ACCESS EXCLUSIVE`, and none of them scans the table: `ADD C
 
 **Alternative.** Without running anything, the lock table in the README's section 8.1 gives the same answer. Running the statements is better evidence, especially for less common DDL (does `ALTER TABLE ... SET (fillfactor = 90)` take `ACCESS EXCLUSIVE`? It takes `SHARE UPDATE EXCLUSIVE`; try it).
 
-## Exercise 2: A new order status
+## Exercise 2 ★: A new order status
 
 [`ex02_2605_order_on_hold.py`](ex02_2605_order_on_hold.py), checked by [`ex02_check.py`](ex02_check.py):
 
 ```text
 --- naive revision
 UnsafeNewEnumValueUsage - unsafe use of new value "on_hold" of enum type order_status
-alembic_version: [('2701',)]
+alembic_version: [('2801',)]
 labels: {pending,paid,shipped,delivered,cancelled,refunded}
 --- fixed revision
 alembic_version: [('2605',)]
@@ -69,7 +69,7 @@ old code reading the row: DataError - bad member for enum OrderStatus: 'on_hold'
 downgrade: order_status 'on_hold' cannot be removed; roll forward instead (the index orders_on_hold_created_at_idx was dropped)
 ```
 
-1. The naive revision runs `ADD VALUE` and the index's `WHERE status = 'on_hold'` in one transaction. The new value isn't committed, so using it is an error, and the whole revision rolls back: still at 2701, still six labels (with `transaction_per_migration`, the revision's transaction is all-or-nothing).
+1. The naive revision runs `ADD VALUE` and the index's `WHERE status = 'on_hold'` in one transaction. The new value isn't committed, so using it is an error, and the whole revision rolls back: still at 2801, still six labels (with `transaction_per_migration`, the revision's transaction is all-or-nothing).
 2. The fix commits the value first:
 
    ```python
@@ -87,7 +87,7 @@ downgrade: order_status 'on_hold' cannot be removed; roll forward instead (the i
 
 **Alternative.** Two revisions: 2605 adds the value (its transaction commits at the end of the revision), 2606 builds the index. That's more explicit and works with migration tools that have no autocommit escape.
 
-## Exercise 3: Which revision is this database at?
+## Exercise 3 ★: Which revision is this database at?
 
 [`ex03_identify_revision.py`](ex03_identify_revision.py) builds the mystery database, then climbs a "ladder" database one revision at a time, comparing catalog snapshots:
 
@@ -98,16 +98,17 @@ downgrade: order_status 'on_hold' cannot be removed; roll forward instead (the i
 2603: 4 differences
 2604: 1 differences
 2701: 26 differences
+2801: 30 differences
 closest revision: 2604 (1 differences)
     only in mystery: index:orders_status_idx
-after stamp + upgrade: ('2701',)
+after stamp + upgrade: ('2801',)
 ```
 
-The distance falls steadily up to 2604 and jumps at 2701 (the outbox tables, their columns, constraints, indexes, trigger and function). One difference remains: the hand-made index. Options: drop it (if nobody needs it), or keep it and write a revision `CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_status_idx ...` so that every environment has it and fresh databases match. Either way, `stamp 2604` is now a fact, not a guess, and `upgrade head` brings the database to 2701.
+The distance falls steadily up to 2604 and jumps at 2701 (the outbox tables, their columns, constraints, indexes, trigger and function) and again at 2801 (`search_products()` and its indexes). One difference remains: the hand-made index. Options: drop it (if nobody needs it), or keep it and write a revision `CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_status_idx ...` so that every environment has it and fresh databases match. Either way, `stamp 2604` is now a fact, not a guess, and `upgrade head` brings the database to 2801.
 
 **Alternative.** `pg_dump --schema-only` of both databases and `diff -u` works too, with a `pg_dump` of the server's version and some patience for 4,000-line diffs. Comparing only "does table X / column Y exist" (what most "detect the version" scripts do) can't tell 2602 from 2603 (`NOT NULL` is the only difference).
 
-## Exercise 4: Review this migration
+## Exercise 4 ★★: Review this migration
 
 The problems, measured with `lock_probe.py` on the reference database (each statement on its own; `transactionid` lines and per-step lock lists omitted):
 
@@ -202,12 +203,12 @@ A batch holds its rows' locks until it commits, so the batch's duration is the w
 
 ```text
 2605 adds: ['column:orders.tracking_token', 'constraint:orders.orders_total_nonnegative', 'index:orders_status_idx']
-downgrade restores 2701: True
+downgrade restores 2801: True
 re-upgrade is identical: True
 statements outside a transaction: 1 concurrent, 3 NOT VALID, 3 VALIDATE
 ```
 
-## Exercise 5: From autogenerate's draft to a revision
+## Exercise 5 ★★: From autogenerate's draft to a revision
 
 [`ex05_draft.py`](ex05_draft.py) runs autogenerate's comparison against a fresh database at head with the patched metadata ([`ex05_metadata.py`](ex05_metadata.py)) and renders the draft:
 
@@ -226,14 +227,14 @@ statements outside a transaction: 1 concurrent, 3 NOT VALID, 3 VALIDATE
 [`ex05_2605_review_votes.py`](ex05_2605_review_votes.py) and [`ex05_check.py`](ex05_check.py):
 
 ```text
-at 2701, autogenerate would emit: ['add_column', 'add_index', 'add_constraint']
+at 2801, autogenerate would emit: ['add_column', 'add_index', 'add_constraint']
 at 2605: []
 after down/up: []
 ```
 
 **Alternative.** Keep the inline `CHECK` but on a column that was just added with a constant default, PostgreSQL could in principle prove it without a scan. It doesn't: `ADD CONSTRAINT ... CHECK` always scans unless `NOT VALID`. Only `SET NOT NULL` has the "validated CHECK" shortcut.
 
-## Exercise 6: A denormalized counter, backfilled under load
+## Exercise 6 ★★: A denormalized counter, backfilled under load
 
 [`ex06_2605_review_count.py`](ex06_2605_review_count.py) and [`ex06_measure.py`](ex06_measure.py) (a thread inserts reviews of random products by random users during the migration; afterwards they're deleted, and the trigger decrements):
 
@@ -281,7 +282,7 @@ The migration held `ACCESS EXCLUSIVE` on `products` and wanted `SHARE ROW EXCLUS
 
 **Design note.** Every review now updates its product's row, which recomputes `search_vector`, usually updates every index of `products` (Module 16's HOT conditions rarely hold for this wide row), bumps `updated_at` through `set_updated_at()`, and writes an `audit_log` row through `audit_trigger()`: after these runs, thousands of products had a fresh `updated_at` although nobody edited them. A separate `product_stats (product_id PRIMARY KEY, review_count)` table would keep that write amplification off the hot table; consider it before denormalizing into a big row.
 
-## Exercise 7: A unique constraint on dirty data
+## Exercise 7 ★★: A unique constraint on dirty data
 
 [`ex07_2605_payment_ref_unique.py`](ex07_2605_payment_ref_unique.py) and [`ex07_check.py`](ex07_check.py) (which inserts the duplicate, runs the revision with and without its cleanup step, and restores the database):
 
@@ -290,14 +291,14 @@ duplicate inserted: (536817, 'paypal', '48475942286b042f')
 without cleanup: could not create unique index "payments_provider_provider_ref_key"
                 DETAIL:  Key (provider, provider_ref)=(paypal, 48475942286b042f) is duplicated.
 left behind: [('payments_provider_provider_ref_key', False)]
-version: [('2701',)]
+version: [('2801',)]
 dropping INVALID index payments_provider_provider_ref_key left by an earlier attempt
 after the fixed run: [('payments_provider_provider_ref_key', True)]
 constraint: [('payments_provider_provider_ref_key', 'u')]
 quarantined: [(536817, 'paypal', '48475942286b042f')]
 ```
 
-1. The concurrent build failed on the duplicate. The revision rolled back (`alembic_version` still 2701), but the index didn't: a concurrent build commits its catalog entries in separate transactions, so the failure leaves an index marked invalid. It's ignored by queries but **maintained on every insert and update** of payments. Any rerun with `CREATE INDEX CONCURRENTLY IF NOT EXISTS` would skip it, and the `ADD CONSTRAINT ... USING INDEX` would then fail on an invalid index.
+1. The concurrent build failed on the duplicate. The revision rolled back (`alembic_version` still 2801), but the index didn't: a concurrent build commits its catalog entries in separate transactions, so the failure leaves an index marked invalid. It's ignored by queries but **maintained on every insert and update** of payments. Any rerun with `CREATE INDEX CONCURRENTLY IF NOT EXISTS` would skip it, and the `ADD CONSTRAINT ... USING INDEX` would then fail on an invalid index.
 2. The fixed revision moves duplicates into `payments_quarantine` (keeping the oldest payment of each pair) in one statement:
 
    ```sql
@@ -317,7 +318,7 @@ quarantined: [(536817, 'paypal', '48475942286b042f')]
 
 **Caveat.** Between the cleanup and the end of the index build, a new duplicate could still arrive (the cleanup and the build are different transactions). The build would then fail again, and the rerun would clean up again. For a table with frequent duplicates, first deploy code that stops creating them (an upsert on a non-unique column isn't possible, but a check before insert narrows the window), then migrate.
 
-## Exercise 8: Rename a table without breaking running code
+## Exercise 8 ★★: Rename a table without breaking running code
 
 [`ex08_2605_rename_cart_expand.py`](ex08_2605_rename_cart_expand.py), [`ex08_2606_rename_cart_contract.py`](ex08_2606_rename_cart_contract.py), checked by [`ex08_check.py`](ex08_check.py) as `bazaar_app`:
 
@@ -337,32 +338,32 @@ The expand revision renames the table, its four constraints and its index (all c
 
 **Alternative.** Keep the table name and change only the code's name for it (the ORM's `__tablename__` stays `cart_items`). Renames are often not worth a migration at all.
 
-## Exercise 9: Two heads
+## Exercise 9 ★★: Two heads
 
 [`ex09_heads.py`](ex09_heads.py):
 
 ```text
 after merging both branches in git:
-  CI: FAIL, 2 heads ['2702', '2703']: rebase or merge before merging
+  CI: FAIL, 2 heads ['2802', '2803']: rebase or merge before merging
   alembic upgrade head: Multiple head revisions are present for given argument 'head ...
-after rebasing 2703 onto 2702:
-  CI: ok, one head 2703
-    2702 -> 2703  add gift wrap
-    2701 -> 2702  add wishlist
-    2604 -> 2701  transactional outbox: outbox + processed_messages (module 27)
+after rebasing 2803 onto 2802:
+  CI: ok, one head 2803
+    2802 -> 2803  add gift wrap
+    2801 -> 2802  add wishlist
+    2701 -> 2801  storefront: search_products() from module 13, its trigram index, a browse index
 with a merge revision instead:
-  CI: ok, one head 2704
-    ('2702', '2703') -> 2704  merge wishlist and gift wrap
-    2701 -> 2702  add wishlist
-    2701 -> 2703  add gift wrap
-    2604 -> 2701  transactional outbox: outbox + processed_messages (module 27)
+  CI: ok, one head 2804
+    ('2802', '2803') -> 2804  merge wishlist and gift wrap
+    2801 -> 2802  add wishlist
+    2801 -> 2803  add gift wrap
+    2701 -> 2801  storefront: search_products() from module 13, its trigram index, a browse index
 ```
 
-The check is three lines (`ScriptDirectory.from_config(cfg).get_heads()`, fail if not exactly one); the project's version is `test_one_head_and_a_straight_history`. **Rebase** (change `down_revision` of the later revision, renumber if ids collide) gives a straight history, and it's the right fix while the revision hasn't run anywhere shared. A **merge revision** is right when both revisions have already run somewhere (a hotfix applied to production while `main` moved on): their files can't change any more. A merge says nothing about the order of its parents: Alembic may run 2702 or 2703 first. If one needs the other, declare it with `depends_on`.
+The check is three lines (`ScriptDirectory.from_config(cfg).get_heads()`, fail if not exactly one); the project's version is `test_one_head_and_a_straight_history`. **Rebase** (change `down_revision` of the later revision, renumber if ids collide) gives a straight history, and it's the right fix while the revision hasn't run anywhere shared. A **merge revision** is right when both revisions have already run somewhere (a hotfix applied to production while `main` moved on): their files can't change any more. A merge says nothing about the order of its parents: Alembic may run 2802 or 2803 first. If one needs the other, declare it with `depends_on`.
 
-The script first produced a nonsensical merge history, because it rewrote `2703_*.py` twice within one second and Python loaded the stale `.pyc` from `__pycache__` (same size, same mtime). `sys.dont_write_bytecode = True` fixed it; when you edit revision files by script, remember the bytecode cache.
+The script first produced a nonsensical merge history, because it rewrote `2803_*.py` twice within one second and Python loaded the stale `.pyc` from `__pycache__` (same size, same mtime). `sys.dont_write_bytecode = True` fixed it; when you edit revision files by script, remember the bytecode cache.
 
-## Exercise 10: Prove that writers were never blocked
+## Exercise 10 ★★★: Prove that writers were never blocked
 
 [`ex10_migration_probe.py`](ex10_migration_probe.py), with [`ex10_naive_2605.py`](ex10_naive_2605.py) and [`ex10_online_2605.py`](ex10_online_2605.py), two runs each:
 
@@ -398,7 +399,7 @@ Two bugs met on the way, both worth knowing:
 - The naive `downgrade()` first used `op.drop_constraint("orders_total_nonnegative", ...)`, and Alembic applied the naming convention to it: `constraint "orders_orders_total_nonnegative" of relation "orders" does not exist`. Names passed to `op.*` go through the convention unless wrapped in `op.f()`.
 - After that failed downgrade, the database was still at 2605 with the naive constraint, and the next run of the *online* revision "succeeded" in 0.1 s: `add_check_constraint_online()` found a validated constraint of that name and skipped everything. Idempotent helpers make reruns safe, and they also make a half-cleaned-up environment look fine. Check `alembic current` before measuring.
 
-## Exercise 11: Split `users.full_name`, with zero downtime
+## Exercise 11 ★★★: Split `users.full_name`, with zero downtime
 
 [`ex11_2605_split_name_expand.py`](ex11_2605_split_name_expand.py), [`ex11_2606_split_name_contract.py`](ex11_2606_split_name_contract.py), [`ex11_check.py`](ex11_check.py):
 
@@ -432,19 +433,20 @@ The backfill runs with triggers off: with the trigger on, setting the parts woul
 
 The contract's `downgrade()` is honest (the full name can be rebuilt from the parts), but not perfect: the re-added `full_name` is the *last* column of `users` now, and the rebuilt value is normalized. The stairway test's catalog comparison would flag the column position. Decide whether that matters; for a downgrade that exists for development, it usually doesn't.
 
-## Exercise 12: Squash the history
+## Exercise 12 ★★★: Squash the history
 
 [`ex12_squash.py`](ex12_squash.py) (it needs `COURSE_PG_CONTAINER` for `docker exec ... pg_dump`):
 
 ```text
 squashed schema: 4240 lines
-2700 -> 2701 (bazaar) (head), transactional outbox: outbox + processed_messages (module 27)
+2701 -> 2801 (bazaar) (head), storefront: search_products() from module 13, its trigram index, a browse index
+2700 -> 2701 (bazaar), transactional outbox: outbox + processed_messages (module 27)
 <base> -> 2700 (bazaar), squashed baseline: everything up to revision 2604
 fresh via squashed chain == fresh via original chain: True
-database at 2701, squashed scripts: current = ('2701',)
+database at head, squashed scripts: current = ('2801',)
 database at 2603, squashed scripts: Can't locate revision identified by '2603'
 ```
 
 1. The snapshot is taken from a database built by migrations, so it contains `bazaar.alembic_version`. A baseline that creates that table would collide with the one Alembic creates before running the baseline: dump with `--exclude-table=bazaar.alembic_version`. (`make_baseline.sh` dumped a database that had never seen Alembic.) The new snapshot includes everything 2601–2604 added: the notify triggers, `slugify()`, `products.slug` with its trigger and index, `orders.idempotency_key`.
 2. `2700_squashed_baseline.py` is `2600_baseline.py` with a new id and the new file. The catalog comparison of the two fresh databases is empty.
-3. A database at 2701 needs nothing: 2701 exists in the new graph, and `alembic_version` only records the current revision. A database at 2603 is stranded: its revision is gone. Before squashing, every environment must be at or past the squash point (2604). If one isn't, upgrade it with the old scripts first, or stamp it after verifying its schema (exercise 3).
+3. A database at the head (2801) needs nothing: its revision exists in the new graph, and `alembic_version` only records the current revision. A database at 2603 is stranded: its revision is gone. Before squashing, every environment must be at or past the squash point (2604). If one isn't, upgrade it with the old scripts first, or stamp it after verifying its schema (exercise 3).

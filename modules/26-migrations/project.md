@@ -1,4 +1,4 @@
-# Module 26 project: Alembic takes over Bazaar's schema
+# Module 26: Project milestone — Alembic takes over Bazaar's schema
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
@@ -7,9 +7,9 @@
 
 Bazaar's schema has been built by numbered SQL files and `reset.sh`, which drops the database every time. From now on, the schema of a living database changes only through reviewed, versioned migrations that keep the shop online. In this milestone you adopt Alembic on the existing database without recreating anything, make it able to build the same schema from nothing, move Module 23's hand-applied triggers into a migration, ship two features (product slugs, checkout idempotency keys) as zero-downtime revisions, and test all of it.
 
-**Starting state:** `./project/bin/reset.sh 26` (the large dataset, which already contains `sql/2301_notify.sql`'s triggers if you applied them in Module 23; it doesn't matter either way), and your Module 25 package (or the reference one).
+**Starting state:** `./project/bin/reset.sh 26` (the large dataset, with no Alembic and without the NOTIFY triggers: `reset.sh` rebuilds from `project/db/`, and revision 2601 adds them), and your Module 25 package (or the reference one).
 
-**Reference solution:** [`project/python/`](../../project/python/): `alembic.ini`, `migrations/` (`env.py`, `script.py.mako`, `baseline/`, `versions/2600`–`2604`), `src/bazaar/migrate.py`, `src/bazaar/catalog.py`, `src/bazaar/testing.py` (scratch databases), the new columns in `src/bazaar/sa/tables.py` and `src/bazaar/orm/models.py`, `tests/conftest.py` (`schema_at_head`, `empty_db`, `fresh_db`) and `tests/test_migrations.py`. (Revision `2701` and the rest of `testing.py` belong to Module 27.)
+**Reference solution:** [`project/python/`](../../project/python/): `alembic.ini`, `migrations/` (`env.py`, `script.py.mako`, `baseline/`, `versions/2600`–`2604`), `src/bazaar/migrate.py`, `src/bazaar/catalog.py`, `src/bazaar/testing.py` (scratch databases), the new columns in `src/bazaar/sa/tables.py` and `src/bazaar/orm/models.py`, `tests/conftest.py` (the at-head check, `empty_db`, `fresh_db`) and `tests/test_migrations.py`. (Revision `2701` and the rest of `testing.py` belong to Module 27; revision `2801` and the `migrated` marker, which replaced the at-head check, to Module 28.)
 
 ## Requirements
 
@@ -42,7 +42,7 @@ Bazaar's schema has been built by numbered SQL files and `reset.sh`, which drops
 
 ### 4. Tests (`tests/test_migrations.py`)
 
-Fixtures: the session fixture `schema_at_head` stops the test run with a clear message unless the database is at head; `empty_db` is an empty scratch database; `fresh_db` a copy of a template built by `alembic upgrade head` (named per pytest-xdist worker).
+Fixtures: a session-level check that stops the test run with a clear message unless the database is at head (Module 28 turns it into the `migrated` marker, which skips only the tests that need head); `empty_db` is an empty scratch database; `fresh_db` a copy of a template built by `alembic upgrade head` (named per pytest-xdist worker).
 
 - one head, straight history;
 - the reference database is at head; `compare_models()` is empty, and detects drift you create in a rolled-back transaction;
@@ -65,8 +65,8 @@ export BAZAAR_DSN=postgresql://postgres:postgres@localhost:5432/bazaar
 
 alembic current                 # (nothing yet)
 alembic stamp 2600
-alembic upgrade head            # 2601 ... 2701; the backfill takes about 25 s
-alembic current                 # 2701 (head)
+alembic upgrade head            # 2601 ... 2801 (2701 was the head at the end of Module 27; Module 28 adds 2801); the backfill takes about 25 s
+alembic current                 # 2801 (head)
 alembic check                   # No new upgrade operations detected.
 alembic upgrade 2601:2604 --sql | grep -c CONCURRENTLY      # 2
 

@@ -32,7 +32,7 @@ def show(c: psycopg.Connection, label: str) -> None:
 
 def main() -> None:
     with scratch_migrations(*FILES) as mig, scratch_db() as dsn:
-        mig.upgrade(dsn, "2701")
+        mig.upgrade(dsn, "2801")
         with psycopg.connect(dsn, autocommit=True) as c:  # rows written before the change
             c.execute(
                 "INSERT INTO users (email, full_name) VALUES"
@@ -63,7 +63,7 @@ def main() -> None:
         mig.downgrade(dsn, "2605")
         with psycopg.connect(dsn) as c:
             show(c, "after downgrading the contract (full_name rebuilt from the parts):")
-        mig.downgrade(dsn, "2701")
+        mig.downgrade(dsn, "2801")
 
     # The backfill at scale, on the reference database (then undone).
     ref = get_settings().dsn
@@ -81,7 +81,7 @@ def main() -> None:
         print(f"reference database: 2605 in {took:.1f}s, users without first_name: {missing}")
         for s in sample:
             print("   ", s)
-        mig.downgrade(ref, "2701")
+        mig.downgrade(ref, "2801")
 
 
 if __name__ == "__main__":

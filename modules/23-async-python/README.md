@@ -455,7 +455,7 @@ So asyncpg gets Module 22's "prepare after 5 executions" benefit from the first 
 inside a transaction: InvalidCachedStatementError: cached statement plan is invalid due to a database schema or configuration change
 ```
 
-Outside a transaction, asyncpg catches the server's error, re-prepares and retries transparently. Inside a transaction it can't, because the error has already aborted the transaction, so it raises `InvalidCachedStatementError`, a subclass of the errors you retry by re-running the whole transaction. Expect a burst of these right after a deploy that runs migrations against live traffic (Module 26), and include them in your retry logic (Module 27). `await conn.reload_schema_state()` clears the caches on demand.
+Outside a transaction, asyncpg catches the server's error, re-prepares and retries transparently. Inside a transaction it can't, because the error has already aborted the transaction, so it raises `InvalidCachedStatementError`. Re-running the whole transaction fixes it, but the class doesn't say so: it is a subclass of `FeatureNotSupportedError` (SQLSTATE `0A000`), not of the serialization or deadlock errors, so a classifier that goes by SQLSTATE, like Module 27's `bazaar.resilience.classify()`, calls it permanent and won't retry it. Expect a burst of these right after a deploy that runs migrations against live traffic (Module 26), so add the class to your retry logic explicitly (Module 27). `await conn.reload_schema_state()` clears the caches on demand.
 
 ### 4.6 COPY and cursors
 
@@ -930,7 +930,7 @@ This is Module 10's `place_order()` locking design, proven from the application 
 **The worker processes each job exactly once in the normal case.** 200 jobs, 4 loops, a handler that counts invocations per job id: every id is seen once, all 4 loops took part, and an unknown job kind is failed with backoff. A second test enqueues a job while the worker's loops sleep with a 30-second poll interval and asserts that it's processed in under a second, which proves the NOTIFY path works. A third cancels the worker mid-job and checks that the job is still leased, not lost.
 
 ```bash
-cd project/python && pytest -v          # 25 tests: Module 22's and Module 23's
+cd project/python && pytest -v tests/test_repo.py tests/test_aio.py tests/test_worker.py   # 25 tests: Module 22's and Module 23's
 ```
 
 ---

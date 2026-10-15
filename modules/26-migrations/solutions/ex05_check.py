@@ -29,11 +29,11 @@ def compare(dsn: str) -> list:
 def main() -> None:
     patch_metadata()
     with scratch_migrations(HERE / "ex05_2605_review_votes.py") as mig, scratch_db() as dsn:
-        mig.upgrade(dsn, "2701")
-        print("at 2701, autogenerate would emit:", [op[0] for op in compare(dsn)])
+        mig.upgrade(dsn, "2801")
+        print("at 2801, autogenerate would emit:", [op[0] for op in compare(dsn)])
         mig.upgrade(dsn, "2605")
         print("at 2605:", compare(dsn))
-        mig.downgrade(dsn, "2701")
+        mig.downgrade(dsn, "2801")
         mig.upgrade(dsn, "2605")
         print("after down/up:", compare(dsn))
 

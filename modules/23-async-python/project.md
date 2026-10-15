@@ -1,4 +1,4 @@
-# Module 23 project: the async layer and the job worker
+# Module 23: Project milestone — the async layer and the job worker
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
@@ -7,7 +7,7 @@
 
 Bazaar's storefront is going to be an async web service (Module 28), and its background work (order confirmations, receipts, search reindexing) needs a worker that reacts within milliseconds when a job is queued, without hammering the database when the queue is empty. In this milestone you add the async half of the `bazaar` package: async connections and pools for both drivers, an async twin of the Module 22 repository, NOTIFY triggers, and an async job worker you can start with `python -m bazaar.worker`.
 
-**Starting state:** `./project/bin/reset.sh 23` and your Module 22 package (or the reference one).
+**Starting state:** `./project/bin/reset.sh 23`, then `alembic stamp 2600 && alembic upgrade head` in `project/python` (see the README's setup), and your Module 22 package (or the reference one).
 
 **Reference solution:** [`project/python/`](../../project/python/): `sql/2301_notify.sql`, `src/bazaar/aio/{db,repo}.py`, `src/bazaar/worker.py`, `tests/test_aio.py`, `tests/test_worker.py`.
 
@@ -17,7 +17,7 @@ Bazaar's storefront is going to be an async web service (Module 28), and its bac
 
 - Add `asyncpg` to the runtime dependencies and `pytest-asyncio` to the dev dependencies.
 - Configure pytest-asyncio's auto mode in `pyproject.toml`, so `async def` tests and fixtures need no decorators.
-- Add a session-scoped, autouse pytest fixture that applies every file in `project/python/sql/` (they must be idempotent).
+- Make sure the triggers of section 2 exist before the tests run: either a session-scoped, autouse pytest fixture that applies every file in `project/python/sql/` (they must be idempotent), or rely on the setup's `alembic upgrade head`, as the reference suite does (revision 2601 creates them).
 
 ### 2. NOTIFY triggers (`sql/2301_notify.sql`)
 
@@ -65,7 +65,7 @@ ruff check src tests
 pytest -v
 ```
 
-Expected: ruff passes, and all 25 tests (16 from Module 22, 9 from this module) pass in a few seconds.
+Expected: ruff passes, and all 25 tests (16 from Module 22's `test_repo.py`, 9 from this module's `test_aio.py` and `test_worker.py`) pass in a few seconds.
 
 An end-to-end run of the worker:
 

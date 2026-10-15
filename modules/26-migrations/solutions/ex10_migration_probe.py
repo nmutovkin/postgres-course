@@ -16,7 +16,7 @@ given revision file), two threads watch:
   the longest uninterrupted run of samples in which the migration held one is
   the bound on how long any writer could have waited for it.
 
-Afterwards the revision is downgraded again (back to 2701). Exit status 1 if
+Afterwards the revision is downgraded again (back to 2801). Exit status 1 if
 the write-blocking time exceeded --max-ms.
 """
 
@@ -95,7 +95,7 @@ def main() -> None:
             stop.set()
             for t in threads:
                 t.join()
-            mig.downgrade(dsn, "2701")
+            mig.downgrade(dsn, "2801")
 
     # Longest run of consecutive samples with a write-blocking lock held.
     longest = current = 0.0

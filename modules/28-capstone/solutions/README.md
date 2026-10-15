@@ -1,4 +1,4 @@
-# Module 28 solutions
+# Module 28: Solutions
 
 <!-- nav:start -->
 > [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
@@ -46,7 +46,7 @@ The tests apply revisions 2802 and 2803 to their fresh databases by executing th
 
 <!-- toc:end -->
 
-## Exercise 1: `/admin/slow-queries`
+## Exercise 1 ★: `/admin/slow-queries`
 
 ```python
 _SORT = {OrderBy.total: "total_exec_time", OrderBy.mean: "mean_exec_time"}
@@ -89,7 +89,7 @@ It runs on the read engine (a read-only, possibly replica, connection), which is
 
 **Alternatives.** Expose `queryid` and let a dashboard (Grafana with the PostgreSQL data source, or `pg_stat_monitor`) do the history. `pg_stat_statements` is cumulative since the last reset, so "slow *now*" needs two snapshots and a difference, which is what monitoring systems store.
 
-## Exercise 2: `/metrics`
+## Exercise 2 ★: `/metrics` for Prometheus
 
 ```python
 for engine, s in db.stats.items():
@@ -109,7 +109,7 @@ for engine, s in db.stats.items():
 
 **Alternatives.** `prometheus_client` with `Histogram` objects updated from the engine events directly, instead of converting `QueryStats`, or OpenTelemetry metrics (exercise 8's provider can export metrics too).
 
-## Exercise 3: Cancel an order
+## Exercise 3 ★: Cancel an order
 
 The revision embeds Module 10's function verbatim:
 
@@ -166,7 +166,7 @@ async def cancel_order(order_id: int, user_id: UserId, session: RwSession) -> di
 
 **Alternatives.** Put the ownership check into the function (`cancel_order(p_order_id, p_user_id)`) and raise `P0002` for "not yours", which is one round trip instead of two. Or let RLS for buyers do it (exercise idea: a `bazaar_buyer` role with `app.user_id`). A paid order's cancellation also needs a refund: write an `order.cancelled` event to the outbox in the same transaction and let a payments consumer refund it.
 
-## Exercise 4: Reviews, only from buyers
+## Exercise 4 ★★: Reviews, only from buyers
 
 ```python
 @router.post("/products/{product_id}/reviews", status_code=201, response_model=ReviewOut)
@@ -196,7 +196,7 @@ The list uses two fixed statements (first page, next page), not a `WHERE` string
 
 **Alternatives.** Enforce "only buyers" in the database: a `BEFORE INSERT` trigger or a check in a `SECURITY DEFINER` function `submit_review()`, so that no client (an admin script, a future service) can bypass it. The cost is that the error is then a SQLSTATE to translate, which is the same pattern as `place_order()`'s.
 
-## Exercise 5: Rate limiting with a token bucket
+## Exercise 5 ★★: Rate limiting with a token bucket in PostgreSQL
 
 The core is one function (revision 2803):
 
@@ -267,7 +267,7 @@ if wait:
 
 After adopting 2803, add `rate_limits` to `bazaar/sa/tables.py` (or to `migrate.IGNORED_TABLES`). Otherwise `test_models_match_migrated_schema` reports it as a table autogenerate would drop.
 
-## Exercise 6: Stream a CSV export
+## Exercise 6 ★★: Stream a CSV export
 
 ```python
 async def _streaming_session(db: DB, seller_id: SellerId) -> AsyncIterator[AsyncSession]:
@@ -312,7 +312,7 @@ async def export_orders(session: StreamingSession, since: date = date(2000, 1, 1
 
 **Alternatives.** `COPY (SELECT ...) TO STDOUT WITH (FORMAT csv, HEADER)` produces the CSV in the server, which is faster still. Through asyncpg, `copy_from_query()` writes to an output callback. That needs the raw driver connection and is the right choice for very large exports. For exports that take minutes, generate the file in a job and send a download link.
 
-## Exercise 7: Read your writes from a replica
+## Exercise 7 ★★: Read your writes from a replica
 
 ```python
 class RememberWritePosition:
@@ -345,7 +345,7 @@ The test runs without a replica, where every read says `read` and the freshness 
 
 **Alternatives.** Pin a user to the primary for N seconds after a write (simpler, no LSN, but it guesses). Use synchronous replication with `remote_apply` (Module 19, section 7) for the writes that need it, so the commit waits until the standby has applied it, at a latency cost on every such write.
 
-## Exercise 8: Tracing, from HTTP to SQL
+## Exercise 8 ★★★: Tracing, from HTTP to SQL
 
 ```python
 provider = make_provider(exporter)  # TracerProvider + SimpleSpanProcessor
@@ -380,7 +380,7 @@ The SQL half is Module 27's instrumentation applied to engines that exist only a
 
 **Production notes.** Use a `BatchSpanProcessor` and an OTLP exporter (exporting synchronously on the request path adds latency). Sample (`ParentBased(TraceIdRatioBased(0.1))`). `db.statement` contains the SQL text but never parameter values, which keeps personal data out of traces. With sqlcommenter on, asyncpg's statement cache sees a different text per request (the span id changes), so prepared statements are never reused. Measure the effect, and consider sampling or turning the commenter off for hot paths.
 
-## Exercise 9: Chaos tests
+## Exercise 9 ★★★: Chaos: kill the connection mid-request
 
 ```python
 def kill_on(engine, admin_dsn: str, marker: str, times: int = 1) -> list[int]:

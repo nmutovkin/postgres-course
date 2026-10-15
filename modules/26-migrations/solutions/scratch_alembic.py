@@ -9,12 +9,12 @@ add the exercise's revision files there, and point Alembic at the copy:
 
     with scratch_migrations(HERE / "ex02_2605_order_on_hold.py") as mig, scratch_db() as dsn:
         mig.upgrade(dsn, "head")
-        mig.downgrade(dsn, "2701")
+        mig.downgrade(dsn, "2801")
 
 scratch_db() is an empty database (dropped afterwards). Use the reference
 database (get_settings().dsn) only for exercises that need the large dataset,
-and always downgrade back to 2701 afterwards: the project's migrations don't
-know the exercise revisions, so the test suite would refuse to run.
+and always downgrade back to 2801 afterwards: the project's migrations don't
+know the exercise revisions, so the tests marked `migrated` would be skipped.
 """
 
 from __future__ import annotations

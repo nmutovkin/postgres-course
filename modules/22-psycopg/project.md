@@ -1,4 +1,4 @@
-# Module 22 project: the Bazaar data-access layer
+# Module 22: Project milestone — the Bazaar data-access layer
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
@@ -7,7 +7,7 @@
 
 Bazaar is about to get its first piece of Python. Before anyone writes web handlers, the team wants one module through which **all** database access goes: plain SQL, parameterized, typed results, business errors as Python exceptions, and tests that run against the real database. This is that module. Modules 23 to 28 build on it: an async twin and a job worker (23), SQLAlchemy (24–25), Alembic migrations (26), production hardening (27), and the FastAPI service (28).
 
-**Starting state:** `./project/bin/reset.sh 22`, and the virtual environment from the module's *Before you start* section.
+**Starting state:** `./project/bin/reset.sh 22`, and the virtual environment and the `alembic` line from the module's *Before you start* section.
 
 **Reference solution:** [`project/python/`](../../project/python/), in particular `src/bazaar/{config,db,models,errors,repo}.py` and `tests/test_repo.py`. Try it yourself first: create your own package (for example in `workspace/python/`) with the same layout, or delete the function bodies in a copy of the reference and rewrite them.
 

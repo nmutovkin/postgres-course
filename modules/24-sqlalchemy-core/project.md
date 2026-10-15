@@ -1,4 +1,4 @@
-# Module 24 project: the Core layer, a drift test, and two reports
+# Module 24: Project milestone — the Core layer, a drift test, and two reports
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

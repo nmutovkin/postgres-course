@@ -33,7 +33,7 @@ def heads_check(cfg) -> list[str]:  # noqa: ANN001
 
 def history(cfg) -> None:  # noqa: ANN001
     script = ScriptDirectory.from_config(cfg)
-    for rev in script.walk_revisions("2701", "heads"):
+    for rev in script.walk_revisions("2801", "heads"):
         print(f"    {rev.down_revision} -> {rev.revision}  {rev.doc}")
 
 
@@ -41,9 +41,9 @@ def main() -> None:
     with scratch_migrations() as mig, scratch_db() as dsn:
         cfg = mig.config(dsn)
         cfg.set_section_option("post_write_hooks", "hooks", "")  # no ruff for scratch files
-        # Two developers, each on a branch that started at head 2701:
-        command.revision(cfg, "add wishlist", rev_id="2702", head="2701")
-        command.revision(cfg, "add gift wrap", rev_id="2703", head="2701", splice=True)
+        # Two developers, each on a branch that started at head 2801:
+        command.revision(cfg, "add wishlist", rev_id="2802", head="2801")
+        command.revision(cfg, "add gift wrap", rev_id="2803", head="2801", splice=True)
         print("after merging both branches in git:")
         heads_check(cfg)
         try:
@@ -53,20 +53,20 @@ def main() -> None:
 
         # Fix 1 (preferred): rebase the second revision onto the first.
         versions = mig.root / "migrations" / "versions"
-        f = next(versions.glob("2703_*.py"))
+        f = next(versions.glob("2803_*.py"))
         f.write_text(
-            re.sub(r"down_revision: (.*) = '2701'", r"down_revision: \1 = '2702'", f.read_text())
+            re.sub(r"down_revision: (.*) = '2801'", r"down_revision: \1 = '2802'", f.read_text())
         )
-        print("after rebasing 2703 onto 2702:")
+        print("after rebasing 2803 onto 2802:")
         heads_check(cfg)
         history(cfg)
         command.upgrade(cfg, "head")
 
         # Fix 2 (for long-lived parallel lines): a merge revision.
         f.write_text(
-            re.sub(r"down_revision: (.*) = '2702'", r"down_revision: \1 = '2701'", f.read_text())
+            re.sub(r"down_revision: (.*) = '2802'", r"down_revision: \1 = '2801'", f.read_text())
         )
-        command.merge(cfg, "heads", message="merge wishlist and gift wrap", rev_id="2704")
+        command.merge(cfg, "heads", message="merge wishlist and gift wrap", rev_id="2804")
         print("with a merge revision instead:")
         heads_check(cfg)
         history(cfg)
