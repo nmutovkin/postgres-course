@@ -1125,7 +1125,7 @@ ALTER TABLE products
 CREATE INDEX products_search_vector_idx ON products USING gin (search_vector);
 ```
 
-PostgreSQL computes the column on every `INSERT` and on every `UPDATE` of the row. It can never be stale, no application code is involved, and queries read the stored value. The details that make it work:
+PostgreSQL computes the column on every `INSERT`, and on every `UPDATE` that assigns one of its input columns (`title`, `description` or `tags`, even to the same value); an `UPDATE` that only sets `price` keeps the stored value without re-parsing. It can never be stale, no application code is involved, and queries read the stored value. The details that make it work:
 
 - **Generation expressions must be immutable.** `to_tsvector('english', ...)` with a constant configuration is immutable. `to_tsvector(text)`, the one-argument form, is only *stable*, because it depends on the `default_text_search_config` setting, so it is rejected.
 - **`coalesce` matters.** `NULL || anything` is NULL. Without `coalesce`, the products whose description is NULL (9,881 of them) would get a NULL `search_vector` and could never be found, even by title.
@@ -1192,7 +1192,7 @@ UPDATE lab.docs SET title = title;   -- back-fill tsv for the existing rows, thr
 
 - the document includes data from **other tables** (the category name, the seller's shop name, the latest review titles), which a generated column can't reference. But then you must also update products when *those* tables change, and that is where trigger-maintained search documents usually rot;
 - you want to **back-fill gradually** on a large live table instead of rewriting it in one locked step;
-- you need logic that isn't immutable, or you want to skip recomputing when irrelevant columns change (`UPDATE OF title, description`).
+- you need logic that isn't immutable. (Skipping the work when irrelevant columns change is not a reason: `UPDATE OF title, description` does that for a trigger, and a generated column already does it on its own.)
 
 | | Generated column | Expression index | Trigger column |
 |---|---|---|---|

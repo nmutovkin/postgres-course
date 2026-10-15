@@ -168,7 +168,7 @@ WHERE user_id = 4242;
 
 `CREATE INDEX name ON table (columns)` creates a B-tree, the default index type. Naming convention in this course: `<table>_<columns>_idx` for plain indexes and `<table>_<columns>_key` for unique ones, which matches what PostgreSQL generates for constraints.
 
-> **Under the hood:** Why `rows=10` estimated but 15 actual? The planner doesn't know user 4242; it knows (from `ANALYZE` statistics) that `orders` has 500,000 rows and about 50,000 distinct `user_id`s, so it guesses 10 per user. Module 12 is about these estimates and what happens when they're badly wrong.
+> **Under the hood:** Why `rows=10` estimated but 15 actual? The planner doesn't know user 4242; it knows (from `ANALYZE` statistics) that `orders` has 500,000 rows and estimates about 50,000 distinct `user_id`s, so it guesses 10 per user. The estimate comes from a 30,000-row sample and is low: the real number is 84,058 buyers, about 6 orders each. Module 12 is about these estimates and what happens when they're badly wrong.
 
 ### 1.3 What an index costs
 
@@ -403,7 +403,7 @@ WHERE relname IN ('orders_pkey', 'lab_status_dedup', 'lab_status_nodedup',
  orders_user_id_idx | 5296 kB
 ```
 
-Without deduplication, every one of these is 11 MB: 500,000 entries of 16 bytes plus page overhead, the same as the unique primary key. With it, the `user_id` index (10 orders per user on average) halves, and the `status` index (6 distinct values) shrinks to a third. Deduplication is automatic and needs no tuning. It's disabled for some types where "equal" doesn't mean "identical bytes" (`numeric` with different display scales, for example, or nondeterministic collations), and unique indexes only use it to absorb the temporary duplicates that MVCC creates.
+Without deduplication, every one of these is 11 MB: 500,000 entries of 16 bytes plus page overhead, the same as the unique primary key. With it, the `user_id` index (about 6 orders per buyer on average) halves, and the `status` index (6 distinct values) shrinks to a third. Deduplication is automatic and needs no tuning. It's disabled for some types where "equal" doesn't mean "identical bytes" (`numeric` with different display scales, for example, or nondeterministic collations), and unique indexes only use it to absorb the temporary duplicates that MVCC creates.
 
 ```sql
 DROP INDEX lab_status_dedup, lab_status_nodedup, lab_user_nodedup;
@@ -1721,7 +1721,7 @@ followed by the validation phases. The phase names include `waiting for writers 
 
 ### 17.3 Invalid indexes
 
-If a concurrent build fails part-way, because of a unique violation, a deadlock, a cancelled statement or a lost connection, it can't roll back the catalog entries it already committed. It leaves an **invalid index** behind: the planner never uses it, but it is still *maintained on every write* (it was already marked ready in step 3), so it costs you write time and space for nothing.
+If a concurrent build fails part-way, because of a unique violation, a deadlock, a cancelled statement or a lost connection, it can't roll back the catalog entries it already committed. It leaves an **invalid index** behind: the planner never uses it, and whether it still costs you anything depends on how far the build got. If it failed during the build of step 3 (a duplicate already in the table, as below, or a cancel during that scan), it was never marked ready (`pg_index.indisready = f`), so the index is empty and writes ignore it. If it failed later, in step 4 or 5, it had already been marked ready (`indisvalid = f`, `indisready = t`): it is *maintained on every write*, so it costs you write time and space for nothing. Either way, drop it.
 
 ```sql
 CREATE UNIQUE INDEX CONCURRENTLY lab_users_full_name_key ON users (full_name);

@@ -73,7 +73,7 @@ SELECT pg_size_pretty(pg_table_size('orders'))   AS table_size,
 
 **Reasoning.** `pg_index` is the catalog of indexes; joining `pg_class` gives the index's name and size. `ORDER BY pg_relation_size(...)` sorts by the raw byte count rather than by the pretty-printed text (which would sort `5528 kB` above `15 MB`). The `bigint` divisions need a cast to `numeric`, otherwise integer division returns 0.
 
-Note the sizes. The two composite indexes (`bigint` + `timestamptz` = 16 bytes of key per entry, plus an 8-byte entry header) are bigger than the primary key, and `orders_shipping_address_id_idx` is half the primary key's size thanks to deduplication (about 10 orders share each address). Indexes almost as large as the table are normal for a table with four access paths.
+Note the sizes. The two composite indexes (`bigint` + `timestamptz` = 16 bytes of key per entry, plus an 8-byte entry header) are bigger than the primary key, and `orders_shipping_address_id_idx` is half the primary key's size thanks to deduplication (about 5 orders share each address that has been used). Indexes almost as large as the table are normal for a table with four access paths.
 
 **Alternative.** `\di+ orders*` in psql shows the same sizes; `\d orders` shows the definitions. The query is useful when you want to sort, filter or compare several tables.
 

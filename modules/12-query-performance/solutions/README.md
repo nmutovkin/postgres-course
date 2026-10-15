@@ -41,7 +41,7 @@ The milestone's reference write-up is at the end of this file.
 
 <!-- toc:end -->
 
-## Exercise 1: Read a plan
+## Exercise 1 ★: Read a plan
 
 ```text
  Nested Loop  (cost=1.27..172.63 rows=25 width=58) (actual time=0.062..0.480 rows=35 loops=1)
@@ -69,7 +69,7 @@ The milestone's reference write-up is at the end of this file.
 
 ---
 
-## Exercise 2: Cost by hand
+## Exercise 2 ★: Cost by hand
 
 ```sql
 SELECT relpages, reltuples FROM pg_class WHERE relname = 'payments';
@@ -101,7 +101,7 @@ Without a condition: 6,101 + 5,368.16 = **11,469.16**.
 
 ---
 
-## Exercise 3: Statistics to estimates
+## Exercise 3 ★: Statistics to estimates
 
 ```sql
 SELECT most_common_freqs[array_position(most_common_vals::text::text[], 'paid')] AS paid_freq
@@ -124,7 +124,7 @@ The second estimate is 27 times too high. MCVs give an accurate frequency for ea
 
 ---
 
-## Exercise 4: Hash batches
+## Exercise 4 ★★: Hash batches
 
 ```text
 work_mem = 4MB (default):   Buckets: 262144  Batches: 2  Memory Usage: 7636kB   (+ temp buffers)
@@ -138,7 +138,7 @@ work_mem = 7MB:             Buckets: 262144  Batches: 1  Memory Usage: 13209kB
 
 ---
 
-## Exercise 5: Three ways to join
+## Exercise 5 ★★: Three ways to join
 
 | Plan | Settings | Est. cost | Time | Buffers | `order_items` rows read |
 |---|---|---:|---:|---:|---:|
@@ -175,7 +175,7 @@ A merge join *can* stop early, and a nested loop is not always best: if the cond
 
 ---
 
-## Exercise 6: Keyset pagination for category pages
+## Exercise 6 ★★: Keyset pagination for category pages
 
 **1. `OFFSET`:**
 
@@ -245,7 +245,7 @@ CREATE INDEX products_active_category_id_price_id_idx
 
 ---
 
-## Exercise 7: The `NOT IN` trap
+## Exercise 7 ★★: The `NOT IN` trap
 
 **1. Leaf categories.**
 
@@ -307,7 +307,7 @@ WHERE NOT EXISTS (SELECT 1 FROM reviews AS r WHERE r.user_id = u.id);
 
 ---
 
-## Exercise 8: Statistics on expressions
+## Exercise 8 ★★: Statistics on expressions
 
 **1. Before:**
 
@@ -357,7 +357,7 @@ ANALYZE products;
 
 ---
 
-## Exercise 9: What does pg_stat_statements say?
+## Exercise 9 ★★: What does pg_stat_statements say?
 
 After a 60-second run (429,142 transactions, about 7,150 per second on this run):
 
@@ -399,7 +399,7 @@ Note how differently the views rank: the report is second by total time with onl
 
 ---
 
-## Exercise 10: Cheapest product per category
+## Exercise 10 ★★: Cheapest product per category
 
 ```text
  Sort (actual time=1558.259..1558.416 rows=2814 loops=1)
@@ -479,7 +479,7 @@ All three return the same 2,814 rows (ties at the minimum price included; `rank(
 
 ---
 
-## Exercise 11: Watch a prepared statement go generic
+## Exercise 11 ★★★: Watch a prepared statement go generic
 
 ```sql
 PREPARE seller_lines(bigint) AS
@@ -541,7 +541,7 @@ SELECT name, generic_plans, custom_plans FROM pg_prepared_statements;
 
 ---
 
-## Exercise 12: Counting without counting
+## Exercise 12 ★★★: Counting without counting
 
 [`count_estimate.sql`](count_estimate.sql):
 
@@ -590,7 +590,7 @@ Each estimate returns in about a millisecond whatever the table size.
 
 ---
 
-## Exercise 13: The slow function
+## Exercise 13 ★★★: The slow function
 
 **Find the statement.** `pg_stat_statements` records statements inside functions with `track = all`:
 

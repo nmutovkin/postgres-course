@@ -1693,7 +1693,7 @@ tuples: 700 removed, 37223 remain, 0 are dead but not yet removable
 removable cutoff: 49276, which was 0 XIDs old when operation ended
 ```
 
-(Only 700 rows had `id <= 1000`, since the earlier `DELETE` had removed 30% of them.) The first VACUUM found the 700 deleted rows but had to keep them: session A's snapshot is older than the deleting transaction, so for A those rows still exist. The `removable cutoff` line shows the horizon VACUUM used, and how many XIDs behind the newest transaction it was. On a busy server, a horizon that is millions of XIDs old means some session has been sitting on a snapshot for a long time. Once A finished, the next VACUUM removed them.
+(Only 700 rows had `id <= 1000`, since the earlier `DELETE` had removed 30% of them.) Don't read `remain` as an exact count: 34,300 rows are left, but this VACUUM scanned only 29 of the table's 619 pages (`pages: 0 removed, 619 remain, 29 scanned (4.68% of total)`; the rest were all-visible and skipped). `remain` counts the live tuples on the scanned pages, extrapolates the old `reltuples` density to the skipped ones, and adds the dead-but-not-removable tuples, so it is an estimate. Its live part is what VACUUM stores in `pg_class.reltuples` (37,223 after the second run). The first VACUUM found the 700 deleted rows but had to keep them: session A's snapshot is older than the deleting transaction, so for A those rows still exist. The `removable cutoff` line shows the horizon VACUUM used, and how many XIDs behind the newest transaction it was. On a busy server, a horizon that is millions of XIDs old means some session has been sitting on a snapshot for a long time. Once A finished, the next VACUUM removed them.
 
 ---
 

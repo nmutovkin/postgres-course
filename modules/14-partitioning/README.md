@@ -373,7 +373,7 @@ SELECT indisvalid FROM pg_index WHERE indexrelid = 'events_user_id_idx'::regclas
 --  t
 ```
 
-The concurrent builds took 0.16–0.42 s per month (about 3 s in total, longer than the blocking build, as usual for `CONCURRENTLY`), and inserts continued throughout. The parent index becomes valid automatically when the last partition's index is attached. Until then, the planner doesn't use it for the parent, and new partitions created in the meantime don't get the index automatically. The same technique works for `REINDEX`: rebuild one partition at a time with `REINDEX INDEX CONCURRENTLY`.
+The concurrent builds took 0.16–0.42 s per month (about 3 s in total, longer than the blocking build, as usual for `CONCURRENTLY`), and inserts continued throughout. The parent index becomes valid automatically when the last partition's index is attached. Until then, the planner doesn't use it for the parent. New partitions created in the meantime *do* get the index: `CREATE TABLE ... PARTITION OF` builds a matching index on the new partition and attaches it to the (still invalid) parent index straight away, so there's nothing to do for them. The same technique works for `REINDEX`: rebuild one partition at a time with `REINDEX INDEX CONCURRENTLY`.
 
 > **Pitfall:** `ON ONLY` + attach works for unique indexes too, but each partition's index must be a unique index on exactly the same columns. To add a primary key to a partitioned table this way, build unique indexes on the partitions concurrently, then add the constraint on the parent: PostgreSQL attaches the matching indexes instead of building new ones.
 
