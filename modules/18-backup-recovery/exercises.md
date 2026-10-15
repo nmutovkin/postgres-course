@@ -1,4 +1,4 @@
-# Module 18 exercises
+# Module 18: Exercises
 
 <!-- nav:start -->
 > [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
@@ -11,7 +11,7 @@ Solutions are in [`solutions/README.md`](solutions/README.md).
 
 ---
 
-### Exercise 1 ★: Read a dump's table of contents
+## Exercise 1 ★: Read a dump's table of contents
 
 Take a custom-format dump of `bazaar` from `course-pg` and answer from its table of contents alone (`pg_restore -l`), without restoring anything:
 
@@ -27,7 +27,7 @@ Take a custom-format dump of `bazaar` from `course-pg` and answer from its table
 
 ---
 
-### Exercise 2 ★: An archiver health query
+## Exercise 2 ★: An archiver health query
 
 Write **one** query that returns a single row with: the number of WAL segments waiting to be archived, the total size of `pg_wal`, the last archived file, the number of seconds since it was archived, and a boolean `is_failing` that is true when the most recent archive attempt failed.
 
@@ -40,7 +40,7 @@ Write **one** query that returns a single row with: the number of WAL segments w
 
 ---
 
-### Exercise 3 ★: Anatomy of a nightly backup
+## Exercise 3 ★: Anatomy of a nightly backup
 
 For the newest backup under `/backups/base` in the lab, determine without starting it:
 
@@ -57,7 +57,7 @@ For the newest backup under `/backups/base` in the lab, determine without starti
 
 ---
 
-### Exercise 4 ★★: A lean developer copy
+## Exercise 4 ★★: A lean developer copy
 
 Developers want a copy of Bazaar on their laptops, with every table, function, index and policy, but **without** the rows of the clickstream (`events` and all its partitions) and of `audit_log`, which are large and not needed for development. Produce a single dump file for this, restore it into a new database `bazaar_dev` on `course-pg`, and report the size of the dump and of the restored database.
 
@@ -70,7 +70,7 @@ Developers want a copy of Bazaar on their laptops, with every table, function, i
 
 ---
 
-### Exercise 5 ★★: Undo a bad bulk update from last night's dump
+## Exercise 5 ★★: Undo a bad bulk update from last night's dump
 
 On `course-pg`, first take a custom dump of `bazaar` (this is "last night's dump"). Then simulate the incident: a seller-tools script meant to raise seller 4's prices by 10% ran `UPDATE bazaar.products SET price = price * 10 WHERE seller_id = 4`.
 
@@ -85,7 +85,7 @@ Restore the dump's pre-data section and only the `products` data into a scratch 
 
 ---
 
-### Exercise 6 ★★: How far back can we go?
+## Exercise 6 ★★: How far back can we go?
 
 Your manager asks: "If someone deletes data right now, which points in time can we restore to?" Write a query for the lab server that answers with one row: `restorable_from` (the earliest moment a kept base backup lets you recover to), `restorable_until` (the latest moment covered by archived WAL), the window length, and the number of base backups currently kept.
 
@@ -100,7 +100,7 @@ Use `/backups/base/catalog.tsv` (written by `nightly-backup.sh`) and the backup 
 
 ---
 
-### Exercise 7 ★★: Test a pgBackRest backup without touching production
+## Exercise 7 ★★: Test a pgBackRest backup without touching production
 
 Set up the `bazaar` stanza and take a full pgBackRest backup (section 8). Then restore that backup into a **separate directory** on a new Docker volume, start a second PostgreSQL server on it, and check that it contains the same number of orders as production had at backup time. The restored server must not archive anything, and production must keep running throughout.
 
@@ -113,7 +113,7 @@ Useful restore options: `--pg1-path` (where to restore), `--archive-mode=off`, `
 
 ---
 
-### Exercise 8 ★★: How much does `-j` help?
+## Exercise 8 ★★: How much does `-j` help?
 
 On `course-pg`, restore a directory-format dump of `bazaar` into fresh databases with `pg_restore -j 1`, `-j 2`, `-j 4` and `-j 8`, timing each. Then split one restore into two steps: pre-data plus data with no parallelism, then post-data with `-j 4`, and time both steps. Explain the shape of the results.
 
@@ -126,7 +126,7 @@ Drop each database right after timing it: every copy is a full 1.5 GB `bazaar` d
 
 ---
 
-### Exercise 9 ★★: Break an incremental chain
+## Exercise 9 ★★: Break an incremental chain
 
 On the lab server, take a PostgreSQL 17 chain: a full backup, an incremental relative to it, and a second incremental relative to the first (change some data between backups, for example `UPDATE inventory SET quantity = quantity + 1`). Then try to combine the chain **wrongly** in three ways and record the error each time:
 
@@ -145,7 +145,7 @@ Finally combine it correctly and verify the result.
 
 ---
 
-### Exercise 10 ★★★: Compressed archiving
+## Exercise 10 ★★★: Compressed archiving
 
 WAL segments compress very well, especially the mostly empty ones produced by `archive_timeout`. Write `archive-wal-gzip.sh`, a variant of `scripts/archive-wal.sh` that stores gzip-compressed segments in `/archive/wal-gz`, while keeping the three rules (durable, never overwrite a different file, idempotent). Switch the lab server to it, take a new base backup, and prove that point-in-time recovery still works by running `scripts/pitr-drill.sh` with a matching restore command. (The drill script reads `RESTORE_COMMAND` and `ARCHIVED_SEGMENT_PATH` from the environment; read its header.)
 
@@ -158,7 +158,7 @@ Put your script in `lab/scripts/` so the container sees it as `/lab/scripts/arch
 
 ---
 
-### Exercise 11 ★★★: Detect gaps in the archive
+## Exercise 11 ★★★: Detect gaps in the archive
 
 A single missing WAL segment makes every point-in-time recovery past it impossible, and you would only find out during a restore. Write a SQL query (run as a superuser on the lab server) that lists every segment missing from `/archive/wal` between the start WAL of the oldest base backup still kept and the newest archived segment.
 
@@ -171,7 +171,7 @@ A segment name is `TTTTTTTTLLLLLLLLSSSSSSSS` in hex: timeline, then a "log" numb
 
 ---
 
-### Exercise 12 ★★★: Recover a dropped table by LSN
+## Exercise 12 ★★★: Recover a dropped table by LSN
 
 On the lab server (with a nightly backup taken), drop the `promotions` table, then place one more order through `place_order()` (the shop keeps running). Without knowing the time of the `DROP`, recover the table:
 

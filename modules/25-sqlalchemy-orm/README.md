@@ -25,10 +25,12 @@ The seller portal needs screens, not reports: "my products" with their stock, "e
 
 ```bash
 ./project/bin/reset.sh 25                                     # same database as module 24
-./project/bin/psql.sh < project/python/sql/2301_notify.sql
 cd project/python && source .venv/bin/activate
 export BAZAAR_DSN=postgresql://postgres:postgres@localhost:5432/bazaar
+alembic stamp 2600 && alembic upgrade head                    # the package's schema
 ```
+
+The reference package always matches its latest migrations, so bring the database to its schema right after `reset.sh` with the `alembic` line above (about 30 s); Module 26 explains what this does.
 
 You need Module 24's package (`bazaar.sa`: engine, tables, `count_statements`). The examples are in [`examples/`](examples/); run them from `project/python`. Outputs come from SQLAlchemy 2.1.4 (2.0-style API), psycopg 3.3.6 and asyncpg 0.32.0 against PostgreSQL 17.11. Ids of rows that examples insert and roll back vary between runs, because sequences advance even when transactions roll back (Module 10).
 

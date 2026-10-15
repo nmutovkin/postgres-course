@@ -31,7 +31,7 @@ Bazaar is growing up. The seller dashboard runs heavy aggregate queries all day,
 
 <!-- toc:end -->
 
-## What you'll learn
+**What you'll learn**
 
 - Why you replicate (high availability, read scaling, analytics isolation, upgrades) and why a replica is still not a backup.
 - How **physical streaming replication** works: the WAL sender, WAL receiver and startup processes; the four LSNs (sent, written, flushed, replayed); `primary_conninfo` and `standby.signal`; building a standby with `pg_basebackup -R`.
@@ -45,7 +45,7 @@ Bazaar is growing up. The seller dashboard runs heavy aggregate queries all day,
 - Zero-downtime major-version upgrades with logical replication.
 - **Logical decoding and change data capture (CDC)**: `test_decoding`, `pgoutput`, and how tools like wal2json and Debezium fit in.
 
-## Before you start
+**Before you start**
 
 This module uses its own lab: four PostgreSQL 17 servers in Docker, separate from the course database.
 
@@ -415,7 +415,7 @@ FATAL:  could not receive data from WAL stream: ERROR:  requested WAL segment 00
 
 (On another run of the same steps the slot first showed `unreserved` after the `CHECKPOINT`, because that checkpoint had not yet removed the segments; the next checkpoint invalidated it. `unreserved` really does mean "about to be lost".)
 
-> **Pitfall:** `max_slot_wal_keep_size` applies to **every** slot, physical and logical, and a logical slot can fall behind even while its subscriber is connected and healthy: its `restart_lsn` cannot move past the start of the oldest transaction that might still need decoding. When this experiment was first run with the analytics subscription of section 10 already in place, the 250 MB `CREATE TABLE ... AS` kept the logical slot 250 MB behind, and the same checkpoint invalidated it too:
+> **Pitfall:** `max_slot_wal_keep_size` applies to **every** slot, physical and logical, and a logical slot can fall behind even while its subscriber is connected and healthy: its `restart_lsn` cannot move past the start of the oldest transaction that might still need decoding. If the analytics subscription of section 10 is already in place when you run this experiment, the 250 MB `CREATE TABLE ... AS` keeps the logical slot 250 MB behind, and the same checkpoint invalidates it too:
 >
 > ```text
 > LOG:  invalidating obsolete replication slot "bazaar_analytics"
@@ -530,7 +530,7 @@ You have three ways to reduce cancellations, and each moves the cost somewhere e
     replica1  |      | t
    ```
 
-   Repeat the experiment with feedback on and the standby query survives its 40-second sleep, while the primary's `VACUUM (VERBOSE)` reports:
+   Repeat the experiment with feedback on and the standby query survives its 60-second sleep, while the primary's `VACUUM (VERBOSE)` reports:
 
    ```text
    tuples: 0 removed, 50000 remain, 16667 are dead but not yet removable
@@ -636,7 +636,7 @@ Resume with `SELECT pg_wal_replay_resume();` and the price catches up instantly.
 
 Neither measure is perfect, and you should understand why before you put either on a dashboard.
 
-- **Bytes** are exact and cheap, but they do not tell you how stale the data is. 11 kB behind might be one second of a quiet night or a millisecond of a busy day.
+- **Bytes** are exact and cheap, but they do not tell you how stale the data is. 38 kB behind might be one second of a quiet night or a millisecond of a busy day.
 - **`replay_lag`** is a time, but it is a *measurement of past positions*: it is computed when the standby reports progress. While replay is completely stuck, the value does not grow smoothly; in the lab, five seconds into a pause it read `00:00:05.13`, and ten seconds later it was still stuck at `00:00:06.53`. And when the primary is idle it becomes NULL even if the standby is broken.
 - **`now() - pg_last_xact_replay_timestamp()`** on the standby is the time since the last *replayed commit* was committed on the primary. It is exactly "how stale is this replica" while the primary is busy, but on an idle primary it grows forever although the standby is perfectly current. Above it says 3.7 s: the time since the last commit *before* the pause, not how long replay has been stuck.
 
@@ -1337,7 +1337,7 @@ Two operational notes:
 
 A logical slot exists only on the server where it was created. Until PostgreSQL 17, if the publisher failed over to a physical standby, the standby had no copy of the slot; the subscription could not continue from where it was and had to be recreated with a full re-copy (or worse, changes made between the last confirmed position and the failover were silently missed).
 
-PostgreSQL 17 can **synchronize logical slots to physical standbys**. Four pieces are required:
+PostgreSQL 17 can **synchronize logical slots to physical standbys**. Three pieces are required:
 
 1. The slot is created as a failover slot: `CREATE SUBSCRIPTION ... WITH (failover = true)`, or for an existing subscription `ALTER SUBSCRIPTION ... SET (failover = true)` (the subscription must be disabled while you change it).
 2. On the standby: `sync_replication_slots = on`, `hot_standby_feedback = on`, a `primary_slot_name`, and a `primary_conninfo` that includes a **`dbname`** (the slot sync worker needs to connect to a database, which a plain replication connection does not).
@@ -1521,7 +1521,7 @@ The old primary's timeline 1 has now diverged from the new primary's timeline 2.
 
 Requirements: the target must have been shut down cleanly, and it must have either data checksums or **`wal_log_hints = on`** (so that hint-bit-only page changes are WAL-logged and pg_rewind can see them); the lab primary sets `wal_log_hints`. The source must be running (or be a cleanly stopped data directory), and, if it was **promoted only recently, it needs a `CHECKPOINT` first**.
 
-That last requirement is easy to miss. A promotion does not wait for a checkpoint; it requests one that runs in the background, spread over minutes. Until it completes, the new primary's control file still describes its last *restartpoint* as a standby, which can be far in the past. `pg_rewind` takes the starting point for the target's replay from there. When this lab was first run without the checkpoint, the rewound server asked for WAL from the very beginning of the standby's life:
+That last requirement is easy to miss. A promotion does not wait for a checkpoint; it requests one that runs in the background, spread over minutes. Until it completes, the new primary's control file still describes its last *restartpoint* as a standby, which can be far in the past. `pg_rewind` takes the starting point for the target's replay from there. Without the checkpoint, the rewound server asks for WAL from the very beginning of the standby's life:
 
 ```text
 LOG:  starting backup recovery with redo LSN 0/3000028, checkpoint LSN 0/3000080, on timeline ID 1
@@ -1637,7 +1637,7 @@ For a large database, step 3's initial copy can take many hours and puts a heavy
 4. creates a subscription with `copy_data = false` that continues from that LSN;
 5. changes the converted server's system identifier, since it is now an independent cluster.
 
-The standby must be stopped while the tool runs (it starts and stops the server itself). In the lab, convert `replica2` (at this point streaming from `replica1`, the new primary of section 12). Three preparations, each learned the hard way in this lab:
+The standby must be stopped while the tool runs (it starts and stops the server itself). In the lab, convert `replica2` (at this point streaming from `replica1`, the new primary of section 12). Three preparations are needed first:
 
 ```bash
 # 1. The -P user must be allowed to make replication connections to the publisher:

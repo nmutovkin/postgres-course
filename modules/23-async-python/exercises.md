@@ -5,7 +5,7 @@
 > [← 22 psycopg 3](../22-psycopg/README.md) · [Course home](../../README.md) · [24 SQLAlchemy Core →](../24-sqlalchemy-core/README.md)
 <!-- nav:end -->
 
-**Starting state.** `./project/bin/reset.sh 23`, plus `project/python/sql/2301_notify.sql` applied (`./project/bin/psql.sh < project/python/sql/2301_notify.sql`), and Module 22's virtual environment with the `bazaar` package installed. Run solutions from `project/python`:
+**Starting state.** `./project/bin/reset.sh 23`, then `alembic stamp 2600 && alembic upgrade head` in `project/python` (the package's schema, see the README's setup), and Module 22's virtual environment with the `bazaar` package installed. Run solutions from `project/python`:
 
 ```bash
 cd project/python && source .venv/bin/activate

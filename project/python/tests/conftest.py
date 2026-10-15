@@ -3,10 +3,10 @@
 The tests need the Bazaar database reachable through BAZAAR_DSN (default:
 localhost:5432, the course container). Which tests run depends on its schema:
 
-* `./project/bin/reset.sh 22` (+ sql/2301_notify.sql from module 23 on): the
-  tests of modules 22-25 run; tests marked `migrated` are skipped, with a reason.
-* the newest Alembic revision (`alembic stamp 2600 && alembic upgrade head`,
-  module 26 on): everything runs.
+* the newest Alembic revision (`alembic stamp 2600 && alembic upgrade head`
+  after reset.sh, which every module's setup does from module 22 on): everything runs.
+* a bare `./project/bin/reset.sh 22` (migrations skipped): the tests of modules
+  22-25 run; tests marked `migrated` are skipped, with a reason.
 
 Isolation strategy:
 * `conn` / `aconn` wrap each test in a transaction that is ROLLED BACK at the
@@ -48,12 +48,11 @@ def pytest_report_header(config: pytest.Config) -> str:
 
 # --- which schema is the database at? ---------------------------------------------------
 #
-# Modules 22-25 run the tests against `reset.sh 22` (plus sql/2301_notify.sql from
-# module 23 on): no Alembic yet. From module 26 on, the database must be at the
-# newest Alembic revision. Tests (or whole files) that need the migrated schema
-# carry the `migrated` marker; when the database is not at head they are SKIPPED
-# with the reason, and everything else still runs. (Until module 28 this check
-# aborted the whole run, which locked out learners on modules 22-25.)
+# Every module's setup brings the database to the newest Alembic revision after
+# reset.sh. Tests (or whole files) that need the migrated schema carry the
+# `migrated` marker; when the database is not at head (migrations skipped, or
+# behind after a pull) they are SKIPPED with the reason, and everything else
+# still runs. (Until module 28 this check aborted the whole run.)
 
 
 @dataclass(frozen=True)

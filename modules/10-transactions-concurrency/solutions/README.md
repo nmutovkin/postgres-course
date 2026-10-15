@@ -1,4 +1,4 @@
-# Module 10 solutions
+# Module 10: Solutions
 
 <!-- nav:start -->
 > [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
@@ -64,7 +64,7 @@ The lock order "orders before inventory" is shared with exercise 10's `ship_next
 
 ---
 
-## Exercise 1: Savepoint bookkeeping
+## Exercise 1 ★: Savepoint bookkeeping
 
 **Original script:** 6 → **35**, 7 → **15**, 8 → **9**, 9 → **20**.
 
@@ -87,7 +87,7 @@ The lesson: in an aborted transaction, statements are skipped, not queued; rolli
 
 ---
 
-## Exercise 2: Row-version forensics
+## Exercise 2 ★: Row-version forensics
 
 ```sql
 BEGIN;
@@ -145,7 +145,7 @@ An alternative to `xmin` comparisons: `pg_xact_commit_timestamp(xmin)` tells you
 
 ---
 
-## Exercise 3: When is the snapshot taken?
+## Exercise 3 ★: When is the snapshot taken?
 
 | Step | Value | Why |
 |---|---|---|
@@ -162,7 +162,7 @@ The practical lesson of step 10: if you want a report's snapshot to start "now",
 
 ---
 
-## Exercise 4: Fix a lost-update bug
+## Exercise 4 ★★: Fix a lost-update bug
 
 Measured (product 57 set to 30, 8 clients × 100 calls of `restock(57, 1)`):
 
@@ -192,7 +192,7 @@ A third fix: run the original function under `REPEATABLE READ` and retry on `400
 
 ---
 
-## Exercise 5: Optimistic locking for product edits
+## Exercise 5 ★★: Optimistic locking for product edits
 
 Solution: [`exercises/ex05_optimistic.sql`](exercises/ex05_optimistic.sql). The heart of it:
 
@@ -232,7 +232,7 @@ Alternatives: the hidden `xmin` column as the token (no schema change, but opaqu
 
 ---
 
-## Exercise 6: A deadlock-free stock transfer
+## Exercise 6 ★★★: A deadlock-free stock transfer
 
 Solution: [`exercises/ex06_transfer_stock.sql`](exercises/ex06_transfer_stock.sql). The essential part:
 
@@ -267,7 +267,7 @@ Alternative: lock with one statement, `SELECT ... WHERE product_id IN (...) ORDE
 
 ---
 
-## Exercise 7: Diagnose a blocking chain
+## Exercise 7 ★★: Diagnose a blocking chain
 
 1. **The graph:**
 
@@ -293,7 +293,7 @@ Alternative: lock with one statement, `SELECT ... WHERE product_id IN (...) ORDE
 
 ---
 
-## Exercise 8: Write skew on the support rota
+## Exercise 8 ★★: Write skew on the support rota
 
 **1. `REPEATABLE READ`:**
 
@@ -343,7 +343,7 @@ B waited at amara's row; after A committed, EvalPlanQual re-checked `on_call` on
 
 ---
 
-## Exercise 9: Predict the outcome
+## Exercise 9 ★★: Predict the outcome
 
 **(a) Changing a key column: B waits.** `sku` is part of the unique constraint `(seller_id, sku)`, which a foreign key *could* reference, so A's `UPDATE` takes `FOR UPDATE` instead of `FOR NO KEY UPDATE` (`pgrowlocks` showed mode `{Update}`). B's foreign key check needs `FOR KEY SHARE`, which conflicts only with `FOR UPDATE`. B waits until A commits, then `INSERT 0 1`. Compare section 10.2, where a price update did not block the same insert. Changing a column that is in *any* unique index (not partial, not an expression) makes updates heavier for concurrency.
 
@@ -351,13 +351,13 @@ B waited at amara's row; after A committed, EvalPlanQual re-checked `on_call` on
 
 **(c) Updating a row that is being deleted: B waits, then `UPDATE 0`.** B found promotion 9 in its snapshot, waited for A's lock, and after A committed the delete, there is no newer version to re-check: EvalPlanQual skips the row. No error; the application must look at the row count. (Under `REPEATABLE READ`, B would get `40001` instead.)
 
-**(d) Share, then upgrade: deadlock.** Both `FOR SHARE` locks are granted (they are compatible). A's `UPDATE` needs `FOR NO KEY UPDATE`, which conflicts with B's share lock: A waits for B. B's `UPDATE` then waits for A's share lock: a cycle. After `deadlock_timeout`, A (the first waiter) is aborted with `40P01`, B's update goes through, and `reserved` ends at 1. The fix: lock with the mode you will need in the end (`FOR NO KEY UPDATE`), not a weaker one you later upgrade.
+**(d) Share, then upgrade: deadlock.** Both `FOR SHARE` locks are granted (they are compatible). A's `UPDATE` needs `FOR NO KEY UPDATE`, which conflicts with B's share lock: A waits for B. B's `UPDATE` then waits for A's share lock: a cycle. Which one is aborted with `40P01` depends on timing (README section 13.2). If B's step 5 came less than 1 s (`deadlock_timeout`) after A's step 4, A's check finds the cycle: A is aborted and B's update goes through. If you waited longer before step 5, A's check has already found nothing, and B's own check, 1 s after step 5, aborts B: A's update goes through. Either way, `reserved` ends at 1. The fix: lock with the mode you will need in the end (`FOR NO KEY UPDATE`), not a weaker one you later upgrade.
 
 So: (b) is the serialization failure and (d) the deadlock.
 
 ---
 
-## Exercise 10: Ship orders with `SKIP LOCKED`
+## Exercise 10 ★★: Ship orders with `SKIP LOCKED`
 
 Solution: [`exercises/ex10_ship_next_order.sql`](exercises/ex10_ship_next_order.sql).
 
@@ -386,7 +386,7 @@ Alternative: `UPDATE ... FROM (SELECT ... FOR UPDATE SKIP LOCKED) c WHERE orders
 
 ---
 
-## Exercise 11: A singleton report refresh
+## Exercise 11 ★★: A singleton report refresh
 
 Solution: [`exercises/ex11_refresh_singleton.sql`](exercises/ex11_refresh_singleton.sql):
 
@@ -416,7 +416,7 @@ Alternatives: a row in a `job_locks` table locked with `FOR UPDATE NOWAIT` (work
 
 ---
 
-## Exercise 12: A migration that cannot take the site down
+## Exercise 12 ★★★: A migration that cannot take the site down
 
 Solution: [`exercises/ex12_add_column_safely.sql`](exercises/ex12_add_column_safely.sql). The retry loop:
 
@@ -458,7 +458,7 @@ Alternatives: a client-side loop in the migration tool (module 26 does this with
 
 ---
 
-## Exercise 13: Idempotent checkout
+## Exercise 13 ★★★: Idempotent checkout
 
 Solution: [`exercises/ex13_idempotent_checkout.sql`](exercises/ex13_idempotent_checkout.sql). The logic:
 

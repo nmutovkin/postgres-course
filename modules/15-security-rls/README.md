@@ -35,7 +35,7 @@ Most of this module needs no volume of data, and the small dataset is the one do
 ./project/bin/psql.sh
 ```
 
-If you prefer the real thing, `./project/bin/reset.sh 15` builds the same schema with the **large** dataset (100k users, 200k products, 500k orders; a few minutes and about 2 GB), and `./project/bin/reset.sh 16` is state 15 with `1501` already applied. The performance section (9) uses the large data; everything else works on either. The TLS lab (sections 14–15) is a separate Docker Compose project in [`lab/tls/`](lab/tls/).
+If you prefer the real thing, `./project/bin/reset.sh 15` builds the same schema with the **large** dataset (100k users, 200k products, 500k orders; a few minutes and about 2 GB), and `./project/bin/reset.sh 16` is state 15 with `1501` already applied. The performance section (12) uses the large data; everything else works on either. The TLS lab (sections 14–15) is a separate Docker Compose project in [`lab/tls/`](lab/tls/).
 
 > **Roles are cluster-wide.** `reset.sh` drops and recreates the `bazaar` *database*, but roles live in the cluster, not in a database, so they survive. That is why `1501` guards every `CREATE ROLE` and re-asserts attributes with `ALTER ROLE`: you can apply it any number of times. It also means that to start the roles truly from scratch you must drop them yourself — see [`lab/README.md`](lab/README.md).
 
@@ -356,6 +356,14 @@ INSERT INTO categories (name) VALUES ('x'); --> ERROR: permission denied for tab
 ```
 
 Note the trade-off: `pg_read_all_data` reads *every* column of *every* table, so it is not a fit for the analyst who must not see `users.email`. That is why Bazaar uses a custom `bazaar_readonly` bundle with column-level control instead (§5.5, §6). Predefined roles are blunt; custom roles are precise. Use predefined roles when "all data" or "all stats" is genuinely what you mean.
+
+**Clean up the demo roles.** Roles are cluster-wide, so the ones created in §2 and §3 survive `reset.sh` and `small15.sh` and would show up in the exercises' role reports. Drop them now, as a superuser. `DROP OWNED BY` first removes `support_team`'s grants in `bazaar`, which would otherwise block the drop:
+
+```sql
+\c - postgres
+DROP OWNED BY support_team;
+DROP ROLE IF EXISTS frank, role_admin, dana, erin, support_team, auditor;
+```
 
 ---
 

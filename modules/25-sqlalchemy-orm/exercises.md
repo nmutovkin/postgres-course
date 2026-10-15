@@ -5,7 +5,7 @@
 > [← 24 SQLAlchemy Core](../24-sqlalchemy-core/README.md) · [Course home](../../README.md) · [26 Migrations with Alembic →](../26-migrations/README.md)
 <!-- nav:end -->
 
-**Starting state.** `./project/bin/reset.sh 25` plus `project/python/sql/2301_notify.sql`, and the `bazaar` package with Modules 24 and 25 (`bazaar.sa`, `bazaar.orm`) in `project/python/.venv`. Run solutions from `project/python`:
+**Starting state.** `./project/bin/reset.sh 25`, then `alembic stamp 2600 && alembic upgrade head` in `project/python` (the package's schema, see the README's setup), and the `bazaar` package with Modules 24 and 25 (`bazaar.sa`, `bazaar.orm`) in `project/python/.venv`. Run solutions from `project/python`:
 
 ```bash
 cd project/python && source .venv/bin/activate

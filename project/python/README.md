@@ -27,7 +27,7 @@ The `bazaar` package is the Python service that Part IV of the course builds on 
 The database runs in the course container. The package runs on your machine and connects to `localhost:5432`.
 
 ```bash
-./project/bin/reset.sh 28                    # the reference database (project/db up to module 25)
+./project/bin/reset.sh 28                    # the reference database (every project/db file; the last are module 15's)
 
 cd project/python
 uv sync                       # creates .venv with runtime and dev dependencies
@@ -41,7 +41,9 @@ alembic upgrade head          # 2601 ... 2801 (about 30 s on the large dataset: 
 alembic current               # 2801 (head)
 ```
 
-From module 26 on, **Alembic owns the schema**: every change is a revision in `migrations/versions/`. Tests that need the migrated schema carry the `migrated` marker and are **skipped, with the reason**, when the database is not at head; on `reset.sh 22` (+ `sql/2301_notify.sql`, modules 22–25) the other tests run as before. `sql/2301_notify.sql` is kept only for modules 23–25 (it became revision 2601; applying it again is harmless). An empty database is built with `alembic upgrade head` alone (revision 2600 runs `migrations/baseline/schema.sql`); it has the schema but no data.
+The reference package always matches its latest migrations, so do this after every `reset.sh NN`, in every module from 22 on; Module 26 explains what it does.
+
+From module 26 on, **Alembic owns the schema**: every change is a revision in `migrations/versions/`. Tests that need the migrated schema carry the `migrated` marker and are **skipped, with the reason**, when the database is not at head; if you skipped the migrations (a bare `reset.sh 22`), the other tests still run. `sql/2301_notify.sql` is kept for reference: it became revision 2601, and applying it again is harmless. An empty database is built with `alembic upgrade head` alone (revision 2600 runs `migrations/baseline/schema.sql`); it has the schema but no data.
 
 Requires Python 3.12+. Settings come from the environment (`src/bazaar/config.py`):
 

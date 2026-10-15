@@ -1926,7 +1926,7 @@ Each update of the other products fired the trigger for *them*, and so on. Fixes
 ### 16.2 Hidden work and surprising semantics
 
 - **Triggers are invisible at the call site.** `UPDATE products SET price = ...` looks like one write. With Bazaar's triggers it's also an `updated_at` change and an `audit_log` insert. Teams that use triggers should list them in the table's documentation (`COMMENT ON TRIGGER`) and know `\d table`, which shows them.
-- **`TRUNCATE` doesn't fire row triggers** (only `ON TRUNCATE` statement triggers), so a truncated `order_items` leaves every `orders.total` stale. `COPY FROM`, on the other hand, fires row triggers like `INSERT` does. Bulk tools that set `session_replication_role = replica` disable ordinary triggers *and* foreign-key checks.
+- **`TRUNCATE` doesn't fire `DELETE` triggers**, neither row-level nor statement-level; only triggers declared `ON TRUNCATE` run. The `orders.total` triggers are `ON DELETE` statement triggers, so a truncated `order_items` leaves every `orders.total` stale. `COPY FROM`, on the other hand, fires row triggers like `INSERT` does. Bulk tools that set `session_replication_role = replica` disable ordinary triggers *and* foreign-key checks.
 - **Statement triggers fire for zero rows**, and `AFTER` row triggers run at the end of the statement, not immediately after each row. A row trigger that queries its own table sees the statement's earlier rows but not its later ones.
 - **Ordering is alphabetical** (section 12.4), so renaming a trigger can change behaviour.
 

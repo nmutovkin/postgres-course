@@ -7,7 +7,7 @@
 
 Finance wants two reports that the plain-SQL repository makes painful to write: a **monthly statement per seller** (every order with its units, payments and refunds, plus totals) and a **revenue roll-up over the category tree** (every category with its own revenue and the revenue of everything below it). Both must run as single statements inside the caller's transaction. In this milestone you add SQLAlchemy Core to the `bazaar` package: an engine built from the existing settings, a description of the whole Bazaar schema as `Table` metadata, a test that fails the moment that description drifts from the real database, and the two reports written with the expression language.
 
-**Starting state:** `./project/bin/reset.sh 24` plus `project/python/sql/2301_notify.sql`, and your Module 23 package (or the reference one).
+**Starting state:** `./project/bin/reset.sh 24`, then `alembic stamp 2600 && alembic upgrade head` in `project/python` (the package's schema, see the README's setup), and your Module 23 package (or the reference one).
 
 **Reference solution:** [`project/python/`](../../project/python/): `src/bazaar/sa/{engine,tables,drift,reports}.py`, `tests/test_sa_core.py`, the SQLAlchemy fixtures in `tests/conftest.py`, and `PaymentStatus` in `src/bazaar/models.py`.
 

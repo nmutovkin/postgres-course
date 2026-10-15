@@ -1,4 +1,4 @@
-# Module 19 exercises
+# Module 19: Exercises
 
 <!-- nav:start -->
 > [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
@@ -20,7 +20,7 @@ Solutions are in [`solutions/README.md`](solutions/README.md).
 
 ---
 
-### Exercise 1 ★: Draw the topology from SQL alone
+## Exercise 1 ★: Draw the topology from SQL alone
 
 Without looking at `docker-compose.yml`, determine for every running node: whether it is a primary or a standby, which server it streams from, which servers stream from it, and which of its standbys are synchronous. Use only SQL (`pg_is_in_recovery()`, `pg_stat_replication`, `pg_stat_wal_receiver`, `current_setting('cluster_name')`) and draw the result as a small diagram. Do it once with the default nodes and once with the `extras` profile running.
 
@@ -33,7 +33,7 @@ Run the same query on each container in a shell loop. A standby that feeds anoth
 
 ---
 
-### Exercise 2 ★: What did `pg_basebackup` copy?
+## Exercise 2 ★: What did `pg_basebackup` copy?
 
 `pg_basebackup -R` copied the primary's configuration into each standby (section 3.2). Using `pg_file_settings` on `m19-replica1`, list every setting that comes from its `postgresql.auto.conf`, and say for each one whether it came from the primary or was written by `pg_basebackup -R`. Which of them would cause trouble if `replica1` were promoted?
 
@@ -46,7 +46,7 @@ Run the same query on each container in a shell loop. A standby that feeds anoth
 
 ---
 
-### Exercise 3 ★: Rename a standby
+## Exercise 3 ★: Rename a standby
 
 Make `m19-replica2` identify itself to the primary as `reporting` instead of `replica2`, without restarting it and without changing `cluster_name`. Then explain what would happen to synchronous replication if you renamed `replica1` the same way, and check your prediction.
 
@@ -59,7 +59,7 @@ Make `m19-replica2` identify itself to the primary as `reporting` instead of `re
 
 ---
 
-### Exercise 4 ★★: An honest lag measurement
+## Exercise 4 ★★: An honest lag measurement
 
 Section 6.2 promised a heartbeat. Build one:
 
@@ -78,7 +78,7 @@ Then pause replay on `replica2` for about 15 seconds and watch both your stalene
 
 ---
 
-### Exercise 5 ★★: Slot early warning
+## Exercise 5 ★★: Slot early warning
 
 Write a monitoring query for the primary that returns one row per replication slot with: name, type, active, `wal_status`, retained WAL (pretty-printed), `safe_wal_size` (pretty-printed), and the percentage of `max_slot_wal_keep_size` already used by the slot (NULL if unlimited). Order it so the most dangerous slot comes first.
 
@@ -93,7 +93,7 @@ Test it: stop `replica2`, generate about 200 MB of WAL on the primary (`CREATE T
 
 ---
 
-### Exercise 6 ★★: Quorums and the delayed standby
+## Exercise 6 ★★: Quorums and the delayed standby
 
 The `extras` profile adds `m19-delayed`, which *flushes* WAL immediately but *applies* it five minutes late. Set `synchronous_standby_names = 'ANY 1 (delayed)'` on the primary. Before measuring, predict how long a single-row `INSERT ... COMMIT` takes with `synchronous_commit` set to `on`, `remote_write` and `remote_apply`. Then measure (for `remote_apply`, give up after 10 seconds by cancelling from another session) and explain. Restore `'FIRST 1 (replica1)'` afterwards.
 
@@ -106,7 +106,7 @@ Which of the four positions (section 2.2) does `recovery_min_apply_delay` hold b
 
 ---
 
-### Exercise 7 ★★: Read-your-writes in one psql script
+## Exercise 7 ★★: Read-your-writes in one psql script
 
 Write a psql script, run from inside the `m19-analytics` container (which can reach every node), that:
 
@@ -125,7 +125,7 @@ Run it twice: normally, and with replay paused on `replica2`.
 
 ---
 
-### Exercise 8 ★★: Which tables are not ready for logical replication?
+## Exercise 8 ★★: Which tables are not ready for logical replication?
 
 Before running `CREATE PUBLICATION ... FOR ALL TABLES` (for an upgrade, section 13), you must know which tables would start rejecting `UPDATE` and `DELETE`. Write a query against the catalogs that lists every table in schema `bazaar` whose replica identity would not identify rows: replica identity `DEFAULT` without a primary key, or `NOTHING`. Also list tables with `REPLICA IDENTITY FULL`, with a note.
 
@@ -138,7 +138,7 @@ Before running `CREATE PUBLICATION ... FOR ALL TABLES` (for an upgrade, section 
 
 ---
 
-### Exercise 9 ★★: Complaints for the analytics team
+## Exercise 9 ★★: Complaints for the analytics team
 
 The customer-care team wants the **negative reviews** (rating 1 or 2) on the analytics server, without the review text (`body`). Extend the milestone's publication and subscription accordingly, without recreating the subscription and without re-copying the tables that are already there.
 
@@ -151,7 +151,7 @@ The customer-care team wants the **negative reviews** (rating 1 or 2) on the ana
 
 ---
 
-### Exercise 10 ★★: Undo a `DROP TABLE` with the delayed standby
+## Exercise 10 ★★: Undo a `DROP TABLE` with the delayed standby
 
 With the `extras` profile running, drop the `promotions` table on the primary. Use the delayed standby to put the table back on the primary, **with** its exclusion constraint, check constraints and foreign key, before the delayed standby replays the drop.
 
@@ -164,7 +164,7 @@ With the `extras` profile running, drop the `promotions` table on the primary. U
 
 ---
 
-### Exercise 11 ★★★: Rehearse a zero-downtime migration
+## Exercise 11 ★★★: Rehearse a zero-downtime migration
 
 Use logical replication to move the whole Bazaar database from `m19-primary` to a new database `bazaar_v2` on `m19-analytics` (a separate cluster, standing in for a server running a newer major version):
 
@@ -182,7 +182,7 @@ The schema dump includes triggers; on the subscriber they do not fire for replic
 
 ---
 
-### Exercise 12 ★★★: Skip a transaction, then repair
+## Exercise 12 ★★★: Skip a transaction, then repair
 
 `ALTER SUBSCRIPTION ... SKIP` throws away a whole remote transaction. Practise it, and the repair it requires, on the analytics replica:
 

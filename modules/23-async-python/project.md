@@ -26,7 +26,7 @@ An idempotent SQL file (run as `bazaar_owner`, Module 15) that creates:
 - a **statement-level** `AFTER INSERT` trigger on `jobs` that sends `pg_notify('jobs_ready', <queue>)` once per distinct queue in the inserted rows;
 - a row-level `AFTER INSERT` trigger on `orders` that sends `pg_notify('new_order', '{"order_id": ..., "seller_id": ..., "user_id": ...}')`.
 
-Apply it with `./project/bin/psql.sh < project/python/sql/2301_notify.sql`. (From Module 26 on, Alembic migrations take over this job.)
+Apply it with `./project/bin/psql.sh < project/python/sql/2301_notify.sql`. (The database from the setup already has these triggers: Alembic revision 2601 contains the same SQL, and applying the file again is harmless. Module 26 shows how a SQL file becomes a migration.)
 
 ### 3. Async connections (`bazaar.aio.db`)
 

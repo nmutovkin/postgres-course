@@ -1,4 +1,4 @@
-"""Exercise 8: a live per-seller order counter fed by NOTIFY (needs sql/2301_notify.sql).
+"""Exercise 8: a live per-seller order counter fed by NOTIFY (needs revision 2601).
 
 Places 30 real orders (plus one that is rolled back) and removes them at the end.
 """

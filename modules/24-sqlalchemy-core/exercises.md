@@ -5,7 +5,7 @@
 > [← 23 Async Python: psycopg async and asyncpg](../23-async-python/README.md) · [Course home](../../README.md) · [25 SQLAlchemy ORM →](../25-sqlalchemy-orm/README.md)
 <!-- nav:end -->
 
-**Starting state.** `./project/bin/reset.sh 24` plus `project/python/sql/2301_notify.sql`, and the `bazaar` package installed in `project/python/.venv` with SQLAlchemy (`uv sync`). Run solutions from `project/python`:
+**Starting state.** `./project/bin/reset.sh 24`, then `alembic stamp 2600 && alembic upgrade head` in `project/python` (the package's schema, see the README's setup), and the `bazaar` package installed in `project/python/.venv` with SQLAlchemy (`uv sync`). Run solutions from `project/python`:
 
 ```bash
 cd project/python && source .venv/bin/activate

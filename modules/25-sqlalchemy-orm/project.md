@@ -7,7 +7,7 @@
 
 The seller portal and the checkout need per-object operations: create a product with its stock, edit it without overwriting a colleague's change, list a seller's products, check out a cart, show a buyer's order history, accept a review only from someone who bought the product. In this milestone you map Bazaar's entities with the SQLAlchemy ORM, build session factories that apply Module 15's row-level security automatically, and write those operations as services, tested against the real database, including a test that fails if a page ever regresses into an N+1 query pattern.
 
-**Starting state:** `./project/bin/reset.sh 25` plus `project/python/sql/2301_notify.sql`, and your Module 24 package (or the reference one).
+**Starting state:** `./project/bin/reset.sh 25`, then `alembic stamp 2600 && alembic upgrade head` in `project/python` (the package's schema, see the README's setup), and your Module 24 package (or the reference one).
 
 **Reference solution:** [`project/python/`](../../project/python/): `src/bazaar/orm/{models,session,services}.py`, the new exceptions in `src/bazaar/errors.py`, `mapping_only` in `src/bazaar/sa/drift.py`, the `session`/`asession` fixtures in `tests/conftest.py`, and `tests/test_orm.py`.
 

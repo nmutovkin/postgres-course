@@ -35,12 +35,15 @@ uv sync                                   # with uv: creates .venv, installs run
 python3 -m venv .venv && .venv/bin/pip install -e . pytest pytest-asyncio ruff pydantic
 source .venv/bin/activate
 export BAZAAR_DSN=postgresql://postgres:postgres@localhost:5432/bazaar
+alembic stamp 2600 && alembic upgrade head   # once after every reset.sh: the package's schema
 python -c "import psycopg; print(psycopg.__version__, psycopg.pq.__impl__)"
 ```
 
+The reference package always matches its latest migrations, so bring the database to its schema right after `reset.sh` with the `alembic` line above (about 30 s); Module 26 explains what this does.
+
 The runnable scripts for this module are in [`examples/`](examples/). Run them from `project/python` with the virtual environment active, for example `python ../../modules/22-psycopg/examples/01_first_query.py`. The outputs shown here come from psycopg 3.3.6 (with the bundled libpq 18) against PostgreSQL 17.11, on a 4-vCPU container reached through Docker's port forwarding. Timings will differ on your machine; ratios between them are what matter.
 
-> **Note:** examples that *change* data either roll back or undo their change, so you can run them in any order. If you ever get the database into a strange state, `reset.sh 22` brings it back.
+> **Note:** examples that *change* data either roll back or undo their change, so you can run them in any order. If you ever get the database into a strange state, `reset.sh 22` (followed by the `alembic` line) brings it back.
 
 ---
 

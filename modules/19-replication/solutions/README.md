@@ -1,4 +1,4 @@
-# Module 19 solutions
+# Module 19: Solutions
 
 <!-- nav:start -->
 > [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
@@ -41,7 +41,7 @@ The milestone's reference solution is in [`../lab/scripts/`](../lab/scripts/): `
 
 <!-- toc:end -->
 
-## Exercise 1: Draw the topology from SQL alone
+## Exercise 1 ★: Draw the topology from SQL alone
 
 [`ex01_topology.sql`](ex01_topology.sql):
 
@@ -85,7 +85,7 @@ Notes:
 
 ---
 
-## Exercise 2: What did `pg_basebackup` copy?
+## Exercise 2 ★: What did `pg_basebackup` copy?
 
 [`ex02_copied_settings.sql`](ex02_copied_settings.sql):
 
@@ -126,7 +126,7 @@ Trouble after promoting `replica1`:
 
 ---
 
-## Exercise 3: Rename a standby
+## Exercise 3 ★: Rename a standby
 
 ```sql
 -- on m19-replica2
@@ -184,7 +184,7 @@ on both standbys, after which the waiting `UPDATE` completed and `pg_stat_replic
 
 ---
 
-## Exercise 4: An honest lag measurement
+## Exercise 4 ★★: An honest lag measurement
 
 [`ex04_heartbeat.sql`](ex04_heartbeat.sql) creates the table on the primary:
 
@@ -233,7 +233,7 @@ Production notes: put the table in a schema of its own (it must not get into app
 
 ---
 
-## Exercise 5: Slot early warning
+## Exercise 5 ★★: Slot early warning
 
 [`ex05_slot_warning.sql`](ex05_slot_warning.sql):
 
@@ -288,7 +288,7 @@ Reasoning:
 
 ---
 
-## Exercise 6: Quorums and the delayed standby
+## Exercise 6 ★★: Quorums and the delayed standby
 
 ```sql
 -- on the primary
@@ -330,7 +330,7 @@ A quorum such as `ANY 1 (replica1, delayed)` would hide the problem as long as `
 
 ---
 
-## Exercise 7: Read-your-writes in one psql script
+## Exercise 7 ★★: Read-your-writes in one psql script
 
 [`ex07_read_your_writes.sql`](ex07_read_your_writes.sql):
 
@@ -392,7 +392,7 @@ Reasoning:
 
 ---
 
-## Exercise 8: Which tables are not ready for logical replication?
+## Exercise 8 ★★: Which tables are not ready for logical replication?
 
 [`ex08_replica_identity.sql`](ex08_replica_identity.sql):
 
@@ -444,7 +444,7 @@ Notes:
 
 ---
 
-## Exercise 9: Complaints for the analytics team
+## Exercise 9 ★★: Complaints for the analytics team
 
 The first idea, `REPLICA IDENTITY FULL` (so that `rating` is part of the identity) plus a column list without `body`, fails on the next update, inside a test transaction:
 
@@ -506,13 +506,13 @@ ALTER SUBSCRIPTION bazaar_analytics REFRESH PUBLICATION;
 INSERT INTO reviews (product_id, user_id, rating, title) VALUES (2, 3, 1, 'Broke after a week') RETURNING id;   -- 79
 ```
 
-appears on the analytics server within a second, and `UPDATE reviews SET rating = 5 WHERE id = 79` makes it disappear (old row matches the filter, new row does not, so a `DELETE` is sent; section 10.4). In the lab run the update was written with `WHERE title = 'Broke after a week'` and also hit four seeded reviews with that title; the analytics count followed correctly (11 on both sides), which is the real test.
+appears on the analytics server within a second, and `UPDATE reviews SET rating = 5 WHERE id = 79` makes it disappear (old row matches the filter, new row does not, so a `DELETE` is sent; section 10.4). Beware of writing that update as `WHERE title = 'Broke after a week'`: it also hits four seeded reviews with that title. Even then the analytics count follows correctly (11 on both sides), which is the real test.
 
 Costs and alternatives: the extra unique index costs write time and space on the primary. `REPLICA IDENTITY FULL` without a column list (and accepting that `body` is copied) is the simpler alternative; publishing with `publish = 'insert'` only would avoid the identity question but would never remove a review whose rating changes.
 
 ---
 
-## Exercise 10: Undo a `DROP TABLE` with the delayed standby
+## Exercise 10 ★★: Undo a `DROP TABLE` with the delayed standby
 
 ```bash
 docker exec m19-primary psql -U postgres -d bazaar -c "DROP TABLE promotions"
@@ -546,7 +546,7 @@ Reasoning:
 
 ---
 
-## Exercise 11: Rehearse a zero-downtime migration
+## Exercise 11 ★★★: Rehearse a zero-downtime migration
 
 **1. Schema.** Roles first (the schema's owners and the RLS policies of later states refer to them), then the schema, then the database-level setting that `pg_dump` without `--create` does not carry:
 
@@ -612,7 +612,7 @@ SELECT setval('bazaar.orders_id_seq', 124, 't');
 SELECT setval('bazaar.users_id_seq', 31, 'f');
 ```
 
-The first version of this script read `pg_sequences.last_value` and only produced three lines (`audit_log`, `orders`, `reviews`). `pg_sequences.last_value` is NULL when `is_called` is false, which is the state the Bazaar seeds leave most sequences in (`setval(seq, max(id) + 1, false)`). The missed sequences stayed at 1 on the new database, and the first new user failed:
+Don't read `pg_sequences.last_value` instead: a script based on it produces only three lines (`audit_log`, `orders`, `reviews`). `pg_sequences.last_value` is NULL when `is_called` is false, which is the state the Bazaar seeds leave most sequences in (`setval(seq, max(id) + 1, false)`). The missed sequences stay at 1 on the new database, and the first new user fails:
 
 ```text
 ERROR:  duplicate key value violates unique constraint "users_pkey"
@@ -639,7 +639,7 @@ Points to note:
 
 ---
 
-## Exercise 12: Skip a transaction, then repair
+## Exercise 12 ★★★: Skip a transaction, then repair
 
 The setup (next order id was 125; order 115 is pending and therefore not on the analytics server):
 

@@ -37,7 +37,7 @@ Files in this directory:
 
 <!-- toc:end -->
 
-## Exercise 1: An index inventory
+## Exercise 1 ★: An index inventory
 
 ```sql
 SELECT i.relname AS index_name,
@@ -79,7 +79,7 @@ Note the sizes. The two composite indexes (`bigint` + `timestamptz` = 16 bytes o
 
 ---
 
-## Exercise 2: Predict the plan
+## Exercise 2 ★: Predict the plan
 
 ```text
 a) Index Scan using payments_order_id_idx on payments
@@ -110,7 +110,7 @@ The common thread: the plan depends on the **number of matching rows**, on wheth
 
 ---
 
-## Exercise 3: Leftmost prefix
+## Exercise 3 ★: Leftmost prefix
 
 | Query | Plan (abbreviated) | Rows | Buffers | Verdict |
 |---|---|---:|---:|---|
@@ -185,7 +185,7 @@ This "top-N per group, then merge" pattern is how feeds over many sources are bu
 
 ---
 
-## Exercise 4: The fulfilment queue
+## Exercise 4 ★★: The fulfilment queue
 
 Before:
 
@@ -254,7 +254,7 @@ DROP INDEX orders_open_seller_id_created_at_idx;
 
 ---
 
-## Exercise 5: The seller's rating histogram
+## Exercise 5 ★★: The seller's rating histogram
 
 Before:
 
@@ -322,7 +322,7 @@ DROP INDEX products_seller_id_id_idx, reviews_product_id_rating_idx;
 
 ---
 
-## Exercise 6: Admin autocomplete
+## Exercise 6 ★★: Admin autocomplete
 
 **Step 1.** The database collation is `en_US.utf8`, so `users_email_lower_key` can't serve `LIKE`. A pattern operator class can:
 
@@ -413,7 +413,7 @@ DROP INDEX users_email_lower_c_idx;
 
 ---
 
-## Exercise 7: Audit the foreign keys
+## Exercise 7 ★★: Audit the foreign keys
 
 [`fk_audit.sql`](fk_audit.sql):
 
@@ -470,7 +470,7 @@ The result at the module's start matches the list in `1102_schema_indexes.sql`, 
 
 ---
 
-## Exercise 8: BRIN for payments
+## Exercise 8 ★★: BRIN for payments
 
 ```sql
 SELECT tablename, attname, round(correlation::numeric, 4) AS correlation
@@ -542,7 +542,7 @@ DROP INDEX payments_created_at_brin, payments_created_at_btree;
 
 ---
 
-## Exercise 9: Three slow queries
+## Exercise 9 ★★: Three slow queries
 
 **(a) Function on the column.**
 
@@ -632,7 +632,7 @@ WHERE oi.product_id = 4242;
 
 ---
 
-## Exercise 10: What can a jsonb index answer?
+## Exercise 10 ★★: What can a jsonb index answer?
 
 | Predicate | Uses `products_attributes_idx`? | Why |
 |---|---|---|
@@ -687,7 +687,7 @@ DROP INDEX products_ram_gb_idx;
 
 ---
 
-## Exercise 11: Revenue without the heap
+## Exercise 11 ★★★: Revenue without the heap
 
 The query reads `seller_id`, `created_at` (key columns of the existing index), `status` and `total`. Covering it means adding `status` and `total` as `INCLUDE` columns. To avoid adding a fifth index, **replace** the existing one, without blocking order taking:
 
@@ -739,7 +739,7 @@ ALTER INDEX orders_seller_id_created_at_ref RENAME TO orders_seller_id_created_a
 
 ---
 
-## Exercise 12: Redundant indexes
+## Exercise 12 ★★★: Redundant indexes
 
 [`redundant_indexes.sql`](redundant_indexes.sql):
 
@@ -801,7 +801,7 @@ State 12: `(0 rows)`. Inside the test transaction:
 
 ---
 
-## Exercise 13: An index build under load
+## Exercise 13 ★★★: An index build under load
 
 **Steps 1–2.** Terminal 1 runs the load; terminal 2 builds the first index:
 

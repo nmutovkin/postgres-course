@@ -1,4 +1,4 @@
-# Module 18 solutions
+# Module 18: Solutions
 
 <!-- nav:start -->
 > [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
@@ -38,7 +38,7 @@ The milestone's reference solution (runbook and scripts) is in [`../lab/`](../la
 
 <!-- toc:end -->
 
-## Exercise 1: Read a dump's table of contents
+## Exercise 1 ★: Read a dump's table of contents
 
 ```bash
 docker exec -u postgres course-pg bash -c '
@@ -69,7 +69,7 @@ The pattern `" bazaar reviews | reviews_"` misses entries whose name is `TABLE r
 
 ---
 
-## Exercise 2: An archiver health query
+## Exercise 2 ★: An archiver health query
 
 [`ex02_archiver_health.sql`](ex02_archiver_health.sql):
 
@@ -101,7 +101,7 @@ With `chmod 500 /archive/wal` and a segment switch, the same query shows `is_fai
 
 ---
 
-## Exercise 3: Anatomy of a nightly backup
+## Exercise 3 ★: Anatomy of a nightly backup
 
 ```bash
 docker exec m18-primary bash -c '
@@ -135,7 +135,7 @@ summaries
 
 ---
 
-## Exercise 4: A lean developer copy
+## Exercise 4 ★★: A lean developer copy
 
 ```bash
 docker exec -u postgres course-pg bash -c '
@@ -167,7 +167,7 @@ Points to note:
 
 ---
 
-## Exercise 5: Undo a bad bulk update from last night's dump
+## Exercise 5 ★★: Undo a bad bulk update from last night's dump
 
 ```bash
 docker exec -u postgres course-pg bash -c '
@@ -229,7 +229,7 @@ Drop the scratch database afterwards (`dropdb scratch`).
 
 ---
 
-## Exercise 6: How far back can we go?
+## Exercise 6 ★★: How far back can we go?
 
 [`ex06_pitr_window.sql`](ex06_pitr_window.sql):
 
@@ -277,7 +277,7 @@ Reasoning:
 
 ---
 
-## Exercise 7: Test a pgBackRest backup without touching production
+## Exercise 7 ★★: Test a pgBackRest backup without touching production
 
 ```bash
 # production keeps running; take a full backup
@@ -336,7 +336,7 @@ Clean up with `docker rm -f m18-ex7 && docker volume rm m18-ex7`. This is the co
 
 ---
 
-## Exercise 8: How much does `-j` help?
+## Exercise 8 ★★: How much does `-j` help?
 
 ```bash
 docker exec -u postgres course-pg bash -c '
@@ -369,7 +369,7 @@ Interpretation:
 
 ---
 
-## Exercise 9: Break an incremental chain
+## Exercise 9 ★★: Break an incremental chain
 
 ```bash
 docker exec -u postgres m18-primary bash -c '
@@ -403,7 +403,7 @@ What the errors show about how the chain is checked:
 
 ---
 
-## Exercise 10: Compressed archiving
+## Exercise 10 ★★★: Compressed archiving
 
 [`archive-wal-gzip.sh`](archive-wal-gzip.sh) keeps the structure of `archive-wal.sh`:
 
@@ -451,7 +451,7 @@ Switch back with `ALTER SYSTEM SET archive_command = '/lab/scripts/archive-wal.s
 
 ---
 
-## Exercise 11: Detect gaps in the archive
+## Exercise 11 ★★★: Detect gaps in the archive
 
 [`ex11_archive_gaps.sql`](ex11_archive_gaps.sql):
 
@@ -506,7 +506,7 @@ Reasoning and limits:
 
 ---
 
-## Exercise 12: Recover a dropped table by LSN
+## Exercise 12 ★★★: Recover a dropped table by LSN
 
 The incident:
 

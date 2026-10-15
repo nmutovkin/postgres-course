@@ -72,7 +72,7 @@ It is 14:07 on a Tuesday. A support engineer, trying to clean up a few test orde
 
 <!-- toc:end -->
 
-## What you'll learn
+**What you'll learn**
 
 - How to reason about backups in terms of **RPO** and **RTO**, and how to choose between logical backups, physical backups and continuous archiving.
 - `pg_dump` in depth: the four output formats, compression, parallel dump and restore with `-j`, how a dump stays consistent, selective restores with `pg_restore -l`/`-L`, `--schema`/`--table`, restoring into a different database, and what `pg_dumpall --globals-only` adds.
@@ -84,7 +84,7 @@ It is 14:07 on a Tuesday. A support engineer, trying to clean up a few test orde
 - PostgreSQL 17's built-in **incremental backups**: `summarize_wal`, `pg_basebackup --incremental` and `pg_combinebackup`.
 - How to test restores automatically, monitor backup freshness, and the backup checklist you should be able to tick for every production database.
 
-## Before you start
+**Before you start**
 
 The module uses two servers.
 

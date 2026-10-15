@@ -22,10 +22,12 @@ On Black Friday, Bazaar's product pages are requested a few thousand times a sec
 
 ```bash
 ./project/bin/reset.sh 23            # same database state as 22 (the large dataset)
-./project/bin/psql.sh < project/python/sql/2301_notify.sql     # NOTIFY triggers for sections 7 and 8
 cd project/python && source .venv/bin/activate                  # the venv from Module 22
 export BAZAAR_DSN=postgresql://postgres:postgres@localhost:5432/bazaar
+alembic stamp 2600 && alembic upgrade head   # the package's schema, including the NOTIFY triggers of sections 7 and 8
 ```
+
+The reference package always matches its latest migrations, so bring the database to its schema right after `reset.sh` with the `alembic` line above (about 30 s); Module 26 explains what this does.
 
 You need Module 22: this module assumes you know psycopg's connections, transactions, parameters, row factories and pools, and only explains what is different with `async`. The examples are in [`examples/`](examples/); run them like Module 22's, from `project/python`. Section 4.8 also uses a small PgBouncer lab in [`lab/`](lab/).
 
@@ -663,7 +665,7 @@ with partial results (`gather(..., return_exceptions=True)` inside the timeout, 
 
 ## 7. LISTEN/NOTIFY, asynchronously
 
-Module 22 showed `LISTEN`/`NOTIFY` with a blocking loop. In async code a listener is just another task, so it fits naturally into a service. The SQL file [`project/python/sql/2301_notify.sql`](../../project/python/sql/2301_notify.sql) adds two triggers to Bazaar:
+Module 22 showed `LISTEN`/`NOTIFY` with a blocking loop. In async code a listener is just another task, so it fits naturally into a service. The SQL file [`project/python/sql/2301_notify.sql`](../../project/python/sql/2301_notify.sql) adds two triggers to Bazaar (your database already has them: the setup's `alembic upgrade head` runs the same SQL as revision 2601):
 
 ```sql
 -- every new order: a row trigger, payload = ids as JSON

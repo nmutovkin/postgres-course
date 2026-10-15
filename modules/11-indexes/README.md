@@ -685,7 +685,7 @@ LIMIT 20;
                Buffers: shared hit=208 read=1076
 ```
 
-The index delivers rows sorted by `seller_id` but with `created_at` *ascending*, so PostgreSQL uses an **Incremental Sort**: it sorts each group of equal `seller_id` separately ("Presorted Key"). That's better than a full sort, but it still reads all 1,403 of seller 42's orders to produce 20. If such an ordering is a hot path, build the index in that order: with `(seller_id, created_at DESC)`, the same query is a plain `Index Scan` under the `Limit`, with no sort node at all. A single-column index never needs `DESC`, since it can be read backward. And `ORDER BY created_at DESC` *without* `seller_id` first, over several sellers, always needs a sort step (exercise 3).
+The index delivers rows sorted by `seller_id` but with `created_at` *ascending*, so PostgreSQL uses an **Incremental Sort**: it sorts each group of equal `seller_id` separately ("Presorted Key"). That's better than a full sort, but it still reads all 1,402 of seller 42's orders (plus seller 43's first, to see where the group ends: `rows=1403`) to produce 20. If such an ordering is a hot path, build the index in that order: with `(seller_id, created_at DESC)`, the same query is a plain `Index Scan` under the `Limit`, with no sort node at all. A single-column index never needs `DESC`, since it can be read backward. And `ORDER BY created_at DESC` *without* `seller_id` first, over several sellers, always needs a sort step (exercise 3).
 
 ### 6.3 NULLs first or last
 
@@ -1131,7 +1131,7 @@ ON CONFLICT (code) WHERE seller_id IS NOT NULL DO NOTHING;   -- INSERT 0 1
 DROP TABLE lab.coupons;
 ```
 
-> **In production:** Adding a `UNIQUE` constraint to a big, busy table with `ALTER TABLE ... ADD CONSTRAINT ... UNIQUE` builds the index while holding a lock that blocks writes. The zero-downtime way is to build the index first with `CREATE UNIQUE INDEX CONCURRENTLY` (section 17), then attach it: `ALTER TABLE t ADD CONSTRAINT t_code_key UNIQUE USING INDEX t_code_key;`, which only takes a brief lock. Module 26 uses this pattern in migrations.
+> **In production:** Adding a `UNIQUE` constraint to a big, busy table with `ALTER TABLE ... ADD CONSTRAINT ... UNIQUE` builds the index while holding an `ACCESS EXCLUSIVE` lock that blocks reads as well as writes. The zero-downtime way is to build the index first with `CREATE UNIQUE INDEX CONCURRENTLY` (section 17), then attach it: `ALTER TABLE t ADD CONSTRAINT t_code_key UNIQUE USING INDEX t_code_key;`, which only takes a brief lock. Module 26 uses this pattern in migrations.
 
 ---
 
@@ -1217,7 +1217,7 @@ ROLLBACK;
 DROP INDEX order_items_product_id_idx, cart_items_product_id_idx;
 ```
 
-The rule that Bazaar follows from this module on (see `project/README.md`): **every foreign key column is the leading column of some index**, unless the child table is tiny. Exercise 8 writes a catalog query that finds the foreign keys that break this rule; at this module's starting state it finds ten.
+The rule that Bazaar follows from this module on (see `project/README.md`): **every foreign key column is the leading column of some index**, unless the child table is tiny. Exercise 7 writes a catalog query that finds the foreign keys that break this rule; at this module's starting state it finds ten.
 
 > **Pitfall:** The cost hides in *other* statements. The slow query is the `DELETE FROM products`, but the missing index is on `order_items`. `pg_stat_statements` (Module 12) shows the delete as slow, and its plan, without `ANALYZE`, looks perfect. Only `EXPLAIN ANALYZE` shows the trigger times. Also remember that `ON DELETE CASCADE` turns one parent delete into a search *and* a delete on every child table, recursively.
 
@@ -1564,7 +1564,7 @@ SELECT count(*) FROM orders WHERE total BETWEEN 1000 AND 1001;
 DROP INDEX lab_orders_total_brin, lab_orders_created_brin;
 ```
 
-**When to use BRIN:** very large, append-mostly tables whose rows arrive in the order of the column you filter on: events, logs, payments, sensor readings, audit trails. `events.occurred_at` (Module 14, 5 million rows) and `payments.created_at` (exercise 9) are textbook cases. Avoid it for columns without physical correlation, and for tables with heavy updates that scatter rows. New ranges at the end of the table are summarised by VACUUM (or with `autosummarize = on`); until then they are always scanned.
+**When to use BRIN:** very large, append-mostly tables whose rows arrive in the order of the column you filter on: events, logs, payments, sensor readings, audit trails. `events.occurred_at` (Module 14, 5 million rows) and `payments.created_at` (exercise 8) are textbook cases. Avoid it for columns without physical correlation, and for tables with heavy updates that scatter rows. New ranges at the end of the table are summarised by VACUUM (or with `autosummarize = on`); until then they are always scanned.
 
 ---
 
@@ -1983,7 +1983,7 @@ EXPLAIN (ANALYZE, BUFFERS) SELECT id FROM orders WHERE user_id = 4242 OR seller_
                Index Cond: (seller_id = 1500)
 ```
 
-But **every** branch of the `OR` needs a usable index. `WHERE user_id = 4242 OR total > 5000` has no index on `total`, so the whole condition becomes a sequential scan. And an `OR` that spans two tables of a join (`WHERE o.user_id = $1 OR oi.product_id = $2`) can't be pushed down to either table, so both are read completely and the `OR` is evaluated on the joined rows. Exercise 10 measures that at 723 ms against 0.7 ms for the rewrite as a `UNION` of two indexable queries. Module 12 discusses the `OR` to `UNION` rewrite.
+But **every** branch of the `OR` needs a usable index. `WHERE user_id = 4242 OR total > 5000` has no index on `total`, so the whole condition becomes a sequential scan. And an `OR` that spans two tables of a join (`WHERE o.user_id = $1 OR oi.product_id = $2`) can't be pushed down to either table, so both are read completely and the `OR` is evaluated on the joined rows. Exercise 9(c) measures that at 723 ms against 0.7 ms for the rewrite as a `UNION` of two indexable queries. Module 12 discusses the `OR` to `UNION` rewrite.
 
 **5. A leading wildcard.** `LIKE '%phones'` and `LIKE '%hill42%'` have no prefix to search for (section 16). Use a trigram index (Module 13).
 

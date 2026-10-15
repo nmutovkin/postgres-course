@@ -1,6 +1,6 @@
 """Module 23, section 7: consuming 'new_order' notifications, two ways.
 
-Needs project/python/sql/2301_notify.sql applied. Places three real orders
+Needs the NOTIFY triggers (revision 2601, formerly sql/2301_notify.sql). Places three orders
 (committed, so that notifications are sent) and removes them again at the end.
 """
 

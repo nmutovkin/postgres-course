@@ -23,6 +23,8 @@ docker exec -it course-pg psql -U bazaar_seller  -d bazaar
 
 Or, in a superuser session, `SET ROLE bazaar_seller;` / `RESET ROLE;` (remember to set `app.seller_id` for the seller). Several exercises change privileges or add policies; each says how to undo its change, so the next starts clean. A quick full reset is always `./modules/15-security-rls/lab/small15.sh --with-1501`.
 
+Roles are cluster-wide, so a reset does not remove roles you created yourself. If you ran the README's demos, drop their roles first (the cleanup block at the end of [README §3](README.md#3-predefined-roles)), or Exercise 1's row count will not match.
+
 Exercises 11 and 12 use the TLS lab in [`lab/tls/`](lab/tls/) (`./make-certs.sh` then `docker compose up -d --wait`).
 
 Solutions: [solutions/README.md](solutions/README.md). Runnable scripts are in [solutions/](solutions/).

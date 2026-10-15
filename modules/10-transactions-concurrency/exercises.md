@@ -1,4 +1,4 @@
-# Module 10 exercises: Transactions and Concurrency
+# Module 10: Exercises
 
 <!-- nav:start -->
 > [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  
@@ -330,7 +330,7 @@ For each scenario, predict whether session B's last statement returns immediatel
 | 3 | | `UPDATE promotions SET discount_pct = 15 WHERE id = 9;` → **?** |
 | 4 | `COMMIT;` | → **?** |
 
-**(d) Share, then upgrade.**
+**(d) Share, then upgrade.** If a session fails, also predict which one, and whether it matters if you run step 5 within a second of step 4 or a few seconds later.
 
 | Step | Session A | Session B |
 |---|---|---|

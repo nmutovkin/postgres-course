@@ -907,7 +907,7 @@ The twenty requests really are concurrent. `gather` starts them together, each g
 
 ### 5.4 Tests at every stage of Part IV
 
-Until this module, `tests/conftest.py` refused to run at all unless the database was at the Alembic head. That was right for Module 26 and later, but it locked out a learner on Modules 22–25, whose database is `reset.sh 22` with no Alembic. Now tests that need the migrated schema carry a marker, and the session decides what to skip:
+Until this module, `tests/conftest.py` refused to run at all unless the database was at the Alembic head. Learners now run the migrations from Module 22 on (`alembic stamp 2600 && alembic upgrade head` after every `reset.sh`), so the suite normally runs in full. Someone who skipped that step, or whose database is behind after a pull, shouldn't be locked out of everything, though. Now tests that need the migrated schema carry a marker, and the session decides what to skip:
 
 ```python
 def pytest_collection_modifyitems(config, items) -> None:
@@ -924,7 +924,7 @@ def pytest_collection_modifyitems(config, items) -> None:
             item.add_marker(pytest.mark.skip(reason=reason))
 ```
 
-Files from Modules 26–28 have `pytestmark = pytest.mark.migrated`. In the Module 24–25 files, the tests that touch columns added by later revisions are marked individually. The reference ORM mapping includes `Product.slug` (2602) and `Order.idempotency_key` (2604), so loading a product or an order on a `reset.sh 22` database fails. The two runs:
+Files from Modules 26–28 have `pytestmark = pytest.mark.migrated`. In the Module 24–25 files, the tests that touch columns added by later revisions are marked individually. The reference ORM mapping includes `Product.slug` (2602) and `Order.idempotency_key` (2604), so loading a product or an order on a database without the migrations fails. The two runs:
 
 ```text
 # reset.sh 22 + sql/2301_notify.sql (no Alembic): modules 22-25

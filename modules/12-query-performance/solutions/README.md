@@ -169,7 +169,7 @@ All three return 278 rows.
 **Reasoning.** The outer input is tiny: 100 orders. A nested loop does 100 index lookups into `order_items_pkey`, about 5 buffers each. Neither alternative can exploit that:
 
 - The **hash join** builds a hash of the 100 orders (13 kB, instant), but then must *probe* it with every row of `order_items`: a sequential scan of 1.27 million rows to find 278. It's the right algorithm when both sides are large.
-- The **merge join** needs both inputs sorted by `order_id`. It sorts the 100 orders (cheap) and reads `order_items` in `order_id` order through its primary key index, and it can only stop when the outer side is exhausted. Seller 42's last December order is near the end of the id range, so it read 1,265,851 index entries and their heap rows: the most expensive plan, as its cost predicted.
+- The **merge join** needs both inputs sorted by `order_id`. It sorts the 100 orders (cheap) and reads `order_items` in `order_id` order through its primary key index, and it can only stop when the sorted orders, its inner input here, are exhausted. Seller 42's last December order is near the end of the id range, so it read 1,265,851 index entries and their heap rows: the most expensive plan, as its cost predicted.
 
 A merge join *can* stop early, and a nested loop is not always best: if the condition were `created_at >= '2023-01-01'` (all 1,402 orders of seller 42), the nested loop would still win, but for 70,000 orders of seller 1 the hash join would. The crossover is what the cost model computes.
 
@@ -537,7 +537,7 @@ EXECUTE seller_lines(1);  EXECUTE seller_lines(2000);
 SELECT name, generic_plans, custom_plans FROM pg_prepared_statements;
 ```
 
-`generic_plans` stays at its value and `custom_plans` increases by 2. Planning this query costs well under a millisecond, which is negligible next to its execution, so for skewed parameters `force_custom_plan` is the safe choice. Set it narrowly: `ALTER ROLE bazaar_app SET plan_cache_mode = force_custom_plan`, or on the function that runs the query. For very frequent, cheap, uniform queries (primary key lookups), generic plans are the right default.
+`generic_plans` stays at its value and `custom_plans` increases by 2. Planning this query costs well under a millisecond, which is negligible next to its execution, so for skewed parameters `force_custom_plan` is the safe choice. Set it narrowly: on the application's role (`ALTER ROLE bazaar_app SET plan_cache_mode = force_custom_plan` once Module 15's `1501` has created `bazaar_app`; in this state the role doesn't exist yet), or on the function that runs the query. For very frequent, cheap, uniform queries (primary key lookups), generic plans are the right default.
 
 ---
 
@@ -643,7 +643,7 @@ LOG:  duration: 80.871 ms  plan:
 	                                                        Rows Removed by Filter: 499766
 ```
 
-**The cause**: `o.user_id::text = p_user::text`. Casting the column to text hides it from `orders_user_id_created_at_idx` (Module 11, section 20), so all 500,000 orders are read (74 of the 81 ms) and the estimate falls back to the 0.5% default (1,042 rows instead of 234). Notice also `Workers Planned: 2, Workers Launched: 0`: the plan was made for parallel workers, but none were available inside the function call, so the "parallel" scan ran in the leader alone.
+**The cause**: `o.user_id::text = p_user::text`. Casting the column to text hides it from `orders_user_id_created_at_idx` (Module 11, section 20), so all 500,000 orders are read (74 of the 81 ms) and the estimate falls back to the 0.5% default (1,042 rows instead of 234). Notice also `Workers Planned: 2, Workers Launched: 0`: this plan was captured without the `max_parallel_workers_per_gather = 0` the exercises ask for, so the planner chose a parallel plan. It still ran in the leader alone, because PL/pgSQL executes a `SELECT ... INTO` with a row limit, and PostgreSQL never runs a plan in parallel when it may stop early. With the setting, the plan has no `Gather` and the scan is a plain `Seq Scan`; the cause and the fix are the same.
 
 **Fix**: compare the values in their own type:
 

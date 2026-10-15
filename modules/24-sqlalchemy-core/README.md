@@ -24,13 +24,15 @@ Bazaar's data-access layer from Module 22 is honest, fast, plain SQL. It is also
 
 ```bash
 ./project/bin/reset.sh 24                                     # large dataset, ~3 minutes
-./project/bin/psql.sh < project/python/sql/2301_notify.sql   # module 23's triggers (the tests apply them too)
 cd project/python
 uv sync                    # or: .venv/bin/pip install -e . pytest pytest-asyncio ruff pydantic
 source .venv/bin/activate
 export BAZAAR_DSN=postgresql://postgres:postgres@localhost:5432/bazaar
+alembic stamp 2600 && alembic upgrade head   # the package's schema (module 23's triggers included)
 python -c "import sqlalchemy; print(sqlalchemy.__version__)"
 ```
+
+The reference package always matches its latest migrations, so bring the database to its schema right after `reset.sh` with the `alembic` line above (about 30 s); Module 26 explains what this does.
 
 The package now depends on `sqlalchemy[asyncio]` (the `[asyncio]` extra installs `greenlet`, which the async engine needs). The outputs in this module come from **SQLAlchemy 2.1.4** with psycopg 3.3.6 and asyncpg 0.32.0, against PostgreSQL 17.11 in a 4-vCPU container reached through Docker's port forwarding (a `SELECT 1` round trip takes about 130–250 µs). Everything uses the **2.0-style API**, which 2.1 keeps; the few places where 2.1 differs from 2.0 are marked. The scripts are in [`examples/`](examples/); run them from `project/python` with the virtual environment active, for example `python ../../modules/24-sqlalchemy-core/examples/01_engine_and_transactions.py`.
 

@@ -671,7 +671,7 @@ The outer `created_at` condition was pushed into the scan; no trace of the CTE r
            Recheck Cond: (seller_id = 42)
 ```
 
-All 1,402 of seller 42's orders were fetched (1,282 buffers), then filtered: 15 times slower. `MATERIALIZED` is still useful when a CTE is expensive and referenced several times, or to stop the planner from pushing a condition into a sub-query where it makes the plan worse. A CTE referenced twice, a recursive CTE, and a CTE containing `INSERT`/`UPDATE`/`DELETE` are always materialised. Before PostgreSQL 12, *every* CTE was a fence, so old advice like "CTEs are slow" refers to that.
+All 1,402 of seller 42's orders were fetched (1,282 buffers), then filtered: 15 times slower. `MATERIALIZED` is still useful when a CTE is expensive and referenced several times, or to stop the planner from pushing a condition into a sub-query where it makes the plan worse. A CTE referenced twice is materialised unless you write `NOT MATERIALIZED`; a recursive CTE and a CTE containing `INSERT`/`UPDATE`/`DELETE` are always materialised. Before PostgreSQL 12, *every* CTE was a fence, so old advice like "CTEs are slow" refers to that.
 
 ### 6.7 SubPlan and InitPlan
 
@@ -1016,7 +1016,7 @@ SELECT name, generic_plans, custom_plans FROM pg_prepared_statements;
  seller_lines |             1 |            5
 ```
 
-`seller_id = $1` in the plan (instead of a literal) shows that this is the **generic** plan. The five custom plans for huge sellers were expensive (hash joins over the whole `order_items` table), and the generic plan, costed for an *average* seller with 372 orders, looked cheaper, so PostgreSQL switched. From now on, every seller gets this nested-loop plan, including seller 1 with 69,805 orders. On this machine, with all data cached, the generic plan for seller 1 took 352 ms against 399 ms for its custom hash-join plan, so no harm done. On a server where the data doesn't fit in memory, 210,000 index lookups into `order_items` would be 210,000 potential random reads. More importantly, the planner is no longer making a decision for seller 1 at all.
+`seller_id = $1` in the plan (instead of a literal) shows that this is the **generic** plan. The five custom plans for huge sellers were expensive (hash joins over the whole `order_items` table), and the generic plan, costed for an *average* seller with 372 orders, looked cheaper, so PostgreSQL switched. From now on, every seller gets this nested-loop plan, including seller 1 with 69,805 orders. On this machine, with all data cached, the generic plan for seller 1 took 352 ms against 399 ms for its custom hash-join plan, so no harm done. On a server where the data doesn't fit in memory, one index lookup into `order_items` per order, 69,805 of them, would be 69,805 potential random reads, plus the heap fetches for the item rows they find. More importantly, the planner is no longer making a decision for seller 1 at all.
 
 Module 11 showed a case where the generic plan is clearly worse: a partial index (`WHERE status = 'active'`) can never be used by a generic plan with `status = $1`, so the plan falls back to a sequential scan (40 ms instead of 0.3 ms).
 
@@ -1448,11 +1448,11 @@ ORDER BY o.total DESC;
  Execution Time: 283.341 ms
 ```
 
-Same 418 rows, **200 times faster**: one pass to compute 1,992 averages, one pass to filter. A window function (`avg(total) OVER (PARTITION BY seller_id)`) would work too, but it must compute the average for every order, then filter. Correlated sub-queries aren't always bad: when each execution is a cheap index lookup, like the "latest order per seller" sub-plan in section 6.7, a few thousand executions cost little. The warning sign is a `SubPlan` with a high `loops` count *and* a lot of work per loop.
+Same 418 rows, **200 times faster**: one pass to compute 1,992 averages, one pass to filter. A window function (`avg(total) OVER (PARTITION BY seller_id)`) would work too, but it must compute the average for every order, then filter. Correlated sub-queries aren't always bad: when each execution is a cheap index lookup (section 6.7), a few thousand executions cost little. The warning sign is a `SubPlan` with a high `loops` count *and* a lot of work per loop.
 
 ### 12.10 CTE fences
 
-Section 6.6 showed it: `WITH ... AS MATERIALIZED` (and every CTE before PostgreSQL 12) is computed in full before the outer query's conditions are applied. If an old code base is full of CTEs written as fences "for readability", check whether they're still materialised (they are if referenced more than once), and remove `MATERIALIZED` where the conditions should be pushed down.
+Section 6.6 showed it: `WITH ... AS MATERIALIZED` (and every CTE before PostgreSQL 12) is computed in full before the outer query's conditions are applied. If an old code base is full of CTEs written as fences "for readability", check whether they're still materialised (they are if referenced more than once, unless written `NOT MATERIALIZED`), and remove `MATERIALIZED` where the conditions should be pushed down.
 
 ---
 

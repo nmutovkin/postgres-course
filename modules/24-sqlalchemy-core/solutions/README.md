@@ -5,7 +5,7 @@
 > [← 23 Async Python: psycopg async and asyncpg](../../23-async-python/README.md) · [Course home](../../../README.md) · [25 SQLAlchemy ORM →](../../25-sqlalchemy-orm/README.md)
 <!-- nav:end -->
 
-Every solution is a runnable script in this directory, run against `./project/bin/reset.sh 24` plus `project/python/sql/2301_notify.sql`, with Python 3.13, SQLAlchemy 2.1.4, psycopg 3.3.6, asyncpg 0.32.0 and PostgreSQL 17.11. The outputs below come from those runs. Run them from `project/python` with the venv active:
+Every solution is a runnable script in this directory, run against `./project/bin/reset.sh 24` brought to the package's schema (`alembic stamp 2600 && alembic upgrade head`), with Python 3.13, SQLAlchemy 2.1.4, psycopg 3.3.6, asyncpg 0.32.0 and PostgreSQL 17.11. The outputs below come from those runs. Run them from `project/python` with the venv active:
 
 ```bash
 cd project/python && source .venv/bin/activate

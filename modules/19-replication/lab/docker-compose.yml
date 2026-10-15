@@ -4,7 +4,7 @@
 #   m19-replica1    physical streaming standby, SYNCHRONOUS (synchronous_standby_names)
 #   m19-replica2    physical streaming standby, asynchronous
 #   m19-analytics   separate cluster that receives orders/order_items/products
-#                   through LOGICAL replication (set up by scripts/setup-analytics.sh)
+#                   through LOGICAL replication (set up by scripts/setup-analytics.sql)
 #
 # Optional (profile "extras"):
 #   m19-replica3    cascading standby that streams from m19-replica2

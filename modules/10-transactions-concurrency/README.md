@@ -507,7 +507,7 @@ BEGIN ISOLATION LEVEL REPEATABLE READ;          -- for one transaction
 SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 
 SET default_transaction_isolation = 'repeatable read';     -- for this session's future transactions
-ALTER ROLE bazaar_reporting SET default_transaction_isolation = 'repeatable read';  -- per role (example)
+ALTER ROLE bazaar_analyst SET default_transaction_isolation = 'repeatable read';  -- per role (the role arrives in module 15)
 
 SHOW transaction_isolation;                     -- the level of the current transaction
 ```
@@ -1273,9 +1273,11 @@ A **deadlock** is a cycle of waits: A waits for a lock that B holds, while B wai
 | 3 | | `BEGIN;` |
 | 4 | | `UPDATE inventory SET reserved = reserved + 1 WHERE product_id = 2;` |
 | 5 | `UPDATE inventory SET reserved = reserved + 1 WHERE product_id = 2;` → **(waits for B)** | |
-| 6 | about 1 s later: **deadlock error** (below) | `UPDATE inventory SET reserved = reserved + 1 WHERE product_id = 1;` → (waits for A), then `UPDATE 1` |
+| 6 | 1 s after step 5: **deadlock error** (below) | `UPDATE inventory SET reserved = reserved + 1 WHERE product_id = 1;` → (waits for A), then `UPDATE 1` |
 | 7 | `COMMIT;` → `ROLLBACK` | |
 | 8 | | `ROLLBACK;` |
+
+This run had B's step 6 less than 1 s after A's step 5, so A got the error. If you type the steps by hand, you'll usually take longer than that: then B gets the deadlock error, 1 s after its step 6, and A's `UPDATE` completes. Section 13.2 explains why.
 
 ```text
 ERROR:  deadlock detected
@@ -1299,7 +1301,7 @@ The error has SQLSTATE **`40P01`** (`deadlock_detected`). PostgreSQL broke the c
 
 ### 13.2 Detection: `deadlock_timeout`
 
-Searching the lock graph for cycles is expensive, and almost all lock waits end on their own within milliseconds. So PostgreSQL does not check on every wait. A waiting backend sleeps for `deadlock_timeout` (default **1 s**); only if it is *still* waiting then does it search for a cycle. If it finds one that includes itself, it aborts its own transaction. So the victim is usually the transaction that started waiting first (A above, which had been waiting since step 5), and every deadlock costs at least `deadlock_timeout` of waiting, holding locks that block other sessions in the meantime.
+Searching the lock graph for cycles is expensive, and almost all lock waits end on their own within milliseconds. So PostgreSQL does not check on every wait. A waiting backend sleeps for `deadlock_timeout` (default **1 s**); only if it is *still* waiting then does it search for a cycle. If it finds one that includes itself, it aborts its own transaction. Each wait gets this check only once. So the victim is whichever waiter's check first sees the complete cycle. If B closes the cycle within 1 s of A starting to wait, A's check finds it and A is aborted (the run above). If B closes it later, A's check has already come up empty, and B's own check, 1 s after B started waiting, aborts B. Either way, every deadlock costs at least `deadlock_timeout` of waiting, holding locks that block other sessions in the meantime.
 
 Raising `deadlock_timeout` makes detection cheaper but deadlocks slower to resolve; lowering it below a few hundred milliseconds wastes CPU on checks that find nothing. 1 s is a fine default. The same setting decides when `log_lock_waits` logs a wait.
 
@@ -1309,7 +1311,7 @@ The `deadlocks` column of `pg_stat_database` counts deadlocks since the last sta
 
 Deadlocks require a cycle, and a cycle requires two transactions that take locks in **different orders**. If every transaction that locks several rows of a table locks them in the same global order (for example, ascending primary key), a cycle is impossible: whoever holds the lowest contested row proceeds, and everyone else waits behind them in line.
 
-That is exactly what Bazaar's `place_order()` does (section 16): whatever order the shopper put the products in the cart, it locks the inventory rows in `product_id` order before touching them. The acceptance test of this module's milestone proves it with pgbench: thousands of checkouts with the products listed in random orders, zero deadlocks. A naive version that reserves line by line in cart order produced **71 deadlocks out of 400 checkouts** in the same test (see the [project milestone](project.md)).
+That is exactly what Bazaar's `place_order()` does (section 16): whatever order the shopper put the products in the cart, it locks the inventory rows in `product_id` order before touching them. The acceptance test of this module's milestone proves it with pgbench: 400 checkouts with the products listed in random orders, zero deadlocks. A naive version that reserves line by line in cart order produced **71 deadlocks out of 400 checkouts** in the same test (see the [project milestone](project.md)).
 
 Practical rules:
 
