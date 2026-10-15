@@ -14,18 +14,18 @@ The exercise revisions build on 2801, the head of the finished package (2701 was
 <!-- toc:start -->
 **Contents**
 
-- [Exercise 1: Review the locks of a release](#exercise-1-review-the-locks-of-a-release)
-- [Exercise 2: A new order status](#exercise-2-a-new-order-status)
-- [Exercise 3: Which revision is this database at?](#exercise-3-which-revision-is-this-database-at)
-- [Exercise 4: Review this migration](#exercise-4-review-this-migration)
-- [Exercise 5: From autogenerate's draft to a revision](#exercise-5-from-autogenerates-draft-to-a-revision)
-- [Exercise 6: A denormalized counter, backfilled under load](#exercise-6-a-denormalized-counter-backfilled-under-load)
-- [Exercise 7: A unique constraint on dirty data](#exercise-7-a-unique-constraint-on-dirty-data)
-- [Exercise 8: Rename a table without breaking running code](#exercise-8-rename-a-table-without-breaking-running-code)
-- [Exercise 9: Two heads](#exercise-9-two-heads)
-- [Exercise 10: Prove that writers were never blocked](#exercise-10-prove-that-writers-were-never-blocked)
-- [Exercise 11: Split `users.full_name`, with zero downtime](#exercise-11-split-usersfull_name-with-zero-downtime)
-- [Exercise 12: Squash the history](#exercise-12-squash-the-history)
+- [Exercise 1 ★: Review the locks of a release](#exercise-1--review-the-locks-of-a-release)
+- [Exercise 2 ★: A new order status](#exercise-2--a-new-order-status)
+- [Exercise 3 ★: Which revision is this database at?](#exercise-3--which-revision-is-this-database-at)
+- [Exercise 4 ★★: Review this migration](#exercise-4--review-this-migration)
+- [Exercise 5 ★★: From autogenerate's draft to a revision](#exercise-5--from-autogenerates-draft-to-a-revision)
+- [Exercise 6 ★★: A denormalized counter, backfilled under load](#exercise-6--a-denormalized-counter-backfilled-under-load)
+- [Exercise 7 ★★: A unique constraint on dirty data](#exercise-7--a-unique-constraint-on-dirty-data)
+- [Exercise 8 ★★: Rename a table without breaking running code](#exercise-8--rename-a-table-without-breaking-running-code)
+- [Exercise 9 ★★: Two heads](#exercise-9--two-heads)
+- [Exercise 10 ★★★: Prove that writers were never blocked](#exercise-10--prove-that-writers-were-never-blocked)
+- [Exercise 11 ★★★: Split `users.full_name`, with zero downtime](#exercise-11--split-usersfull_name-with-zero-downtime)
+- [Exercise 12 ★★★: Squash the history](#exercise-12--squash-the-history)
 
 <!-- toc:end -->
 

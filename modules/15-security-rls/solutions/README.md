@@ -18,21 +18,21 @@ All solutions were run on PostgreSQL 17 against the small dataset with the refer
 <!-- toc:start -->
 **Contents**
 
-- [Exercise 1 — a role report (ex01_role_report.sql)](#exercise-1--a-role-report-ex01_role_reportsql)
-- [Exercise 2 — a privilege matrix (ex02_privilege_matrix.sql)](#exercise-2--a-privilege-matrix-ex02_privilege_matrixsql)
-- [Exercise 3 — the append-only audit log](#exercise-3--the-append-only-audit-log)
-- [Exercise 4 — a read-only role, two ways](#exercise-4--a-read-only-role-two-ways)
-- [Exercise 5 — hide users.email (ex05_hide_email.sql)](#exercise-5--hide-usersemail-ex05_hide_emailsql)
-- [Exercise 6 — no modifying archived products (ex06_archived_products.sql)](#exercise-6--no-modifying-archived-products-ex06_archived_productssql)
-- [Exercise 7 — fix mis-owned objects (ex07_fix_ownership.sql)](#exercise-7--fix-mis-owned-objects-ex07_fix_ownershipsql)
-- [Exercise 8 — a support role (ex08_support_role.sql)](#exercise-8--a-support-role-ex08_support_rolesql)
-- [Exercise 9 — reviews per seller (ex09_reviews_rls.sql)](#exercise-9--reviews-per-seller-ex09_reviews_rlssql)
-- [Exercise 10 — measure RLS overhead (large data)](#exercise-10--measure-rls-overhead-large-data)
-- [Exercise 11 — sslmode in the lab](#exercise-11--sslmode-in-the-lab)
-- [Exercise 12 — harden pg_hba.conf, migrate off md5 (ex12/pg_hba.conf)](#exercise-12--harden-pg_hbaconf-migrate-off-md5-ex12pg_hbaconf)
-- [Exercise 13 — exploit and fix a search_path hole (ex13_search_path.sql)](#exercise-13--exploit-and-fix-a-search_path-hole-ex13_search_pathsql)
-- [Exercise 14 — close the sequence side channel](#exercise-14--close-the-sequence-side-channel)
-- [Exercise 15 — the FK existence leak (ex15_fk_leak.sql)](#exercise-15--the-fk-existence-leak-ex15_fk_leaksql)
+- [Exercise 1 ★: A role report from the catalogs](#exercise-1--a-role-report-from-the-catalogs)
+- [Exercise 2 ★: What can each login role do?](#exercise-2--what-can-each-login-role-do)
+- [Exercise 3 ★: The append-only audit log](#exercise-3--the-append-only-audit-log)
+- [Exercise 4 ★★: A read-only reporting role, two ways](#exercise-4--a-read-only-reporting-role-two-ways)
+- [Exercise 5 ★★: Hide users.email from the read-only bundle](#exercise-5--hide-usersemail-from-the-read-only-bundle)
+- [Exercise 6 ★★: Sellers cannot modify archived products](#exercise-6--sellers-cannot-modify-archived-products)
+- [Exercise 7 ★★: Find and fix mis-owned objects](#exercise-7--find-and-fix-mis-owned-objects)
+- [Exercise 8 ★★★: Design a "support" role](#exercise-8--design-a-support-role)
+- [Exercise 9 ★★: Reviews, per seller](#exercise-9--reviews-per-seller)
+- [Exercise 10 ★★★: Measure RLS overhead (large data)](#exercise-10--measure-rls-overhead-large-data)
+- [Exercise 11 ★★: sslmode in the lab](#exercise-11--sslmode-in-the-lab)
+- [Exercise 12 ★★★: Harden pg_hba.conf and migrate off md5](#exercise-12--harden-pg_hbaconf-and-migrate-off-md5)
+- [Exercise 13 ★★★: Exploit, then fix, a search_path hole](#exercise-13--exploit-then-fix-a-search_path-hole)
+- [Exercise 14 ★★: Close the sequence side channel](#exercise-14--close-the-sequence-side-channel)
+- [Exercise 15 ★★★: Prove the FK existence leak and seal it](#exercise-15--prove-the-fk-existence-leak-and-seal-it)
 
 <!-- toc:end -->
 

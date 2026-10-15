@@ -6,10 +6,10 @@ Everything here was verified on PostgreSQL 17.11 (`course-pg`). `./project/bin/r
 **Contents**
 
 - [Files](#files)
-- [Small dataset (states 03–11)](#small-dataset-states-0311)
+- [Small dataset (states 04–11)](#small-dataset-states-0411)
 - [Large dataset (state 12 and later; module 11 starts from the small data)](#large-dataset-state-12-and-later-module-11-starts-from-the-small-data)
 - [Things module authors must know](#things-module-authors-must-know)
-- [Spec deviations and issues to resolve](#spec-deviations-and-issues-to-resolve)
+- [Design notes](#design-notes)
 - [Pointers added later](#pointers-added-later)
 
 <!-- toc:end -->
@@ -89,7 +89,7 @@ Row counts at state 07 (0201+0301 only): users 30, sellers 6, categories 23, pro
   | 2101 | ≈45 s |
   | `reset.sh all` | about 3–3.5 min |
 
-  The DB is about 1.9 GB at `all`. Disk on this shared host filled up once during testing, so check `df` if a reset fails with "No space left".
+  The DB is about 1.5 GB at `all` (`pg_database_size('bazaar')` = 1504 MB, the same as at state 16; all databases together 1526 MB; the data directory about 2.5 GB with WAL). Disk on this shared host filled up once during testing, so check `df` if a reset fails with "No space left".
 
 ## Things module authors must know
 

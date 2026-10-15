@@ -10,6 +10,7 @@ These are the conventions every module follows, so the course reads as one book.
 - [Exercises (`exercises.md`)](#exercises-exercisesmd)
 - [Solutions (`solutions/README.md`)](#solutions-solutionsreadmemd)
 - [Project milestone (`project.md`)](#project-milestone-projectmd)
+- [Heading conventions](#heading-conventions)
 - [SQL style](#sql-style)
 - [Python style (Part IV)](#python-style-part-iv)
 - [Navigation](#navigation)

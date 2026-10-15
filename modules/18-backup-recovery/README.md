@@ -7,11 +7,64 @@
 
 It is 14:07 on a Tuesday. A support engineer, trying to clean up a few test orders in production, runs `DELETE FROM orders WHERE created_at > '2025-01-01'` in the wrong psql tab. The statement finishes in 300 ms. Thousands of real orders and their items are gone, the checkout keeps taking new orders on top of the hole, and every replica you built for high availability has faithfully deleted them too. What happens next depends entirely on decisions made months earlier: what you back up, how often, where you keep it, and whether anybody has ever practised a restore. This module is about making those decisions well, and about the PostgreSQL machinery (dumps, base backups, WAL archiving and point-in-time recovery) that lets you answer "bring Bazaar back to 14:06:59" with a calm "give me twenty minutes".
 
+**What you'll learn**
+
+- How to reason about backups in terms of **RPO** and **RTO**, and how to choose between logical backups, physical backups and continuous archiving.
+- `pg_dump` in depth: the four output formats, compression, parallel dump and restore with `-j`, how a dump stays consistent, selective restores with `pg_restore -l`/`-L`, `--schema`/`--table`, restoring into a different database, and what `pg_dumpall --globals-only` adds.
+- Version compatibility rules for dumps and restores.
+- Physical backups with `pg_basebackup`: what happens on the server, what the backup contains (`backup_label`, `backup_manifest`, WAL), formats, compression, tablespaces, and verification with `pg_verifybackup`.
+- Continuous archiving: `archive_mode`, writing a correct `archive_command`, `archive_library`, `archive_timeout`, `restore_command`, and monitoring the archiver.
+- **Point-in-time recovery (PITR)**: recovery targets (`time`, `lsn`, `xid`, `name`, `immediate`), `recovery_target_action`, finding the exact moment of a mistake with `pg_waldump`, timelines and `.history` files.
+- **pgBackRest**: repository, stanza, full/differential/incremental backups, retention, `verify`, PITR restore and delta restore.
+- PostgreSQL 17's built-in **incremental backups**: `summarize_wal`, `pg_basebackup --incremental` and `pg_combinebackup`.
+- How to test restores automatically, monitor backup freshness, and the backup checklist you should be able to tick for every production database.
+
+**Before you start**
+
+The module uses two servers.
+
+**1. The course database (`course-pg`) with the large dataset**, for the logical-backup sections (2 and 3), where realistic sizes and timings matter. If it is not already at the Module 18 state (the same data as the Module 16 and 17 states, so it is if you followed those modules), reset it; this takes a few minutes:
+
+```bash
+./project/bin/reset.sh 18
+```
+
+**2. The module's lab server (`m18-primary`)**, for everything physical: WAL archiving is switched on and pgBackRest is installed. It uses the small dataset, which keeps base backups and the WAL archive small (the large dataset would put several gigabytes of WAL into the archive just by loading it). From the repository root:
+
+```bash
+cd modules/18-backup-recovery/lab
+docker compose up -d --build                     # builds postgres:17 + pgBackRest, starts m18-primary
+COURSE_PG_CONTAINER=m18-primary ../../../project/bin/reset.sh 11
+```
+
+Open a psql session on the lab server with:
+
+```bash
+docker exec -it m18-primary psql -U postgres -d bazaar
+```
+
+> **If the image build fails** because your network blocks the Debian/PGDG package mirrors (the `Dockerfile` runs `apt-get install pgbackrest`), build from `Dockerfile.prebuilt` instead, which copies the pgBackRest binary from a public Docker Hub image: `M18_DOCKERFILE=Dockerfile.prebuilt docker compose up -d --build`. Everything else in the module is identical.
+
+The lab contains:
+
+| Path | What it is |
+|---|---|
+| `lab/docker-compose.yml` | The `m18-primary` service and four named volumes: `pgdata`, `archive` (the WAL archive), `backups` (base backups), `pgbackrest` (the pgBackRest repository). |
+| `lab/conf/init-archiving.sql` | `ALTER SYSTEM` settings applied when the server is first created: `archive_mode`, `archive_command`, `summarize_wal`, ... |
+| `lab/conf/pgbackrest.conf` | pgBackRest configuration (section 8). |
+| `lab/scripts/archive-wal.sh` | The `archive_command` (section 5). |
+| `lab/scripts/nightly-backup.sh` | Nightly base backup with verification and retention (section 10 and the milestone). |
+| `lab/scripts/pitr-drill.sh` | An automated point-in-time-recovery drill that verifies row counts (section 10 and the milestone). |
+| `lab/scripts/check-backup-freshness.sh` | A monitoring check for backup and archive freshness. |
+| `lab/scripts/bazaar-activity.sql` | A burst of 200 checkouts, some of which are then marked paid and shipped, to generate realistic WAL. |
+
+Module 16 explained the write-ahead log, LSNs, segments, checkpoints and crash recovery from the inside. This module puts that knowledge to work: **every physical backup technique is "copy the files, then replay WAL", which is crash recovery on purpose.** If any WAL term below feels hazy, reread Module 16's WAL sections first.
+
+When you are done with the module, tear the lab down with `docker compose down -v` (the `-v` removes the volumes too).
+
 <!-- toc:start -->
 **Contents**
 
-- [What you'll learn](#what-youll-learn)
-- [Before you start](#before-you-start)
 - [1. What can go wrong, and what a backup must achieve](#1-what-can-go-wrong-and-what-a-backup-must-achieve)
   - [1.1 Failure modes](#11-failure-modes)
   - [1.2 RPO and RTO](#12-rpo-and-rto)
@@ -71,61 +124,6 @@ It is 14:07 on a Tuesday. A support engineer, trying to clean up a few test orde
 - [What's next](#whats-next)
 
 <!-- toc:end -->
-
-**What you'll learn**
-
-- How to reason about backups in terms of **RPO** and **RTO**, and how to choose between logical backups, physical backups and continuous archiving.
-- `pg_dump` in depth: the four output formats, compression, parallel dump and restore with `-j`, how a dump stays consistent, selective restores with `pg_restore -l`/`-L`, `--schema`/`--table`, restoring into a different database, and what `pg_dumpall --globals-only` adds.
-- Version compatibility rules for dumps and restores.
-- Physical backups with `pg_basebackup`: what happens on the server, what the backup contains (`backup_label`, `backup_manifest`, WAL), formats, compression, tablespaces, and verification with `pg_verifybackup`.
-- Continuous archiving: `archive_mode`, writing a correct `archive_command`, `archive_library`, `archive_timeout`, `restore_command`, and monitoring the archiver.
-- **Point-in-time recovery (PITR)**: recovery targets (`time`, `lsn`, `xid`, `name`, `immediate`), `recovery_target_action`, finding the exact moment of a mistake with `pg_waldump`, timelines and `.history` files.
-- **pgBackRest**: repository, stanza, full/differential/incremental backups, retention, `verify`, PITR restore and delta restore.
-- PostgreSQL 17's built-in **incremental backups**: `summarize_wal`, `pg_basebackup --incremental` and `pg_combinebackup`.
-- How to test restores automatically, monitor backup freshness, and the backup checklist you should be able to tick for every production database.
-
-**Before you start**
-
-The module uses two servers.
-
-**1. The course database (`course-pg`) with the large dataset**, for the logical-backup sections (2 and 3), where realistic sizes and timings matter. If it is not already at the Module 18 state (the same data as the Module 16 and 17 states, so it is if you followed those modules), reset it; this takes a few minutes:
-
-```bash
-./project/bin/reset.sh 18
-```
-
-**2. The module's lab server (`m18-primary`)**, for everything physical: WAL archiving is switched on and pgBackRest is installed. It uses the small dataset, which keeps base backups and the WAL archive small (the large dataset would put several gigabytes of WAL into the archive just by loading it). From the repository root:
-
-```bash
-cd modules/18-backup-recovery/lab
-docker compose up -d --build                     # builds postgres:17 + pgBackRest, starts m18-primary
-COURSE_PG_CONTAINER=m18-primary ../../../project/bin/reset.sh 11
-```
-
-Open a psql session on the lab server with:
-
-```bash
-docker exec -it m18-primary psql -U postgres -d bazaar
-```
-
-> **If the image build fails** because your network blocks the Debian/PGDG package mirrors (the `Dockerfile` runs `apt-get install pgbackrest`), build from `Dockerfile.prebuilt` instead, which copies the pgBackRest binary from a public Docker Hub image: `M18_DOCKERFILE=Dockerfile.prebuilt docker compose up -d --build`. Everything else in the module is identical.
-
-The lab contains:
-
-| Path | What it is |
-|---|---|
-| `lab/docker-compose.yml` | The `m18-primary` service and four named volumes: `pgdata`, `archive` (the WAL archive), `backups` (base backups), `pgbackrest` (the pgBackRest repository). |
-| `lab/conf/init-archiving.sql` | `ALTER SYSTEM` settings applied when the server is first created: `archive_mode`, `archive_command`, `summarize_wal`, ... |
-| `lab/conf/pgbackrest.conf` | pgBackRest configuration (section 8). |
-| `lab/scripts/archive-wal.sh` | The `archive_command` (section 5). |
-| `lab/scripts/nightly-backup.sh` | Nightly base backup with verification and retention (section 10 and the milestone). |
-| `lab/scripts/pitr-drill.sh` | An automated point-in-time-recovery drill that verifies row counts (section 10 and the milestone). |
-| `lab/scripts/check-backup-freshness.sh` | A monitoring check for backup and archive freshness. |
-| `lab/scripts/bazaar-activity.sql` | A burst of 200 checkouts, some of which are then marked paid and shipped, to generate realistic WAL. |
-
-Module 16 explained the write-ahead log, LSNs, segments, checkpoints and crash recovery from the inside. This module puts that knowledge to work: **every physical backup technique is "copy the files, then replay WAL", which is crash recovery on purpose.** If any WAL term below feels hazy, reread Module 16's WAL sections first.
-
-When you are done with the module, tear the lab down with `docker compose down -v` (the `-v` removes the volumes too).
 
 ## 1. What can go wrong, and what a backup must achieve
 
@@ -232,7 +230,7 @@ Two consequences matter in production. The `ALTER TABLE` waits for the whole dum
 | **directory** | `-Fd` | A directory: one file per table plus a table of contents | Yes (gzip) | `pg_restore` | **Yes** (`-j`) | **Yes** | **Yes** |
 | **tar** | `-Ft` | A tar archive of the directory format | No | `pg_restore` | No | No | Yes |
 
-All four contain the same information; they differ in packaging. Measured on the course database with the large Bazaar dataset (the `bazaar` database is 1.5 GB at the Module 18 state, roughly half of it indexes; later modules' data takes it to about 1.9 GB), writing inside the container:
+All four contain the same information; they differ in packaging. Measured on the course database with the large Bazaar dataset (the `bazaar` database is 1.5 GB at the Module 18 state, about 560 MB of it indexes), writing inside the container:
 
 ```bash
 docker exec -u postgres course-pg bash -c 'mkdir -p /tmp/dumps && cd /tmp/dumps &&
@@ -659,7 +657,7 @@ pg_verifybackup: error: WAL parsing failed for timeline 1
 
 ### 4.5 Formats and compression, measured
 
-For comparison, the same measurements on `course-pg` with the large dataset, not on the lab server (the whole cluster, all databases plus shared catalogs, is 1.66 GB at the Module 18 state, a little more than the 1.5 GB `bazaar` database):
+For comparison, the same measurements on `course-pg` with the large dataset, not on the lab server (all databases together are 1,526 MB at the Module 18 state, a little more than the 1,504 MB `bazaar` database; a physical backup also copies the WAL it needs and the rest of the data directory):
 
 ```text
 pg_basebackup -D /backups/bb-plain -Fp -X stream -c fast                       4.0 s    1.7 GB

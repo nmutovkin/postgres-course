@@ -11,6 +11,24 @@ Solutions are in [`solutions/README.md`](solutions/README.md).
 
 ---
 
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Read a dump's table of contents](#exercise-1--read-a-dumps-table-of-contents)
+- [Exercise 2 ★: An archiver health query](#exercise-2--an-archiver-health-query)
+- [Exercise 3 ★: Anatomy of a nightly backup](#exercise-3--anatomy-of-a-nightly-backup)
+- [Exercise 4 ★★: A lean developer copy](#exercise-4--a-lean-developer-copy)
+- [Exercise 5 ★★: Undo a bad bulk update from last night's dump](#exercise-5--undo-a-bad-bulk-update-from-last-nights-dump)
+- [Exercise 6 ★★: How far back can we go?](#exercise-6--how-far-back-can-we-go)
+- [Exercise 7 ★★: Test a pgBackRest backup without touching production](#exercise-7--test-a-pgbackrest-backup-without-touching-production)
+- [Exercise 8 ★★: How much does `-j` help?](#exercise-8--how-much-does--j-help)
+- [Exercise 9 ★★: Break an incremental chain](#exercise-9--break-an-incremental-chain)
+- [Exercise 10 ★★★: Compressed archiving](#exercise-10--compressed-archiving)
+- [Exercise 11 ★★★: Detect gaps in the archive](#exercise-11--detect-gaps-in-the-archive)
+- [Exercise 12 ★★★: Recover a dropped table by LSN](#exercise-12--recover-a-dropped-table-by-lsn)
+
+<!-- toc:end -->
+
 ## Exercise 1 ★: Read a dump's table of contents
 
 Take a custom-format dump of `bazaar` from `course-pg` and answer from its table of contents alone (`pg_restore -l`), without restoring anything:

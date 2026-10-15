@@ -7,30 +7,6 @@
 
 Bazaar is growing up. The seller dashboard runs heavy aggregate queries all day, and they compete with checkout for CPU and I/O on the one database server. The finance team wants to run its own reporting tool directly against order data without being able to touch production. The CTO keeps asking what happens if the database server dies at 3 a.m., and next year you will have to upgrade from PostgreSQL 17 to 18 without taking the shop offline for hours. All four problems have the same root answer: **keep more than one copy of the database, and keep the copies continuously up to date.** That is replication, and PostgreSQL has two very different kinds built in. This module builds both, on a four-server lab, and teaches you how each one works, how to monitor it, and how it fails.
 
-<!-- toc:start -->
-**Contents**
-
-- [What you'll learn](#what-youll-learn)
-- [Before you start](#before-you-start)
-- [1. Why replicate, and which kind](#1-why-replicate-and-which-kind)
-- [2. How streaming replication works](#2-how-streaming-replication-works)
-- [3. Building a standby](#3-building-a-standby)
-- [4. Replication slots](#4-replication-slots)
-- [5. Hot standby: queries on replicas](#5-hot-standby-queries-on-replicas)
-- [6. Monitoring replication](#6-monitoring-replication)
-- [7. Synchronous replication](#7-synchronous-replication)
-- [8. Cascading and delayed standbys](#8-cascading-and-delayed-standbys)
-- [9. Read/write splitting and the read-your-writes problem](#9-readwrite-splitting-and-the-read-your-writes-problem)
-- [10. Logical replication](#10-logical-replication)
-- [11. Logical replication in operation](#11-logical-replication-in-operation)
-- [12. Failover by hand: promotion and `pg_rewind`](#12-failover-by-hand-promotion-and-pg_rewind)
-- [13. Major-version upgrades with logical replication](#13-major-version-upgrades-with-logical-replication)
-- [14. Logical decoding and change data capture](#14-logical-decoding-and-change-data-capture)
-- [Summary](#summary)
-- [What's next](#whats-next)
-
-<!-- toc:end -->
-
 **What you'll learn**
 
 - Why you replicate (high availability, read scaling, analytics isolation, upgrades) and why a replica is still not a backup.
@@ -78,6 +54,28 @@ The lab files:
 | `lab/scripts/lag.sql` | The replication lag monitoring query. |
 
 This module builds on Module 16 (WAL, LSNs, checkpoints, crash recovery) and Module 18 (base backups, `restore_command`, recovery, timelines). A physical standby is, quite literally, a server that restored a base backup and **never stops recovering**.
+
+<!-- toc:start -->
+**Contents**
+
+- [1. Why replicate, and which kind](#1-why-replicate-and-which-kind)
+- [2. How streaming replication works](#2-how-streaming-replication-works)
+- [3. Building a standby](#3-building-a-standby)
+- [4. Replication slots](#4-replication-slots)
+- [5. Hot standby: queries on replicas](#5-hot-standby-queries-on-replicas)
+- [6. Monitoring replication](#6-monitoring-replication)
+- [7. Synchronous replication](#7-synchronous-replication)
+- [8. Cascading and delayed standbys](#8-cascading-and-delayed-standbys)
+- [9. Read/write splitting and the read-your-writes problem](#9-readwrite-splitting-and-the-read-your-writes-problem)
+- [10. Logical replication](#10-logical-replication)
+- [11. Logical replication in operation](#11-logical-replication-in-operation)
+- [12. Failover by hand: promotion and `pg_rewind`](#12-failover-by-hand-promotion-and-pg_rewind)
+- [13. Major-version upgrades with logical replication](#13-major-version-upgrades-with-logical-replication)
+- [14. Logical decoding and change data capture](#14-logical-decoding-and-change-data-capture)
+- [Summary](#summary)
+- [What's next](#whats-next)
+
+<!-- toc:end -->
 
 ## 1. Why replicate, and which kind
 
@@ -530,7 +528,7 @@ You have three ways to reduce cancellations, and each moves the cost somewhere e
     replica1  |      | t
    ```
 
-   Repeat the experiment with feedback on and the standby query survives its 60-second sleep, while the primary's `VACUUM (VERBOSE)` reports:
+   Repeat the experiment with feedback on (the even rows are already gone, so this time delete `WHERE id % 3 = 0`, 16,667 of the remaining 50,000 rows) and the standby query survives its 60-second sleep, while the primary's `VACUUM (VERBOSE)` reports:
 
    ```text
    tuples: 0 removed, 50000 remain, 16667 are dead but not yet removable
@@ -1215,7 +1213,7 @@ The milestone's lag query, `scripts/lag.sql`, run on the primary, shows every co
  replica2         | physical | streaming | async      | 0 bytes | 00:00:00.000837 | 0 bytes      | reserved   | OK
 ```
 
-(`delayed` appears because the extras profile from section 8 is still running. Its replay is always minutes behind, by design; in production you would give known-delayed standbys their own thresholds, for example by matching on the name in the `CASE`.)
+(`delayed` appears because the extras profile from section 8 is still running. Its replay is always minutes behind, by design, yet its `replay_lag` reads 15 seconds and the alert is `OK`: the standby replays WAL up to the first commit record that is not yet 5 minutes old and waits there, so `replay_lag` is roughly the age of that commit (15 seconds here), which can never exceed the 5-minute delay and so never reaches `lag.sql`'s 5-minute `crit_time`. The 273 kB in `lag` is the better sign that it is behind. In production you would give known-delayed standbys their own thresholds, for example by matching on the name in the `CASE`.)
 
 For a logical consumer, "lag" is measured from `confirmed_flush_lsn` (what the subscriber has confirmed applying). On the subscriber, `pg_stat_subscription` shows the apply worker's `received_lsn`, `last_msg_receipt_time` and `latest_end_time`, and `pg_stat_subscription_stats` counts errors.
 

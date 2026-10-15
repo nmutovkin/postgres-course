@@ -34,15 +34,15 @@ The tests apply revisions 2802 and 2803 to their fresh databases by executing th
 <!-- toc:start -->
 **Contents**
 
-- [Exercise 1: `/admin/slow-queries`](#exercise-1-adminslow-queries)
-- [Exercise 2: `/metrics`](#exercise-2-metrics)
-- [Exercise 3: Cancel an order](#exercise-3-cancel-an-order)
-- [Exercise 4: Reviews, only from buyers](#exercise-4-reviews-only-from-buyers)
-- [Exercise 5: Rate limiting with a token bucket](#exercise-5-rate-limiting-with-a-token-bucket)
-- [Exercise 6: Stream a CSV export](#exercise-6-stream-a-csv-export)
-- [Exercise 7: Read your writes from a replica](#exercise-7-read-your-writes-from-a-replica)
-- [Exercise 8: Tracing, from HTTP to SQL](#exercise-8-tracing-from-http-to-sql)
-- [Exercise 9: Chaos tests](#exercise-9-chaos-tests)
+- [Exercise 1 ★: `/admin/slow-queries`](#exercise-1--adminslow-queries)
+- [Exercise 2 ★: `/metrics` for Prometheus](#exercise-2--metrics-for-prometheus)
+- [Exercise 3 ★: Cancel an order](#exercise-3--cancel-an-order)
+- [Exercise 4 ★★: Reviews, only from buyers](#exercise-4--reviews-only-from-buyers)
+- [Exercise 5 ★★: Rate limiting with a token bucket in PostgreSQL](#exercise-5--rate-limiting-with-a-token-bucket-in-postgresql)
+- [Exercise 6 ★★: Stream a CSV export](#exercise-6--stream-a-csv-export)
+- [Exercise 7 ★★: Read your writes from a replica](#exercise-7--read-your-writes-from-a-replica)
+- [Exercise 8 ★★★: Tracing, from HTTP to SQL](#exercise-8--tracing-from-http-to-sql)
+- [Exercise 9 ★★★: Chaos: kill the connection mid-request](#exercise-9--chaos-kill-the-connection-mid-request)
 
 <!-- toc:end -->
 

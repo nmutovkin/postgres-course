@@ -7,11 +7,50 @@
 
 Bazaar's board has a slide titled "10× in two years". Marketing wants every seller to have a live dashboard, finance wants to keep every order forever, and the Black Friday peak of 3,527 orders in a day is supposed to become 35,000. Modules 19 and 20 gave you replicas for reads and automatic failover, but every `INSERT`, every stock reservation and every row of every table still lives on **one primary**. One day that box is the biggest one you can buy, and it is still too small. **Sharding** splits the data itself across several independent PostgreSQL servers, so that each one stores and writes only a slice. It is the most powerful scaling tool in this course and also the most expensive one: it changes your keys, your queries, your transactions and your operations. This module teaches you when it is worth that price, how it works underneath, and how to do it three ways on Bazaar: in the application, with PostgreSQL's own `postgres_fdw` and partitioning, and with the Citus extension.
 
+**What you'll learn**
+
+- When you actually need sharding, and the cheaper alternatives to exhaust first (a bigger server, read replicas, partitioning, archiving, caching).
+- The core vocabulary: shard, shard key (distribution column), logical shard versus physical node, router, coordinator.
+- How to choose a **shard key**: cardinality, even distribution, query locality, and **co-location** of related tables. Why `seller_id` fits Bazaar, and where it hurts.
+- **Hot shards and skew**, measured on Bazaar's Zipf-distributed sellers (seller 1 has 14% of all orders), and what you can do about them.
+- Hash, range and directory (lookup) sharding, and why you create many more logical shards than you have servers.
+- **Global IDs**: why per-shard identity columns collide, and the fixes (offset sequences, snowflake IDs, UUIDv7, Citus's per-node ranges).
+- **Cross-shard queries** (scatter-gather, partial aggregation) and **cross-shard transactions**: two-phase commit with `PREPARE TRANSACTION`, its failure modes, and sagas.
+- Approach 1: **application-level sharding** with a small Python router.
+- Approach 2: **`postgres_fdw` + hash partitioning**, with pushdown of filters, aggregates and joins, asynchronous execution, and exactly where it breaks.
+- Approach 3: **Citus**: coordinator, workers and metadata; distributed, reference and co-located tables; router versus multi-shard plans; repartition joins; distributed transactions; the shard rebalancer and tenant isolation; schema-based sharding; columnar storage; the limitations, and why Bazaar needs the `2101` migration.
+- What sharding costs you in day-to-day operations.
+
+**Before you start**
+
+This module has its own lab in `modules/21-sharding/lab/`: one Docker Compose file with a Citus cluster and a plain-PostgreSQL "do it yourself" cluster, plus scripts that load Bazaar into them. Nothing here touches your usual `course-pg` container.
+
+```bash
+cd modules/21-sharding/lab
+docker compose up -d                    # Citus: m21-coord, m21-worker1, m21-worker2
+./scripts/citus-build.sh small          # load Bazaar, apply 2101, distribute (about 10 s)
+docker exec -it m21-coord psql -U postgres -d bazaar
+```
+
+`citus-build.sh small` runs four steps that sections 13 and 14 explain one by one: `load-bazaar.sh` (`reset.sh 11` plus the schema-only migrations of modules 11–15, then `project/db/sharding/2101_schema_shard_prep.sql`), `citus-init-nodes.sh` (registers the workers), `distribute.sql` and `citus-adapt.sql`. The **small** dataset (30 users, 6 sellers, 120 orders) keeps outputs readable and is what most examples use. `citus-build.sh large` loads the 500,000-order dataset of modules 12–20 instead. It takes about 6 minutes and roughly 5 GB of disk across the containers (including WAL). The timings in sections 4, 14 and 16 come from that large run. A few sections use the second lab, which you start when you get there:
+
+| Container | Profile | Role |
+|---|---|---|
+| `m21-coord` | default | Citus coordinator: clients connect here. Holds the metadata and copies of reference tables. |
+| `m21-worker1`, `m21-worker2` | default | Citus workers: hold the shards. |
+| `m21-worker3` | `scale` | A third worker, added in section 16 to practise rebalancing. |
+| `m21-fdw-coord`, `m21-shard1`, `m21-shard2` | `fdw` | Plain PostgreSQL 17: the `postgres_fdw` cluster (section 11) and the nodes of the application router (section 10). |
+| `m21-app` | `fdw` | Python 3.12 with psycopg 3, runs `lab/router/router.py`. |
+
+The lab uses the `citusdata/citus:14.2.0-pg17` image (Citus 14.2 on PostgreSQL 17.10). Authentication inside the lab network is `trust`, so you can concentrate on sharding. Section 19 lists what changes in production.
+
+This module leans on three earlier ones: **[Module 14](../14-partitioning/)** (hash partitioning, pruning, partition-wise joins and aggregates; a sharded table is a partitioned table whose partitions live on other machines), **[Module 10](../10-transactions-concurrency/)** (`place_order()`, row locks, deadlock avoidance) and **[Modules 19](../19-replication/)–[20](../20-high-availability/)** (each shard node is still a PostgreSQL server that needs replicas and failover).
+
+---
+
 <!-- toc:start -->
 **Contents**
 
-- [What you'll learn](#what-youll-learn)
-- [Before you start](#before-you-start)
 - [1. Do you need to shard?](#1-do-you-need-to-shard)
   - [1.1 What one PostgreSQL server can do](#11-what-one-postgresql-server-can-do)
   - [1.2 Try these first](#12-try-these-first)
@@ -69,52 +108,11 @@ Bazaar's board has a slide titled "10× in two years". Marketing wants every sel
 
 <!-- toc:end -->
 
-**What you'll learn**
-
-- When you actually need sharding, and the cheaper alternatives to exhaust first (a bigger server, read replicas, partitioning, archiving, caching).
-- The core vocabulary: shard, shard key (distribution column), logical shard versus physical node, router, coordinator.
-- How to choose a **shard key**: cardinality, even distribution, query locality, and **co-location** of related tables. Why `seller_id` fits Bazaar, and where it hurts.
-- **Hot shards and skew**, measured on Bazaar's Zipf-distributed sellers (seller 1 has 14% of all orders), and what you can do about them.
-- Hash, range and directory (lookup) sharding, and why you create many more logical shards than you have servers.
-- **Global IDs**: why per-shard identity columns collide, and the fixes (offset sequences, snowflake IDs, UUIDv7, Citus's per-node ranges).
-- **Cross-shard queries** (scatter-gather, partial aggregation) and **cross-shard transactions**: two-phase commit with `PREPARE TRANSACTION`, its failure modes, and sagas.
-- Approach 1: **application-level sharding** with a small Python router.
-- Approach 2: **`postgres_fdw` + hash partitioning**, with pushdown of filters, aggregates and joins, asynchronous execution, and exactly where it breaks.
-- Approach 3: **Citus**: coordinator, workers and metadata; distributed, reference and co-located tables; router versus multi-shard plans; repartition joins; distributed transactions; the shard rebalancer and tenant isolation; schema-based sharding; columnar storage; the limitations, and why Bazaar needs the `2101` migration.
-- What sharding costs you in day-to-day operations.
-
-**Before you start**
-
-This module has its own lab in `modules/21-sharding/lab/`: one Docker Compose file with a Citus cluster and a plain-PostgreSQL "do it yourself" cluster, plus scripts that load Bazaar into them. Nothing here touches your usual `course-pg` container.
-
-```bash
-cd modules/21-sharding/lab
-docker compose up -d                    # Citus: m21-coord, m21-worker1, m21-worker2
-./scripts/citus-build.sh small          # load Bazaar, apply 2101, distribute (about 10 s)
-docker exec -it m21-coord psql -U postgres -d bazaar
-```
-
-`citus-build.sh small` runs four steps that sections 13 and 14 explain one by one: `load-bazaar.sh` (`reset.sh 11` plus the schema-only migrations of modules 11–15, then `project/db/sharding/2101_schema_shard_prep.sql`), `citus-init-nodes.sh` (registers the workers), `distribute.sql` and `citus-adapt.sql`. The **small** dataset (30 users, 6 sellers, 120 orders) keeps outputs readable and is what most examples use. `citus-build.sh large` loads the 500,000-order dataset of modules 12–20 instead. It takes about 6 minutes and roughly 5 GB of disk across the containers (including WAL). The timings in sections 4, 14 and 16 come from that large run. A few sections use the second lab, which you start when you get there:
-
-| Container | Profile | Role |
-|---|---|---|
-| `m21-coord` | default | Citus coordinator: clients connect here. Holds the metadata and copies of reference tables. |
-| `m21-worker1`, `m21-worker2` | default | Citus workers: hold the shards. |
-| `m21-worker3` | `scale` | A third worker, added in section 16 to practise rebalancing. |
-| `m21-fdw-coord`, `m21-shard1`, `m21-shard2` | `fdw` | Plain PostgreSQL 17: the `postgres_fdw` cluster (section 11) and the nodes of the application router (section 10). |
-| `m21-app` | `fdw` | Python 3.12 with psycopg 3, runs `lab/router/router.py`. |
-
-The lab uses the `citusdata/citus:14.2.0-pg17` image (Citus 14.2 on PostgreSQL 17.10). Authentication inside the lab network is `trust`, so you can concentrate on sharding. Section 19 lists what changes in production.
-
-This module leans on three earlier ones: **[Module 14](../14-partitioning/)** (hash partitioning, pruning, partition-wise joins and aggregates; a sharded table is a partitioned table whose partitions live on other machines), **[Module 10](../10-transactions-concurrency/)** (`place_order()`, row locks, deadlock avoidance) and **[Modules 19](../19-replication/)–[20](../20-high-availability/)** (each shard node is still a PostgreSQL server that needs replicas and failover).
-
----
-
 ## 1. Do you need to shard?
 
 ### 1.1 What one PostgreSQL server can do
 
-Most applications never need sharding. Be suspicious of anyone, including yourself, who proposes it before the numbers demand it. A single modern server is very large: 64–192 cores, 1–4 TB of RAM, and tens of TB of NVMe that does hundreds of thousands of random reads per second. Well-indexed PostgreSQL on such a machine serves tens of thousands of transactions per second and databases of several terabytes. Bazaar's large dataset, with 500,000 orders, 5 million events and every module's indexes, is **1.9 GB**. It fits in the RAM of a laptop.
+Most applications never need sharding. Be suspicious of anyone, including yourself, who proposes it before the numbers demand it. A single modern server is very large: 64–192 cores, 1–4 TB of RAM, and tens of TB of NVMe that does hundreds of thousands of random reads per second. Well-indexed PostgreSQL on such a machine serves tens of thousands of transactions per second and databases of several terabytes. Bazaar's large dataset, with 500,000 orders, 5 million events and every module's indexes, is about **1.5 GB**. It fits in the RAM of a laptop.
 
 What eventually breaks on one server, roughly in the order teams meet it:
 

@@ -42,7 +42,7 @@ Solutions: [solutions/README.md](solutions/README.md). Runnable scripts are in [
 - [Exercise 6 ★★: Sellers cannot modify archived products](#exercise-6--sellers-cannot-modify-archived-products)
 - [Exercise 7 ★★: Find and fix mis-owned objects](#exercise-7--find-and-fix-mis-owned-objects)
 - [Exercise 8 ★★★: Design a "support" role](#exercise-8--design-a-support-role)
-- [Exercise 9 ★★★: Reviews, per seller](#exercise-9--reviews-per-seller)
+- [Exercise 9 ★★: Reviews, per seller](#exercise-9--reviews-per-seller)
 - [Exercise 10 ★★★: Measure RLS overhead (large data)](#exercise-10--measure-rls-overhead-large-data)
 - [Exercise 11 ★★: sslmode in the lab](#exercise-11--sslmode-in-the-lab)
 - [Exercise 12 ★★★: Harden pg_hba.conf and migrate off md5](#exercise-12--harden-pg_hbaconf-and-migrate-off-md5)

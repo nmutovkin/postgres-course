@@ -9,11 +9,41 @@ It is 03:12 on the Saturday of Bazaar's biggest sale of the year. The primary da
 
 High availability (HA) is the engineering that turns those forty minutes into about thirty seconds, with no human involved, and that makes "two primaries" impossible by construction. This module explains why that is harder than it looks, how Patroni solves it on top of the streaming replication you already know, and how applications have to behave so that a failover is a short blip rather than lost or duplicated orders.
 
+**What you'll learn**
+
+- How to reason about availability in numbers: nines, MTBF/MTTR, serial and parallel components, and RPO/RTO for HA.
+- The failure modes of a database cluster (crash, node loss, partition, full disk, slow node) and what automation should and should not do about each.
+- The hard problems behind automatic failover: failure detection, leader election, consensus, split-brain, fencing, and STONITH.
+- How Patroni works: the agent on each node, the DCS (etcd), the leader key and its TTL, the HA loop, bootstrap, and its configuration model.
+- How to operate Patroni: the REST API, `patronictl` (switchover, failover, restart, reinit, edit-config, pause/resume), synchronous mode, failover rules, `pg_rewind`, and the watchdog.
+- How clients find the primary: HAProxy with Patroni health checks, libpq multi-host connection strings (`target_session_attrs`, `load_balance_hosts`), PgBouncer placement, DNS and virtual IPs.
+- How applications must behave during a failover: which errors they see, what happens to in-flight transactions, and how to retry safely with idempotency keys.
+- The alternatives (repmgr, pg_auto_failover, CloudNativePG, managed services) and how to choose.
+- Operational practice: failure drills, monitoring, and upgrades of a Patroni cluster.
+
+**Before you start**
+
+- You have finished [Module 19](../19-replication/): streaming replication, replication slots, synchronous replication (`synchronous_standby_names`, `synchronous_commit`), `pg_promote()`, timelines, and `pg_rewind`. This module builds on all of them and does not re-teach them.
+- This module does not use the single `course-pg` container. Its lab in [`lab/`](lab/) starts **eight containers**: three etcd members, three Patroni + PostgreSQL 17 nodes, HAProxy, and a client box. Plan for about 2 GB of free RAM, and about 2 GB of disk in total with the small Bazaar dataset (reset state 11), or about 10 GB with the full one (reset state 20: about 3 GB per node, three copies).
+- Every container, network, and volume is prefixed with `m20-`, so the lab cannot collide with your course database. `./lab/scripts/down.sh` removes all of it.
+- The lab scripts are Bash and assume GNU `date` (Linux, WSL, or macOS with coreutils).
+
+```bash
+cd modules/20-high-availability/lab
+./scripts/up.sh                 # build the image (first run: a few minutes) and start the cluster
+./scripts/load-bazaar.sh        # reset.sh 20 against whichever node is the leader (2-3 minutes)
+./scripts/load-bazaar.sh 11     # or: the small dataset (seconds), enough for every exercise
+```
+
+If your network blocks the Debian package mirrors (the image installs Python with `apt-get`), build the fallback image instead: `M20_DOCKERFILE=Dockerfile.prebuilt ./scripts/up.sh`. It copies Python from the official `python` image.
+
+The schema is not changed by this module. Like Modules 16 to 19, it works *on* the Bazaar database. The only new objects are in a separate schema, `ha_lab`, which the lab's client scripts create for their bookkeeping.
+
+---
+
 <!-- toc:start -->
 **Contents**
 
-- [What you'll learn](#what-youll-learn)
-- [Before you start](#before-you-start)
 - [1. What "highly available" means](#1-what-highly-available-means)
   - [1.1 Availability in numbers](#11-availability-in-numbers)
   - [1.2 RPO and RTO, revisited](#12-rpo-and-rto-revisited)
@@ -67,38 +97,6 @@ High availability (HA) is the engineering that turns those forty minutes into ab
 - [What's next](#whats-next)
 
 <!-- toc:end -->
-
-**What you'll learn**
-
-- How to reason about availability in numbers: nines, MTBF/MTTR, serial and parallel components, and RPO/RTO for HA.
-- The failure modes of a database cluster (crash, node loss, partition, full disk, slow node) and what automation should and should not do about each.
-- The hard problems behind automatic failover: failure detection, leader election, consensus, split-brain, fencing, and STONITH.
-- How Patroni works: the agent on each node, the DCS (etcd), the leader key and its TTL, the HA loop, bootstrap, and its configuration model.
-- How to operate Patroni: the REST API, `patronictl` (switchover, failover, restart, reinit, edit-config, pause/resume), synchronous mode, failover rules, `pg_rewind`, and the watchdog.
-- How clients find the primary: HAProxy with Patroni health checks, libpq multi-host connection strings (`target_session_attrs`, `load_balance_hosts`), PgBouncer placement, DNS and virtual IPs.
-- How applications must behave during a failover: which errors they see, what happens to in-flight transactions, and how to retry safely with idempotency keys.
-- The alternatives (repmgr, pg_auto_failover, CloudNativePG, managed services) and how to choose.
-- Operational practice: failure drills, monitoring, and upgrades of a Patroni cluster.
-
-**Before you start**
-
-- You have finished [Module 19](../19-replication/): streaming replication, replication slots, synchronous replication (`synchronous_standby_names`, `synchronous_commit`), `pg_promote()`, timelines, and `pg_rewind`. This module builds on all of them and does not re-teach them.
-- This module does not use the single `course-pg` container. Its lab in [`lab/`](lab/) starts **eight containers**: three etcd members, three Patroni + PostgreSQL 17 nodes, HAProxy, and a client box. Plan for about 2 GB of free RAM, and about 2 GB of disk in total with the small Bazaar dataset (reset state 11), or about 10 GB with the full one (reset state 20: about 3 GB per node, three copies).
-- Every container, network, and volume is prefixed with `m20-`, so the lab cannot collide with your course database. `./lab/scripts/down.sh` removes all of it.
-- The lab scripts are Bash and assume GNU `date` (Linux, WSL, or macOS with coreutils).
-
-```bash
-cd modules/20-high-availability/lab
-./scripts/up.sh                 # build the image (first run: a few minutes) and start the cluster
-./scripts/load-bazaar.sh        # reset.sh 20 against whichever node is the leader (2-3 minutes)
-./scripts/load-bazaar.sh 11     # or: the small dataset (seconds), enough for every exercise
-```
-
-If your network blocks the Debian package mirrors (the image installs Python with `apt-get`), build the fallback image instead: `M20_DOCKERFILE=Dockerfile.prebuilt ./scripts/up.sh`. It copies Python from the official `python` image.
-
-The schema is not changed by this module. Like Modules 16 to 19, it works *on* the Bazaar database. The only new objects are in a separate schema, `ha_lab`, which the lab's client scripts create for their bookkeeping.
-
----
 
 ## 1. What "highly available" means
 

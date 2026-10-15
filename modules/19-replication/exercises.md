@@ -20,6 +20,24 @@ Solutions are in [`solutions/README.md`](solutions/README.md).
 
 ---
 
+<!-- toc:start -->
+**Contents**
+
+- [Exercise 1 ★: Draw the topology from SQL alone](#exercise-1--draw-the-topology-from-sql-alone)
+- [Exercise 2 ★: What did `pg_basebackup` copy?](#exercise-2--what-did-pg_basebackup-copy)
+- [Exercise 3 ★: Rename a standby](#exercise-3--rename-a-standby)
+- [Exercise 4 ★★: An honest lag measurement](#exercise-4--an-honest-lag-measurement)
+- [Exercise 5 ★★: Slot early warning](#exercise-5--slot-early-warning)
+- [Exercise 6 ★★: Quorums and the delayed standby](#exercise-6--quorums-and-the-delayed-standby)
+- [Exercise 7 ★★: Read-your-writes in one psql script](#exercise-7--read-your-writes-in-one-psql-script)
+- [Exercise 8 ★★: Which tables are not ready for logical replication?](#exercise-8--which-tables-are-not-ready-for-logical-replication)
+- [Exercise 9 ★★: Complaints for the analytics team](#exercise-9--complaints-for-the-analytics-team)
+- [Exercise 10 ★★: Undo a `DROP TABLE` with the delayed standby](#exercise-10--undo-a-drop-table-with-the-delayed-standby)
+- [Exercise 11 ★★★: Rehearse a zero-downtime migration](#exercise-11--rehearse-a-zero-downtime-migration)
+- [Exercise 12 ★★★: Skip a transaction, then repair](#exercise-12--skip-a-transaction-then-repair)
+
+<!-- toc:end -->
+
 ## Exercise 1 ★: Draw the topology from SQL alone
 
 Without looking at `docker-compose.yml`, determine for every running node: whether it is a primary or a standby, which server it streams from, which servers stream from it, and which of its standbys are synchronous. Use only SQL (`pg_is_in_recovery()`, `pg_stat_replication`, `pg_stat_wal_receiver`, `current_setting('cluster_name')`) and draw the result as a small diagram. Do it once with the default nodes and once with the `extras` profile running.

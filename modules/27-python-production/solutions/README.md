@@ -12,18 +12,18 @@ All solutions ran against PostgreSQL 17.11 with the large dataset at revision 27
 <!-- toc:start -->
 **Contents**
 
-- [Exercise 1: Classify real failures](#exercise-1-classify-real-failures)
-- [Exercise 2: Timeouts for one slow endpoint](#exercise-2-timeouts-for-one-slow-endpoint)
-- [Exercise 3: Timeouts that survive PgBouncer](#exercise-3-timeouts-that-survive-pgbouncer)
-- [Exercise 4: A retry decorator with jitter, proven](#exercise-4-a-retry-decorator-with-jitter-proven)
-- [Exercise 5: How much faster are template databases?](#exercise-5-how-much-faster-are-template-databases)
-- [Exercise 6: Pools and `fork()`](#exercise-6-pools-and-fork)
-- [Exercise 7: A concurrency test that can fail](#exercise-7-a-concurrency-test-that-can-fail)
-- [Exercise 8: A projection fed by the outbox](#exercise-8-a-projection-fed-by-the-outbox)
-- [Exercise 9: Database time per request](#exercise-9-database-time-per-request)
-- [Exercise 10: Size a pool, and prove the size](#exercise-10-size-a-pool-and-prove-the-size)
-- [Exercise 11: Exactly once, under every crash](#exercise-11-exactly-once-under-every-crash)
-- [Exercise 12: Checkout through failovers](#exercise-12-checkout-through-failovers)
+- [Exercise 1 ★: Classify real failures](#exercise-1--classify-real-failures)
+- [Exercise 2 ★: Timeouts for one slow endpoint](#exercise-2--timeouts-for-one-slow-endpoint)
+- [Exercise 3 ★: Timeouts that survive PgBouncer](#exercise-3--timeouts-that-survive-pgbouncer)
+- [Exercise 4 ★★: A retry decorator with jitter, proven](#exercise-4--a-retry-decorator-with-jitter-proven)
+- [Exercise 5 ★★: How much faster are template databases?](#exercise-5--how-much-faster-are-template-databases)
+- [Exercise 6 ★★: Pools and `fork()`](#exercise-6--pools-and-fork)
+- [Exercise 7 ★★: A concurrency test that can fail](#exercise-7--a-concurrency-test-that-can-fail)
+- [Exercise 8 ★★: A projection fed by the outbox](#exercise-8--a-projection-fed-by-the-outbox)
+- [Exercise 9 ★★: Database time per request](#exercise-9--database-time-per-request)
+- [Exercise 10 ★★★: Size a pool, and prove the size](#exercise-10--size-a-pool-and-prove-the-size)
+- [Exercise 11 ★★★: Exactly once, under every crash](#exercise-11--exactly-once-under-every-crash)
+- [Exercise 12 ★★★: Checkout through failovers](#exercise-12--checkout-through-failovers)
 
 <!-- toc:end -->
 

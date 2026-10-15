@@ -24,19 +24,19 @@ The milestone's reference write-up is at the end of this file.
 <!-- toc:start -->
 **Contents**
 
-- [Exercise 1: Read a plan](#exercise-1-read-a-plan)
-- [Exercise 2: Cost by hand](#exercise-2-cost-by-hand)
-- [Exercise 3: Statistics to estimates](#exercise-3-statistics-to-estimates)
-- [Exercise 4: Hash batches](#exercise-4-hash-batches)
-- [Exercise 5: Three ways to join](#exercise-5-three-ways-to-join)
-- [Exercise 6: Keyset pagination for category pages](#exercise-6-keyset-pagination-for-category-pages)
-- [Exercise 7: The `NOT IN` trap](#exercise-7-the-not-in-trap)
-- [Exercise 8: Statistics on expressions](#exercise-8-statistics-on-expressions)
-- [Exercise 9: What does pg_stat_statements say?](#exercise-9-what-does-pg_stat_statements-say)
-- [Exercise 10: Cheapest product per category](#exercise-10-cheapest-product-per-category)
-- [Exercise 11: Watch a prepared statement go generic](#exercise-11-watch-a-prepared-statement-go-generic)
-- [Exercise 12: Counting without counting](#exercise-12-counting-without-counting)
-- [Exercise 13: The slow function](#exercise-13-the-slow-function)
+- [Exercise 1 ★: Read a plan](#exercise-1--read-a-plan)
+- [Exercise 2 ★: Cost by hand](#exercise-2--cost-by-hand)
+- [Exercise 3 ★: Statistics to estimates](#exercise-3--statistics-to-estimates)
+- [Exercise 4 ★★: Hash batches](#exercise-4--hash-batches)
+- [Exercise 5 ★★: Three ways to join](#exercise-5--three-ways-to-join)
+- [Exercise 6 ★★: Keyset pagination for category pages](#exercise-6--keyset-pagination-for-category-pages)
+- [Exercise 7 ★★: The `NOT IN` trap](#exercise-7--the-not-in-trap)
+- [Exercise 8 ★★: Statistics on expressions](#exercise-8--statistics-on-expressions)
+- [Exercise 9 ★★: What does pg_stat_statements say?](#exercise-9--what-does-pg_stat_statements-say)
+- [Exercise 10 ★★: Cheapest product per category](#exercise-10--cheapest-product-per-category)
+- [Exercise 11 ★★★: Watch a prepared statement go generic](#exercise-11--watch-a-prepared-statement-go-generic)
+- [Exercise 12 ★★★: Counting without counting](#exercise-12--counting-without-counting)
+- [Exercise 13 ★★★: The slow function](#exercise-13--the-slow-function)
 - [Milestone: the performance review](#milestone-the-performance-review)
 
 <!-- toc:end -->

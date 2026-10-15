@@ -14,7 +14,7 @@ If you moved the server to another host port (`PGPORT_HOST`), use that port wher
 <!-- toc:start -->
 **Contents**
 
-- [Exercise 1 ★: Three version numbers](#exercise-1--three-version-numbers)
+- [Exercise 1 ★: Four version numbers](#exercise-1--four-version-numbers)
 - [Exercise 2 ★: Same server, two doors](#exercise-2--same-server-two-doors)
 - [Exercise 3 ★: `down` versus `down -v`](#exercise-3--down-versus-down--v)
 - [Exercise 4 ★★: Prove the compose file is in effect](#exercise-4--prove-the-compose-file-is-in-effect)
