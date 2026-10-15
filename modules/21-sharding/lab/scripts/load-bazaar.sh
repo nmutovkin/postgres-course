@@ -14,7 +14,8 @@
 #        about 3-4 minutes and 2 GB of disk.
 #
 # The database is left as an ORDINARY single-node database with the 2101
-# schema. scripts/citus-setup.sh then turns it into a Citus cluster.
+# schema. scripts/citus-init-nodes.sh and scripts/distribute.sql (all run by
+# scripts/citus-build.sh) then turn it into a Citus cluster.
 set -euo pipefail
 SIZE="${1:-small}"
 CONTAINER="${2:-m21-coord}"

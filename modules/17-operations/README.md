@@ -194,7 +194,7 @@ The **context** says when and by whom a parameter can be changed:
 
 | Context | Can be changed | Examples |
 |---|---|---|
-| `internal` | Never (compile-time or `initdb`-time) | `block_size`, `data_checksums` (until PG 18's online tooling) |
+| `internal` | Never (compile-time or `initdb`-time) | `block_size`, `data_checksums` (chosen at `initdb`, on by default since PG 18; `pg_checksums` can change it only while the cluster is stopped) |
 | `postmaster` | Only at server **start** (restart required) | `shared_buffers`, `max_connections`, `wal_level`, `shared_preload_libraries` |
 | `sighup` | In the config files, then **reload** | `autovacuum_naptime`, `checkpoint_timeout`, `max_wal_size`, `log_line_prefix` |
 | `superuser-backend`, `backend` | At connection start (in the connection string or `ALTER ROLE`), not later in the session | `log_connections` |
@@ -1614,7 +1614,7 @@ PgBouncer also has an **admin console**: connect to the virtual database `pgboun
 docker compose exec -e PGPASSWORD=postgres pg psql -h pgbouncer -p 6432 -U postgres pgbouncer -c 'SHOW POOLS'
 ```
 
-The most useful are `SHOW POOLS` (per pool: `cl_active` clients linked to a server connection, `cl_waiting` clients waiting for one, `sv_active`/`sv_idle` server connections, `maxwait` seconds the oldest client has waited), `SHOW STATS` (queries and transactions per second, average wait), `SHOW CLIENTS`, `SHOW SERVERS`, and `SHOW CONFIG`. The console also accepts `RELOAD` (re-read the config), `PAUSE`/`RESUME` (hold all traffic, for example during a failover, Module 20), and `SET` for some settings.
+The most useful are `SHOW POOLS` (per pool: `cl_active` clients that are linked to a server connection or are idle with no queries waiting, `cl_waiting` clients waiting for one, `sv_active`/`sv_idle` server connections, `maxwait` seconds the oldest client has waited), `SHOW STATS` (queries and transactions per second, average wait), `SHOW CLIENTS`, `SHOW SERVERS`, and `SHOW CONFIG`. The console also accepts `RELOAD` (re-read the config), `PAUSE`/`RESUME` (hold all traffic, for example during a failover, Module 20), and `SET` for some settings.
 
 ### 11.4 What pooling buys: pgbench
 

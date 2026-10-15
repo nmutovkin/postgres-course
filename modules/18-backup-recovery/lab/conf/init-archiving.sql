@@ -5,7 +5,7 @@
 -- We use ALTER SYSTEM (which writes postgresql.auto.conf) rather than
 -- `postgres -c ...` flags on purpose: command-line flags have higher priority
 -- than ALTER SYSTEM, so a setting passed with -c can never be changed later
--- with ALTER SYSTEM + reload. Section 7 changes archive_command at runtime.
+-- with ALTER SYSTEM + reload. Section 8 changes archive_command at runtime.
 ALTER SYSTEM SET wal_level = 'replica';            -- enough WAL for archiving/PITR (the default)
 ALTER SYSTEM SET archive_mode = 'on';              -- start the archiver (restart-only)
 ALTER SYSTEM SET archive_command = '/lab/scripts/archive-wal.sh %p %f';

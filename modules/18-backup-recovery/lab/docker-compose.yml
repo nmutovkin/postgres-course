@@ -4,7 +4,7 @@
 #
 #   cd modules/18-backup-recovery/lab
 #   docker compose up -d --build
-#   COURSE_PG_CONTAINER=m18-primary ../../../project/bin/reset.sh 16
+#   COURSE_PG_CONTAINER=m18-primary ../../../project/bin/reset.sh 11   # small dataset, see README "Before you start"
 #
 # All names start with m18- so the lab can run next to the main course-pg.
 name: m18-lab

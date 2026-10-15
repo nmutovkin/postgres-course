@@ -5,7 +5,7 @@
 > [← 17 Configuration, Maintenance and Monitoring](../17-operations/README.md) · [Course home](../../README.md) · [19 Replication →](../19-replication/README.md)
 <!-- nav:end -->
 
-Exercises 1, 4, 5 and 8 use the **course database** (`course-pg`) at the Module 16 state with the large dataset (`./project/bin/reset.sh 16`). All the others use the **lab server** `m18-primary` with the small dataset (`COURSE_PG_CONTAINER=m18-primary ../../../project/bin/reset.sh 11` from `modules/18-backup-recovery/lab`), with at least one base backup taken by `scripts/nightly-backup.sh`. Run shell commands from the lab directory unless stated otherwise. Inside the course container, put dump files under `/tmp/dumps`.
+Exercises 1, 4, 5 and 8 use the **course database** (`course-pg`) at the Module 18 state with the large dataset (`./project/bin/reset.sh 18`). All the others use the **lab server** `m18-primary` with the small dataset (`COURSE_PG_CONTAINER=m18-primary ../../../project/bin/reset.sh 11` from `modules/18-backup-recovery/lab`), with at least one base backup taken by `scripts/nightly-backup.sh`. Run shell commands from the lab directory unless stated otherwise. Inside the course container, put dump files under `/tmp/dumps`.
 
 Solutions are in [`solutions/README.md`](solutions/README.md).
 
@@ -61,7 +61,7 @@ For the newest backup under `/backups/base` in the lab, determine without starti
 
 Developers want a copy of Bazaar on their laptops, with every table, function, index and policy, but **without** the rows of the clickstream (`events` and all its partitions) and of `audit_log`, which are large and not needed for development. Produce a single dump file for this, restore it into a new database `bazaar_dev` on `course-pg`, and report the size of the dump and of the restored database.
 
-**Self-check:** in `bazaar_dev`, `events` has 0 rows but still has 25 partitions; `orders` has 500,000 rows. The dump is less than half the size of a full custom-format dump (about 65 MB versus 144 MB). Drop `bazaar_dev` afterwards.
+**Self-check:** in `bazaar_dev`, `events` has 0 rows but still has 25 partitions; `orders` has 500,000 rows. The dump is less than half the size of a full custom-format dump made with the same compression (with `-Z zstd`: about 65 MB versus 152 MB). Drop `bazaar_dev` afterwards.
 
 <details><summary>Hint</summary>
 
@@ -121,7 +121,7 @@ On `course-pg`, restore a directory-format dump of `bazaar` into fresh databases
 
 <details><summary>Hint</summary>
 
-Drop each database right after timing it: every copy is 1.5 GB. Think about which section contains the CPU-heavy work, what limits parallelism (the largest table, the number of cores) and what extra workers cost.
+Drop each database right after timing it: every copy is a full 1.5 GB `bazaar` database. Think about which section contains the CPU-heavy work, what limits parallelism (the largest table, the number of cores) and what extra workers cost.
 </details>
 
 ---

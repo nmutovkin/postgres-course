@@ -21,7 +21,7 @@ All outputs below come from a PostgreSQL 17 container started from the course's 
 
 <!-- toc:end -->
 
-## Exercise 1 ★: Three version numbers
+## Exercise 1 ★: Four version numbers
 
 ```sql
 SELECT version();                 -- (1) full string
@@ -66,7 +66,7 @@ You are connected to database "bazaar" as user "postgres" via socket in "/var/ru
 Through native psql (TCP via the published port):
 
 ```text
-You are connected to database "postgres" as user "postgres" on host "localhost" (address "127.0.0.1") at port "5433".
+You are connected to database "bazaar" as user "postgres" on host "localhost" (address "127.0.0.1") at port "5433".
 
  inet_server_addr | inet_client_addr | inet_server_port 
 ------------------+------------------+------------------

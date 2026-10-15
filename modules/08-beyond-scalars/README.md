@@ -1269,7 +1269,7 @@ A few practical rules:
 
 - **Validate what queries depend on**: keys that are filtered, sorted or joined on, and anything a cast in a query relies on. Leave purely descriptive keys free.
 - **Category-specific rules hard-code category ids** in the constraint, which is brittle. When the rules grow, move them into a function (module 09) or into a table of required keys per category checked by a trigger (also module 09). A `CHECK` constraint can call a function, but it must only look at the row itself. It must not query other tables, because PostgreSQL won't re-check the row when the other table changes.
-- **Adding a constraint scans the table** to check existing rows, while holding a lock that blocks writes. On a big table, use `ADD CONSTRAINT ... NOT VALID` (enforced for new writes only) and `VALIDATE CONSTRAINT` later, which takes a weaker lock. Module 26 covers this zero-downtime pattern.
+- **Adding a constraint scans the table** to check existing rows, while holding an `ACCESS EXCLUSIVE` lock that blocks reads as well as writes. On a big table, use `ADD CONSTRAINT ... NOT VALID` (enforced for new writes only) and `VALIDATE CONSTRAINT` later, which takes a weaker lock. Module 26 covers this zero-downtime pattern.
 - There's no built-in JSON Schema validator. Extensions such as `pg_jsonschema` add one if you need full JSON Schema.
 
 ---
@@ -2188,10 +2188,10 @@ The same applies to `products.status` (default `'draft'`) and `payments.status` 
 
 ```text
 before:  orders 16475   users 16387   products 16435
-after:   orders 16657   users 16667   products 16435
+after:   orders 16637   users 16661   products 16642
 ```
 
-`orders` was rewritten (enum conversion). So was `users`, because converting `email` to the `email_address` domain rewrites it: the domain has a constraint. `products` wasn't rewritten, even though it gained two columns: `ADD COLUMN` with a constant default only records the default in the catalog. On Bazaar's small tables, all of this takes milliseconds. On a 500-million-row `orders` table it could take an hour of downtime. Module 26 shows the zero-downtime alternative: add a new column, backfill it in batches, switch over, drop the old one.
+`orders` and `products` were rewritten (enum conversion of `status`). So was `users`, because converting `email` to the `email_address` domain rewrites it: the domain has a constraint. The two columns `products` gained didn't add to that: `ADD COLUMN` with a constant default only records the default in the catalog. On Bazaar's small tables, all of this takes milliseconds. On a 500-million-row `orders` table it could take an hour of downtime. Module 26 shows the zero-downtime alternative: add a new column, backfill it in batches, switch over, drop the old one.
 
 ### 18.2 The domain and the case-insensitive e-mail index
 

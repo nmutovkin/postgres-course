@@ -181,7 +181,7 @@ Read grants + a `FOR SELECT ... USING (true)` policy `TO bazaar_support` on the 
 
 ---
 
-## Exercise 9 ★★★: Reviews, per seller
+## Exercise 9 ★★: Reviews, per seller
 
 Extend RLS so a seller sees only the reviews of **their own products**. `reviews` currently has no RLS. Enable it, keep the app and read-only roles seeing everything, and add a seller policy. (A review links to a product via `reviews.product_id`.)
 

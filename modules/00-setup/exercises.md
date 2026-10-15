@@ -23,7 +23,7 @@ If you moved the server to another host port (`PGPORT_HOST`), use that port wher
 
 <!-- toc:end -->
 
-## Exercise 1 ★: Three version numbers
+## Exercise 1 ★: Four version numbers
 
 Find and write down:
 
@@ -44,7 +44,7 @@ Two of the answers come from SQL, two from `psql --version`. For the container's
 
 ## Exercise 2 ★: Same server, two doors
 
-Connect once with `./project/bin/psql.sh` and once with a native psql (`-h localhost`). In **each** session run:
+Connect to `bazaar` once with `./project/bin/psql.sh` and once with a native psql (`-h localhost -d bazaar`). In **each** session run:
 
 ```sql
 \conninfo

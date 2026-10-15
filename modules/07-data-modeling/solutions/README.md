@@ -162,7 +162,7 @@ LEFT JOIN LATERAL (
 
 **Reasoning.** "Changes" is the number of history rows minus one, the initial price. Ordered aggregates pick the first and last price per group without a self-join. (Module 06's `first_value`/`last_value` windows work too, with the frame caveat.)
 
-The check matters because `products.price` and the latest history row store the **same fact twice**: a deliberate denormalization (the current price is read constantly; the history rarely). Section 6.1's rules apply: one writer (module 09's trigger), and this check. The `LEFT JOIN LATERAL ... ON true` plus `IS DISTINCT FROM` makes a product *without* history count as a mismatch rather than vanishing from the result, which is the subtle part.
+The check matters because `products.price` and the latest history row store the **same fact twice**: a deliberate denormalization (the current price is read constantly; the history rarely). Section 6.1's rules apply: one writer (the trigger of module 09's exercise 4), and this check. The `LEFT JOIN LATERAL ... ON true` plus `IS DISTINCT FROM` makes a product *without* history count as a mismatch rather than vanishing from the result, which is the subtle part.
 
 **Alternative.** `DISTINCT ON (product_id) ... ORDER BY product_id, valid_from DESC` gives the latest row per product in one pass, which is faster than one lateral lookup per product when you need all products.
 
@@ -259,7 +259,7 @@ The titles come from `products` through the join, so a renamed product shows its
 4. **No `UNIQUE (provider, provider_ref)`** on payments: duplicate webhook deliveries could record a payment twice (exercise 1).
 5. **`addresses.country_code` has no format check**, although `sellers.country_code` does (`'^[A-Z]{2}$'`). Inconsistent rules for the same kind of value are a smell; module 08's domains solve it once.
 6. **Reviews by non-buyers are allowed** (user 7's review of product 1). That's a business decision more than a flaw, but it should be written down, and probably surfaced as "unverified" in the UI.
-7. **"Every product has at least one price history row" and "the latest history price equals `products.price`"** are not enforced (exercise 2's check). Module 09 adds the trigger.
+7. **"Every product has at least one price history row" and "the latest history price equals `products.price`"** are not enforced (exercise 2's check). Module 09's exercise 4 adds the trigger.
 
 ---
 

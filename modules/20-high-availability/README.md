@@ -68,7 +68,7 @@ High availability (HA) is the engineering that turns those forty minutes into ab
 
 <!-- toc:end -->
 
-## What you'll learn
+**What you'll learn**
 
 - How to reason about availability in numbers: nines, MTBF/MTTR, serial and parallel components, and RPO/RTO for HA.
 - The failure modes of a database cluster (crash, node loss, partition, full disk, slow node) and what automation should and should not do about each.
@@ -80,10 +80,10 @@ High availability (HA) is the engineering that turns those forty minutes into ab
 - The alternatives (repmgr, pg_auto_failover, CloudNativePG, managed services) and how to choose.
 - Operational practice: failure drills, monitoring, and upgrades of a Patroni cluster.
 
-## Before you start
+**Before you start**
 
 - You have finished [Module 19](../19-replication/): streaming replication, replication slots, synchronous replication (`synchronous_standby_names`, `synchronous_commit`), `pg_promote()`, timelines, and `pg_rewind`. This module builds on all of them and does not re-teach them.
-- This module does not use the single `course-pg` container. Its lab in [`lab/`](lab/) starts **eight containers**: three etcd members, three Patroni + PostgreSQL 17 nodes, HAProxy, and a client box. Plan for about 2 GB of free RAM, and about 3 GB of disk with the small Bazaar dataset or about 10 GB with the full one (three copies of it).
+- This module does not use the single `course-pg` container. Its lab in [`lab/`](lab/) starts **eight containers**: three etcd members, three Patroni + PostgreSQL 17 nodes, HAProxy, and a client box. Plan for about 2 GB of free RAM, and about 2 GB of disk in total with the small Bazaar dataset (reset state 11), or about 10 GB with the full one (reset state 20: about 3 GB per node, three copies).
 - Every container, network, and volume is prefixed with `m20-`, so the lab cannot collide with your course database. `./lab/scripts/down.sh` removes all of it.
 - The lab scripts are Bash and assume GNU `date` (Linux, WSL, or macOS with coreutils).
 
@@ -152,7 +152,7 @@ Backups and PITR give an RPO of "since the last archived WAL segment" and an RTO
 | Base backup + WAL archive (PITR) | ~1 WAL segment or `archive_timeout` | minutes to hours |
 | Manual failover to an async replica | the replica's lag (usually < 1 s) | 10 to 60 min (human) |
 | **Automatic failover, async replicas** | the replica's lag at the moment of failure | ~10 to 40 s |
-| **Automatic failover, synchronous replication** | **0** (with caveats, see Section 9) | ~10 to 40 s, plus some extra write latency at all times |
+| **Automatic failover, synchronous replication** | **0** (with caveats, see Section 10) | ~10 to 40 s, plus some extra write latency at all times |
 
 > **Pitfall:** HA is not a backup. A replica faithfully replays `DELETE FROM bazaar.orders;` within milliseconds. HA protects against *infrastructure* failure. Backups and PITR (Module 18) protect against *data* failure, such as bugs, bad migrations, and operator mistakes. You need both.
 
@@ -277,7 +277,7 @@ Electing a new primary is half the job. The other half is making sure the **old*
 - **STONITH** ("shoot the other node in the head"): power the old node off through an out-of-band channel, such as an IPMI/iLO controller, a PDU, or the cloud provider's "stop instance" API, *before* promoting the replacement. It is crude and effective, but needs a working out-of-band path, and that path may be affected by the very failure you are handling.
 - **Resource fencing:** cut the old primary off from what it needs. Detach its storage volume, revoke it from a SAN, move the virtual IP away, or remove it from the load balancer.
 - **Self-fencing:** the node fences *itself*. It holds the primary role only while it holds a time-limited **lease**, and it demotes itself when it cannot renew the lease. This needs no out-of-band control, but it depends on the node being healthy enough to notice and act. A node frozen by the kernel cannot demote itself.
-- **Watchdog:** backs up self-fencing with hardware or a kernel timer. If the HA agent stops "petting" the watchdog before the lease expires, the kernel reboots the machine. A frozen node gets reset instead of waking up later still believing it is primary (Section 12).
+- **Watchdog:** backs up self-fencing with hardware or a kernel timer. If the HA agent stops "petting" the watchdog before the lease expires, the kernel reboots the machine. A frozen node gets reset instead of waking up later still believing it is primary (Section 11.6).
 - **Client-side fencing:** route clients only to the node that *currently* holds the lease, and cut existing connections to a node the moment it loses it. This doesn't stop the old node from accepting writes. It stops anyone from *sending* them.
 
 Production systems layer several of these. Patroni uses self-fencing through a lease, optionally backed by a watchdog, plus client-side fencing through REST health checks.
@@ -421,7 +421,7 @@ What the knobs mean in practice:
 - After a **clean shutdown** or a **switchover**, the old leader *deletes* the key itself, so failover takes a couple of seconds.
 - When the primary is **cut off from the DCS**, it demotes itself after roughly `loop_wait` plus `retry_timeout`. That is *before* the others can elect a replacement (`ttl`). The gap between the two is the margin that prevents split-brain.
 
-Section 13 measures all three in the lab.
+Section 12 measures all three in the lab.
 
 ---
 
@@ -999,7 +999,7 @@ During the drills, the write loop recorded these errors, in roughly this order:
 | Error | SQLSTATE | When |
 |---|---|---|
 | `server closed the connection unexpectedly` | `08006` (connection failure) | the primary process or node died under an open connection |
-| `terminating connection due to administrator command` | `57P01` (admin_shutdown) | clean shutdown, switchover, or HAProxy killing sessions on the demoted node |
+| `terminating connection due to administrator command` | `57P01` (admin_shutdown) | the server shut down under an open connection: a clean stop, or the old primary during a switchover |
 | `the database system is shutting down` / `is starting up` | `57P03` (cannot_connect_now) | connecting during a stop or start |
 | `cannot execute INSERT in a read-only transaction` | `25006` (read_only_sql_transaction) | the connection is attached to a node that is now a replica (seen after the DCS-loss demotion) |
 | `connection timeout expired` / `session is read-only` | (client side) | no primary available yet: HAProxy has no server up, or libpq found only replicas |

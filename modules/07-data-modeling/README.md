@@ -154,7 +154,7 @@ ER diagrams are usually drawn in **crow's foot** notation, which Mermaid support
 | `}\|` | ─<┼ | one or more |
 | `}o` | ─<○ | zero or more |
 
-`USERS ||--o{ ADDRESSES : stores` reads: "one user stores zero or more addresses; each address belongs to exactly one user." A solid line (`--`) marks an *identifying* relationship (the child's key includes the parent's key, like `order_items` including `order_id`); a dashed line (`..`) a non-identifying one.
+`USERS ||--o{ ADDRESSES : stores` reads: "one user stores zero or more addresses; each address belongs to exactly one user." Formally, Mermaid's solid line (`--`) marks an *identifying* relationship (the child's key includes the parent's key, like `order_items` including `order_id`) and a dashed line (`..`) a non-identifying one. The diagram below doesn't keep to that distinction: it draws solid lines throughout and uses the dashed line only to make the optional `ships` relationship stand out. Read identifying relationships off the `PK,FK` columns instead.
 
 Here is Bazaar v2. The v1 tables are included so the new relationships make sense, with only their key columns shown:
 
@@ -673,7 +673,8 @@ The BCNF decomposition is:
 ```sql
 CREATE TABLE carriers (
     carrier       text PRIMARY KEY,
-    country_code  char(2) NOT NULL
+    country_code  char(2) NOT NULL,
+    UNIQUE (carrier, country_code)   -- target for the composite FK mentioned below
 );
 CREATE TABLE seller_carriers (
     seller_id  bigint,
@@ -1257,7 +1258,7 @@ LEFT JOIN LATERAL (
 
 (In a real marketplace, promotions and coupons would make some differences legitimate. Bazaar's promotions arrive in module 08 and are deliberately not applied to past orders.)
 
-Who writes the history rows? Every price change must insert one, in the same transaction as the `UPDATE` of `products.price`. Forgetting that in one code path breaks the history forever. Module 09 makes it automatic with a trigger.
+Who writes the history rows? Every price change must insert one, in the same transaction as the `UPDATE` of `products.price`. Forgetting that in one code path breaks the history forever. Module 09's exercise 4 makes it automatic with a trigger.
 
 ### 9.3 Soft delete versus hard delete
 
@@ -1362,12 +1363,13 @@ Name constraints explicitly, as Bazaar does for its `CHECK`s. An error message t
 Every PostgreSQL object can carry a comment, stored in the catalog and shown by psql and GUI tools. It's the right place for the things a column name can't say: units, meaning, invariants, and the reasons behind deliberate denormalizations.
 
 ```sql
+BEGIN;
 COMMENT ON TABLE payments IS 'Payment attempts and refunds (negative amounts) per order.';
 COMMENT ON COLUMN payments.amount IS 'Positive = charge, negative = refund. Never 0.';
 COMMENT ON COLUMN payments.provider_ref IS 'Transaction id at the provider; NULL until the provider confirms.';
 ```
 
-`\d+ payments` shows the column comments in its "Description" column, and `\dt+` shows table comments. To produce a data dictionary from SQL, use `obj_description()` and `col_description()`:
+Like the other examples that change the database, this runs inside a transaction, which stays open for the queries below and is rolled back at the end. `\d+ payments` shows the column comments in its "Description" column, and `\dt+` shows table comments. To produce a data dictionary from SQL, use `obj_description()` and `col_description()`:
 
 ```sql
 SELECT c.relname AS table_name, obj_description(c.oid, 'pg_class') AS description
@@ -1413,6 +1415,10 @@ ORDER BY a.attnum;
  status       | text                     | t        | 
  created_at   | timestamp with time zone | t        | 
 (7 rows)
+```
+
+```sql
+ROLLBACK;   -- the table comment is in the schema already; the column comments were only for this demonstration
 ```
 
 Comments are part of the schema, so they belong in migrations, next to the `CREATE TABLE`. They travel with `pg_dump` (module 18). A comment that explains *why* (`'Denormalised: ...'`) is worth more than one that repeats the name (`'The amount'`).

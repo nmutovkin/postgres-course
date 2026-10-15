@@ -580,7 +580,7 @@ FROM heap_page_items(get_raw_page('lab.page_demo', 0)),
 (3 rows)
 ```
 
-`HEAP_HASVARWIDTH` says the row contains a variable-width column (`label`). `HEAP_XMAX_INVALID` says "there is no deleter". Notice the new flag `HEAP_XMIN_COMMITTED` that was not there before the `SELECT` in the previous step. That's a **hint bit**, and section 6.4 explains who set it and why.
+`HEAP_HASVARWIDTH` says the row contains a variable-width column (`label`). `HEAP_XMAX_INVALID` says "there is no deleter". `HEAP_XMIN_COMMITTED` is different: it was not set when the rows were inserted, but by the first query that read them after the insert committed. That's a **hint bit**, and section 6.4 explains who set it and why.
 
 ### 5.2 The null bitmap
 
@@ -771,7 +771,7 @@ A **snapshot** answers one question: *which transactions' effects may I see?* It
 -- Session A
 BEGIN;
 UPDATE lab.page_demo SET label = 'apricot' WHERE id = 1;
-SELECT pg_current_xact_id();
+SELECT pg_current_xact_id() AS session_a_xid;
 ```
 
 Meanwhile some other transaction starts and commits. We simulate one in session B: in autocommit mode, `pg_current_xact_id()` assigns an XID and the statement commits immediately. Then B takes a snapshot and reads the row:
@@ -960,7 +960,7 @@ UPDATE 1
 (7 rows)
 ```
 
-Line pointer 2 (the old "banana") now has `xmax` set and `t_ctid = (0,6)`, pointing to the new "blueberry" version in line pointer 6.
+Line pointer 2 (the old "banana") now has `xmax` set and `t_ctid = (0,7)`, pointing to the new "blueberry" version in line pointer 7. (Line pointer 6 is the "apricot" version from the rolled-back transaction above.)
 
 ### 7.2 Heap-only tuples (HOT)
 
@@ -1170,7 +1170,7 @@ INSERT 0 4
 (4 rows)
 ```
 
-- Row 1 is small: stored as is (plus a 4-byte header).
+- Row 1 is small: stored as is (plus a 1-byte short varlena header, section 4.2).
 - Row 2 crossed the threshold, compressed to under 100 bytes, and stayed **inline**, compressed.
 - Row 3 did not compress well enough, so it was moved **out of line** uncompressed.
 - Row 4 compressed by a factor of almost 90, but even compressed it is larger than 2 KB, so it is compressed **and** out of line.
@@ -1200,7 +1200,7 @@ GROUP BY chunk_id ORDER BY chunk_id;
 (2 rows)
 ```
 
-Two out-of-line values: row 3 (6400 bytes = 3 full chunks of 1996 + a remainder) and row 4 (its 26 KB of compressed data).
+Two out-of-line values: row 3 (6400 bytes = 3 full chunks of 1996 + a remainder) and row 4 (its 24,053 bytes, about 24 KB, of compressed data).
 
 Changing the strategy or the compression method affects values stored **from then on**:
 
@@ -1410,9 +1410,10 @@ Let's crash the server. Not the whole container, just one backend, killed with `
 CREATE TABLE lab.crash_demo (id int, note text);
 INSERT INTO lab.crash_demo SELECT g, 'committed before the crash' FROM generate_series(1, 1000) g;
 SELECT pg_backend_pid();
+SELECT pg_sleep(60);
 ```
 
-Now, from a second terminal, kill that backend with `SIGKILL` (use the PID you got) and look at the server log:
+While `pg_sleep(60)` is still running, kill that backend from a second terminal with `SIGKILL` (use the PID you got) and look at the server log:
 
 ```bash
 docker exec course-pg kill -9 12345          # your PID here

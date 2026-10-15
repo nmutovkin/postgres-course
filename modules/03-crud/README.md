@@ -1735,7 +1735,7 @@ DETAIL:  Key (id)=(5) is still referenced from table "order_items".
 ROLLBACK;
 ```
 
-A `DELETE` that matches several rows is all-or-nothing too: `DELETE FROM products WHERE status = 'archived'` fails as a whole because of product 5, and the three deletable archived products stay as well. Exercise 11 asks you to delete exactly the ones that can go.
+A `DELETE` that matches several rows is all-or-nothing too: `DELETE FROM products WHERE status = 'archived'` fails as a whole because of product 5, so product 61, the one archived product that was never ordered (5, 23 and 38 all were), stays as well. Exercise 11 asks you to delete exactly the ones that can go.
 
 > **In production:** a `DELETE` of millions of rows in one statement holds its row locks until it commits, generates a lot of write-ahead log (which replicas must replay, module 19), and leaves millions of dead rows for `VACUUM`. Large clean-ups are usually done in batches (`DELETE ... WHERE id IN (SELECT id ... LIMIT 10000)`, repeated until `DELETE 0`), each in its own short transaction. For time-based data, partitioning (module 14) turns "delete last year" into dropping a partition, which is instant.
 
@@ -1771,7 +1771,7 @@ HINT:  Truncate table "order_items" at the same time, or use TRUNCATE ... CASCAD
 ROLLBACK;
 ```
 
-`TRUNCATE orders, order_items` (or `TRUNCATE orders CASCADE`) works. `TRUNCATE` is the tool for emptying staging tables, resetting test databases (`TRUNCATE users, sellers, ... RESTART IDENTITY`), and clearing out data you're about to reload. It isn't for production tables that other sessions are using: its exclusive lock blocks them all. (Module 09 notes that `TRUNCATE` also bypasses the row-level triggers that keep `orders.total` correct.)
+`TRUNCATE orders, order_items` (or `TRUNCATE orders CASCADE`) works. `TRUNCATE` is the tool for emptying staging tables, resetting test databases (`TRUNCATE users, sellers, ... RESTART IDENTITY`), and clearing out data you're about to reload. It isn't for production tables that other sessions are using: its exclusive lock blocks them all. (Module 09 notes that `TRUNCATE` also bypasses the triggers that keep `orders.total` correct, which fire on `INSERT`, `UPDATE` and `DELETE`.)
 
 ---
 

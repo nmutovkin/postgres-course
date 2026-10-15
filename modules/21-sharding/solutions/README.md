@@ -1,4 +1,4 @@
-# Module 21 solutions
+# Module 21: Solutions
 
 <!-- nav:start -->
 > [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
@@ -38,7 +38,7 @@ All SQL was run on the module's lab: Citus 14.2 on PostgreSQL 17.10 (`citus-buil
 
 <!-- toc:end -->
 
-## Exercise 1: Pick the shard key
+## Exercise 1 ★: Pick the shard key
 
 There is no single right answer. What matters is that you weigh cardinality, distribution, locality and co-location explicitly.
 
@@ -55,7 +55,7 @@ There is no single right answer. What matters is that you weigh cardinality, dis
 
 ---
 
-## Exercise 2: Router or multi-shard?
+## Exercise 2 ★: Router or multi-shard?
 
 ```text
 a  Task Count: 1     both columns of products' key, seller_id = 3 prunes
@@ -78,7 +78,7 @@ The general rule: `EXPLAIN` every query on the hot path and assert `Task Count: 
 
 ---
 
-## Exercise 3: Where would seller 42 live?
+## Exercise 3 ★: Where would seller 42 live?
 
 `ex03_where_is_seller42.sql`:
 
@@ -140,7 +140,7 @@ ORDER BY table_name::text;
 
 ---
 
-## Exercise 4: Measure the skew, without Citus
+## Exercise 4 ★★: Measure the skew, without Citus
 
 `ex04_skew.sql` on a single-node large Bazaar:
 
@@ -175,7 +175,7 @@ What to conclude: with a Zipf-distributed tenant size, per-shard balance is impo
 
 ---
 
-## Exercise 5: Make them co-located
+## Exercise 5 ★★: Make them co-located
 
 All five originals fail on Citus:
 
@@ -288,7 +288,7 @@ Or keep the recursion, but isolate it in a `MATERIALIZED` CTE that touches only 
 
 ---
 
-## Exercise 6: Global IDs
+## Exercise 6 ★★: Global IDs
 
 **1. Offset sequences.**
 
@@ -349,7 +349,7 @@ The same `INSERT` on the coordinator returned the next small id (123 in our run)
 
 ---
 
-## Exercise 7: Clean up after a failed two-phase commit
+## Exercise 7 ★★: Clean up after a failed two-phase commit
 
 After `./scripts/2pc-drill.sh`:
 
@@ -431,7 +431,7 @@ Alert on any row, on every node. Also alert on `age(datfrozenxid)` growing (Modu
 
 ---
 
-## Exercise 8: postgres_fdw pushdown puzzles
+## Exercise 8 ★★: postgres_fdw pushdown puzzles
 
 From `ex08_fdw_puzzles.sql`:
 
@@ -456,7 +456,7 @@ c versus d is the most surprising pair. Write small helper functions in SQL rath
 
 ---
 
-## Exercise 9: Reference or distributed?
+## Exercise 9 ★★: Reference or distributed?
 
 `ex09_new_tables.sql`. The decisions:
 
@@ -533,7 +533,7 @@ CONTEXT:  while executing command on m21-worker1:5432
 
 ---
 
-## Exercise 10: Give the biggest seller a node of its own
+## Exercise 10 ★★★: Give the biggest seller a node of its own
 
 `ex10_isolate_seller1.sql`, after adding `m21-worker3`:
 
@@ -577,7 +577,7 @@ Isolating early, while a tenant is still moderately large, is cheaper than isola
 
 ---
 
-## Exercise 11: Distribute the clickstream
+## Exercise 11 ★★★: Distribute the clickstream
 
 `ex11_distribute_events.sql`:
 
@@ -634,7 +634,7 @@ One node, one shard, one partition, and the new primary key `(session_id, id, oc
 
 ---
 
-## Exercise 12: Rebalance the application-level shards
+## Exercise 12 ★★★: Rebalance the application-level shards
 
 ```bash
 docker exec m21-app python router.py dashboard 2

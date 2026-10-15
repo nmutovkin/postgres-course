@@ -339,7 +339,7 @@ Run B:
 BEGIN
 INSERT 0 1
 psql:/tmp/tx.sql:3: ERROR:  null value in column "task" of relation "launch_checklist" violates not-null constraint
-DETAIL:  Failing row contains (9, null, null, f, null).
+DETAIL:  Failing row contains (7, null, null, f, null).
 INSERT 0 1
 COMMIT
 ```
@@ -351,7 +351,7 @@ COMMIT
 - **C:** `interactive` only activates when psql reads from a terminal. `-f` isn't interactive, so C behaves exactly like A. This is the reason to choose `interactive`.
 - **D:** psql stops at the error and exits with 3. The connection closes with the transaction still open, and the server rolls back any transaction whose connection goes away.
 
-Notice the ids in the `DETAIL` lines (7, 9): failed inserts still consume identity values, and rolled-back transactions don't give them back. Identity and sequence values are never "gap-free". Module 02 returns to this.
+Notice the ids: in run B the failed insert used id 7, and the rows kept are 6 and 8 (`SELECT id, task FROM launch_checklist WHERE id > 5`). Failed inserts still consume identity values, and rolled-back statements don't give them back. Identity and sequence values are never "gap-free". Module 02 returns to this.
 
 **The production recipe** is D plus `-1`: one transaction, stop at the first error, non-zero exit status.
 

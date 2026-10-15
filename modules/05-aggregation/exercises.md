@@ -40,7 +40,7 @@ Solutions: [solutions/README.md](solutions/README.md).
 
 For each order status, show the number of orders, its percentage of all orders, the summed order value, and its percentage of all order value. Percentages with one decimal. Largest value first.
 
-**Self-check:** 6 rows. `delivered`: 91 orders, 75.8 %, 42,136.29, 76.1 %. Each percentage column adds up to 100 (give or take rounding). If a percentage column shows only 0s and a 75, check your integer division.
+**Self-check:** 6 rows. `delivered`: 91 orders, 75.8 %, 42,136.29, 76.1 %. Each percentage column adds up to 100 (give or take rounding). If the order percentages show only 0s, or whole numbers such as 75 and 8, check your integer division.
 
 <details><summary>Hint</summary>
 

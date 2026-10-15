@@ -28,7 +28,7 @@ A three-node PostgreSQL 17 cluster managed by Patroni, with a three-member etcd 
 ```bash
 ./scripts/up.sh                 # build m20-patroni:17 (first time) and start everything
 ./scripts/load-bazaar.sh        # Bazaar at reset state 20, loaded into the current leader
-./scripts/load-bazaar.sh 11     # ...or the small dataset (seconds, ~1 GB instead of ~10 GB of disk)
+./scripts/load-bazaar.sh 11     # ...or the small dataset (seconds, ~2 GB instead of ~10 GB of disk in total)
 ./scripts/cluster.sh            # patronictl list
 ./scripts/failover-drill.sh kill
 ./scripts/down.sh               # remove containers, network, and volumes (--image: also the image)
@@ -38,7 +38,7 @@ From your machine you can also connect through HAProxy: `psql "host=127.0.0.1 po
 
 **If `apt-get` fails while building** (some corporate networks block the Debian mirrors), build the fallback image, which copies Python from the official `python` image instead: `M20_DOCKERFILE=Dockerfile.prebuilt ./scripts/up.sh`. It has no `curl`/`jq`; use `./scripts/rest.sh` for the REST API.
 
-**Resources:** about 2 GB of RAM. Disk: the image is about 0.8 GB; with the small dataset the volumes use about 2 GB (mostly WAL that Patroni-managed Postgres keeps up to `max_wal_size`). The full reset state 20 is about 2 GB of data per node *times three*, plus WAL while loading: plan for about 10 GB. The scripts assume Bash and GNU `date` (Linux, WSL, or macOS with coreutils).
+**Resources:** about 2 GB of RAM. Disk: the image is about 0.8 GB; with the small dataset (reset state 11) the volumes use about 2 GB in total (mostly WAL that Patroni-managed Postgres keeps up to `max_wal_size`). The full reset state 20 is about 2 GB of data per node, about 3 GB with WAL, *times three*: plan for about 10 GB. The scripts assume Bash and GNU `date` (Linux, WSL, or macOS with coreutils).
 
 ## Files
 

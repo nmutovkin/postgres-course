@@ -394,7 +394,7 @@ Zero rows. `products` and `sellers` share **two** names, `id` and `created_at`, 
 
 That's why experienced people treat `NATURAL JOIN` as a bug waiting to happen:
 
-> **Pitfall:** A `NATURAL JOIN` means something different every time somebody adds a column. Add `updated_at` to two tables (module 09 does exactly that for `products` and `orders`), and every natural join between them suddenly also requires equal `updated_at` values, returning far fewer rows. Nothing in the query text changed. Never use `NATURAL JOIN` in code that lives longer than one interactive session. Use `ON`, and `USING` only when the shared name is a deliberate convention.
+> **Pitfall:** A `NATURAL JOIN` means something different every time somebody adds a column. Add `updated_at` to a second table (`products` already has one, and module 09 adds it to `orders`), and every natural join between them suddenly also requires equal `updated_at` values, returning far fewer rows. Nothing in the query text changed. Never use `NATURAL JOIN` in code that lives longer than one interactive session. Use `ON`, and `USING` only when the shared name is a deliberate convention.
 
 ## 5. Outer joins: keeping the rows that found no partner
 
@@ -669,7 +669,7 @@ Four problems in one result: a saucepan miscounted (17 counted, 18 in the system
 Three details:
 
 - `(SELECT * FROM products WHERE seller_id = 3) AS p` is a **subquery in `FROM`** (a derived table, section 10.3). We need it because filtering `products` in `WHERE` (`p.seller_id = 3`) would, by the rule of 5.3, also drop the unknown-SKU row whose `p` columns are all `NULL`. Restricting a table *before* a full join is easiest done this way.
-- `coalesce(c.sku, p.sku)` picks whichever side is present, because either could be `NULL`. (`JOIN ... USING (sku)` would do that automatically, if both sides had a column named `sku`.)
+- `coalesce(c.sku, p.sku)` picks whichever side is present, because either could be `NULL`. (Both sides have a column named `sku`, so `FULL JOIN ... USING (sku)` would do that automatically: its merged `sku` column is the non-`NULL` one. Here we join on `c.sku = p.sku` and coalesce by hand.)
 - The `WHERE` here filters on conditions that are true for padded rows (`c.sku IS NULL OR p.id IS NULL`), so it keeps them on purpose. That's the reconciliation pattern: full join, then keep everything that isn't a clean match.
 
 ## 6. Self joins
@@ -962,7 +962,7 @@ How do you know you're at risk? Use the grain check from section 7: as soon as a
 Module 05 covers the systematic fix (aggregate each child table separately, *then* join the results) in detail, because that's where these bugs usually live. For this module, two takeaways:
 
 - When you need a filter on a child table but values from the parent ("orders that contain a laptop"), don't join the child: test for its existence with `EXISTS`. That's the next section.
-- Before trusting a sum over a join, compare the row count with what the grain should be. "Orders of seller 1" should be 38 rows. If the join produces 85, it fanned out.
+- Before trusting a sum over a join, compare the row count with what the grain should be. "Orders of seller 1" should be 38 rows. If the join produces 67, it fanned out.
 
 ## 9. Semi-joins and anti-joins: `EXISTS`, `IN`, `NOT EXISTS`, `NOT IN`
 
@@ -1443,7 +1443,7 @@ Some details:
 - **Order matters in `FROM`.** The lateral subquery can only see tables listed before it.
 - **Tie-breaking.** `ORDER BY price DESC LIMIT 3` with two products at the same price picks arbitrarily between them, and the choice can change between runs. Add a unique column as the last sort key (`p.id` above) to make "top N" deterministic. This applies to every `ORDER BY ... LIMIT`.
 - **Set-returning functions are implicitly lateral.** `FROM orders o, generate_series(1, o.id)` (or any function in `FROM` that takes another table's column) works without the keyword.
-- **Performance.** A lateral subquery with `ORDER BY ... LIMIT` per outer row is fast when an index supports it (here, an index on `products (seller_id, price)`, module 11), because each execution reads only a few index entries. Without an index it scans for every outer row.
+- **Performance.** A lateral subquery with `ORDER BY ... LIMIT` per outer row is fast when an index supports it (here, an index such as `products (seller_id, price)`; module 11 covers index design), because each execution reads only a few index entries. Without an index it scans for every outer row.
 
 Two other tools solve "top N per group" and "latest per group": `DISTINCT ON` in module 05 (only for N = 1) and window functions like `row_number()` in module 06. You'll compare all three there.
 

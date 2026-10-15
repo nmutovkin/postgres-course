@@ -61,7 +61,7 @@ A `.psqlrc` for your **native** psql (or copied into the container with `docker 
 - keeps a larger, de-duplicated history;
 - loads silently, without "Null display is ..." lines at start-up.
 
-Add anything else you find useful, such as saved queries in variables. Keep a copy at `workspace/01/psqlrc` so it's versioned with your other work (as a plain file, `workspace/` is git-ignored).
+Add anything else you find useful, such as saved queries in variables. Keep a copy at `workspace/01/psqlrc`, with your other workspace files (`workspace/` is git-ignored, so version it in your own repository if you like).
 
 ### 3. `workspace/01/db_report.sql`: the database report
 

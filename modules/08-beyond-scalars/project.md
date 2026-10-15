@@ -70,7 +70,7 @@ docker exec -i course-pg psql -X -U postgres -d bazaar -v ON_ERROR_STOP=1 < my_0
    - product **62**: the empty object `{}`.
 
    Tags are lowercase words such as `laptop`, `gaming`, `bestseller`, `book`, `sci-fi`, `clothing` and `usb-c`. If you'd rather spend your time on the schema, you may write the seed for the laptops and books only and then apply the reference seed `project/db/0802_seed_types.sql` *instead of* your own. The exercises assume the reference values.
-6. Insert the nine promotions with **fixed ids** 1–9 exactly as listed in [`project/db/NOTES.md`](../../project/db/NOTES.md) and the reference seed (products 47 and 48 open-ended from 2025-06-20; product 10 twice: Black Friday 2024 and June 1–15, 2025), and make the next generated id 10. (An identity column needs `OVERRIDING SYSTEM VALUE` to accept explicit ids.)
+6. Insert the nine promotions with **fixed ids** 1–9 exactly as listed in [section 16.1 of the README](README.md#161-built-in-range-types-and-bounds) and the reference seed `project/db/0802_seed_types.sql` (products 47 and 48 open-ended from 2025-06-20; product 10 twice: Black Friday 2024 and June 1–15, 2025), and make the next generated id 10. (An identity column needs `OVERRIDING SYSTEM VALUE` to accept explicit ids.)
 
 ## Acceptance checks
 
@@ -98,10 +98,10 @@ Two more checks to run by hand:
 SELECT to_regtype('order_status') IS NULL AS rolled_back;   -- t
 
 -- nothing else changed: the sanity checks still pass
-\i project/db/tools/check.sql
+\i /course/project/db/tools/check.sql
 ```
 
-(Run `\i` from a psql whose working directory is the repository, or pipe the file in with `docker exec -i`.)
+(`/course/project` is where the repository's `project/` directory is mounted inside the container. From a shell, `./project/bin/psql.sh < project/db/tools/check.sql` does the same.)
 
 ## Reference solution
 

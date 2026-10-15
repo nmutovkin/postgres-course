@@ -462,7 +462,7 @@ ORDER BY s.id;
 (6 rows)
 ```
 
-Each `FILTER` sees only its own subset of each group's rows. The same group is scanned once, and seven aggregates are computed from it in a single pass. That's much cheaper than seven separate queries, and it guarantees the columns are consistent with each other (the row totals add up).
+Each `FILTER` sees only its own subset of each group's rows. The same group is scanned once, and six aggregates are computed from it in a single pass. That's much cheaper than six separate queries, and it guarantees the columns are consistent with each other (the row totals add up).
 
 `FILTER` is standard SQL, but not every database supports it. The portable spelling uses `CASE` inside the aggregate, relying on the fact that aggregates ignore `NULL`s:
 
@@ -638,7 +638,7 @@ ORDER BY user_id;
 (9 rows)
 ```
 
-They read better than the counting equivalents (`count(*) FILTER (WHERE status <> 'delivered') = 0`), and they compose nicely with `HAVING`: `HAVING bool_and(status = 'delivered')` keeps the groups where everything was delivered. Like the "for all" queries in module 04, `bool_and` over a group whose conditions are all `NULL` returns `NULL`, not true.
+They read better than the counting equivalents (`count(*) FILTER (WHERE status <> 'delivered') = 0`), and they compose nicely with `HAVING`: `HAVING bool_and(status = 'delivered')` keeps the groups where everything was delivered. Unlike the "for all" queries in module 04 (`ALL` over an empty set is true), `bool_and` over a group whose conditions are all `NULL` returns `NULL`, not true.
 
 ## 7. Ordered-set aggregates: medians, percentiles and the mode
 
@@ -956,7 +956,7 @@ WHERE id IN (17, 48, 71, 93);
 
 Order 71 was placed on 1 February in UTC, but on the evening of 31 January in Los Angeles. Order 17 goes the other way: 31 March in UTC and Los Angeles, already 1 April in Tokyo.
 
-`ts AT TIME ZONE 'zone'` converts a `timestamptz` into the local wall-clock time (a plain `timestamp`) in that zone, and `date_trunc` then truncates the wall-clock time, so the month is the local month. PostgreSQL 12+ also has a three-argument form, `date_trunc('month', ts, 'Asia/Tokyo')`, which returns a `timestamptz`: *the instant* the Tokyo month began, 15:00 UTC on the last day of the previous month. Casting that to `date` in a UTC session prints the previous day, a classic source of off-by-one bugs, so for labels use the `AT TIME ZONE` form. Either way, decide which zone defines your business month (often the zone of the company's accounting) and write it into the query. NOTES.md fixes Bazaar's reporting zone as UTC, and module 09's `seller_sales_daily` uses UTC days too. A report built from the session's zone gives different numbers to different users, and nobody can tell why.
+`ts AT TIME ZONE 'zone'` converts a `timestamptz` into the local wall-clock time (a plain `timestamp`) in that zone, and `date_trunc` then truncates the wall-clock time, so the month is the local month. PostgreSQL 12+ also has a three-argument form, `date_trunc('month', ts, 'Asia/Tokyo')`, which returns a `timestamptz`: *the instant* the Tokyo month began, 15:00 UTC on the last day of the previous month. Casting that to `date` in a UTC session prints the previous day, a classic source of off-by-one bugs, so for labels use the `AT TIME ZONE` form. Either way, decide which zone defines your business month (often the zone of the company's accounting) and write it into the query. Bazaar's convention is UTC: module 09's `seller_sales_daily` uses UTC days (NOTES.md documents its `day` column as the UTC day). A report built from the session's zone gives different numbers to different users, and nobody can tell why.
 
 ### 10.2 Missing buckets vanish
 
@@ -1040,7 +1040,7 @@ Six rows, zeros where there were no sales. Every detail of that query matters:
 - **All order conditions are in `ON`**, not in `WHERE`. A `WHERE o.seller_id = 4` would remove the padded rows of empty months and undo the whole exercise (module 04, section 5.3).
 - **`count(o.id)`, not `count(*)`**: the padded row of an empty month would count as 1 (section 2.3).
 - **`coalesce(sum(...), 0)`**: the sum over a padded row is `NULL`.
-- **The join condition is a range** (`>= month AND < month + 1 month`) rather than `date_trunc('month', o.created_at) = g.month`. Both are correct, but the range form lets the planner use an index on `orders.created_at` (module 11), while wrapping the column in a function prevents it. This "keep the column bare" habit is worth forming now.
+- **The join condition is a range** (`>= month AND < month + 1 month`) rather than `date_trunc('month', o.created_at) = g.month`. Both are correct, but the range form lets the planner use an index such as one on `orders.created_at` (module 11 covers index design), while wrapping the column in a function prevents it. This "keep the column bare" habit is worth forming now.
 
 ### 10.4 One series per seller: `CROSS JOIN` the calendar
 
@@ -1275,7 +1275,7 @@ You don't need to tune queries yet (module 12 does that properly), but it helps 
 
 PostgreSQL has two main strategies for grouping:
 
-- **`HashAggregate`**: read the input once, keep a hash table with one entry per group (key → running aggregate state), update the entry for each row, and emit all groups at the end. The input doesn't need any order, and the output comes out in hash order, which is effectively random. Memory grows with the **number of groups**, not the number of rows. If the hash table exceeds `work_mem` (4 MB by default), PostgreSQL 13 and later spill parts of it to disk, which works but is slower.
+- **`HashAggregate`**: read the input once, keep a hash table with one entry per group (key → running aggregate state), update the entry for each row, and emit all groups at the end. The input doesn't need any order, and the output comes out in hash order, which is effectively random. Memory grows with the **number of groups**, not the number of rows. If the hash table exceeds `work_mem` × `hash_mem_multiplier` (4 MB × 2.0 = 8 MB by default since PostgreSQL 15), PostgreSQL 13 and later spill parts of it to disk, which works but is slower.
 - **`GroupAggregate`**: requires input **sorted** by the grouping keys, walks it, and emits a group each time the key changes. It needs almost no memory and produces sorted output, but if the input isn't already sorted (by an index, or by an earlier step), it needs a `Sort` first, which costs O(n log n) and possibly disk.
 
 `EXPLAIN` shows which one the planner picked:

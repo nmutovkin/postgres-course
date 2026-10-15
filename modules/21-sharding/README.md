@@ -69,7 +69,7 @@ Bazaar's board has a slide titled "10× in two years". Marketing wants every sel
 
 <!-- toc:end -->
 
-## What you'll learn
+**What you'll learn**
 
 - When you actually need sharding, and the cheaper alternatives to exhaust first (a bigger server, read replicas, partitioning, archiving, caching).
 - The core vocabulary: shard, shard key (distribution column), logical shard versus physical node, router, coordinator.
@@ -83,7 +83,7 @@ Bazaar's board has a slide titled "10× in two years". Marketing wants every sel
 - Approach 3: **Citus**: coordinator, workers and metadata; distributed, reference and co-located tables; router versus multi-shard plans; repartition joins; distributed transactions; the shard rebalancer and tenant isolation; schema-based sharding; columnar storage; the limitations, and why Bazaar needs the `2101` migration.
 - What sharding costs you in day-to-day operations.
 
-## Before you start
+**Before you start**
 
 This module has its own lab in `modules/21-sharding/lab/`: one Docker Compose file with a Citus cluster and a plain-PostgreSQL "do it yourself" cluster, plus scripts that load Bazaar into them. Nothing here touches your usual `course-pg` container.
 
@@ -545,7 +545,7 @@ CONTEXT:  while updating tuple (0,2) in relation "orders_p0"
 An orphaned prepared transaction, one whose coordinator died or forgot it, is worse than a long-running transaction:
 
 - It **holds its locks forever**, across restarts. Every writer to those rows queues behind it.
-- It **holds back the xmin horizon**, so VACUUM cannot remove any dead row newer than it, anywhere in the cluster. On the same node, deleting 10,000 rows and running `VACUUM (VERBOSE)` showed `10000 are dead but not yet removable` with `removable cutoff: 845`, exactly the prepared transaction's xid. After `ROLLBACK PREPARED`, the same VACUUM removed all 10,000.
+- It **holds back the xmin horizon**, so VACUUM cannot remove any dead row newer than it, in any table of its database (and in the shared catalogs). On the same node, deleting 10,000 rows and running `VACUUM (VERBOSE)` showed `10000 are dead but not yet removable` with `removable cutoff: 845`, exactly the prepared transaction's xid. After `ROLLBACK PREPARED`, the same VACUUM removed all 10,000.
 - Left long enough, it blocks freezing and drives the cluster towards **transaction ID wraparound** (Module 16).
 - No session owns it, so `pg_terminate_backend` can't kill it and `idle_in_transaction_session_timeout` doesn't apply.
 
@@ -1313,7 +1313,7 @@ ERROR:  the query contains a join that requires repartitioning
 HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 ```
 
-With `SET citus.enable_repartition_joins = on`, Citus runs a **repartition join**: every shard of both tables is re-hashed on the join key (a *map* step writing intermediate files), the pieces are shuffled between workers, and matching pieces are joined (*merge* tasks). The plan shows `MapMergeJob` with 32 map tasks per side and 12 merge tasks. On the large dataset it took **7.0 s** and returned 99,178 rows. It works, but it is a batch-analytics tool, not something for a request handler.
+With `SET citus.enable_repartition_joins = on`, Citus runs a **repartition join**: every shard of both tables is re-hashed on the join key (a *map* step writing intermediate files), the pieces are shuffled between workers, and matching pieces are joined (*merge* tasks). The plan shows `MapMergeJob` with 32 map tasks per side and 12 merge tasks. On the large dataset it took **7.0 s** and returned a count of 99,178. It works, but it is a batch-analytics tool, not something for a request handler.
 
 The same idea also fails for the *same* tables joined without the distribution column. On the small dataset, `orders JOIN order_items ON i.order_id = o.id` (no `seller_id`) raises the same repartition error. Add `AND i.seller_id = o.seller_id` and it becomes a co-located join with 32 independent tasks. **Every join between seller tables must carry `seller_id`.**
 
@@ -1585,7 +1585,7 @@ WHERE shardid = get_shard_id_for_distribution_column('orders', 1);
   102331 | -1905060026   | -1905060026
 ```
 
-The old shard's hash range was split into three: the hashes below `hashint8(1)`, exactly `hashint8(1)` (seller 1 alone), and the hashes above. `orders` now has 34 shards. Seller 1's shard group can be moved like any other, for example to a node of its own:
+The old shard's hash range was split into three: the hashes below `hashint8(1)`, exactly `hashint8(1)` (seller 1 alone), and the hashes above. `orders` now has 34 shards. Seller 1's shard group can be moved like any other, for example to `m21-worker1`. It is now a shard of its own, though that worker still holds other shards too:
 
 ```sql
 SELECT citus_move_shard_placement(102331, 'm21-worker3', 5432, 'm21-worker1', 5432,

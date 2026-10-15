@@ -21,7 +21,7 @@ If you have used Docker and PostgreSQL before, skim sections 1 and 4, run the qu
 
 **Before you start**
 
-You need a terminal, about 1 GB of free disk space, and permission to install software. No database knowledge is assumed.
+You need a terminal, about 5 GB of free disk space (the image is about 0.5 GB, the large dataset about 2 GB, plus write-ahead log and headroom; some labs in later modules need more), and permission to install software. No database knowledge is assumed.
 
 ---
 
@@ -342,13 +342,15 @@ SELECT 1 + 1 AS two;
 
 Leave with `\q` (or Ctrl-D).
 
-The script is three lines of bash. The interesting one is:
+The script is a few lines of bash. The interesting ones are:
 
 ```bash
-exec docker exec -it -e PGOPTIONS="${PGOPTIONS:-}" "$CONTAINER" psql -U postgres -d "$DB" "$@"
+if [[ $# -gt 0 && "$1" != -* ]]; then DB="$1"; shift; else DB=bazaar; fi
+TTY_FLAG="-i"; [ -t 0 ] && TTY_FLAG="-it"
+exec docker exec $TTY_FLAG -e PGOPTIONS="${PGOPTIONS:-}" "$CONTAINER" psql -U postgres -d "$DB" "$@"
 ```
 
-It runs `psql -U postgres -d bazaar` inside the container. Anything after the database name is passed to psql: `./project/bin/psql.sh bazaar -c 'SELECT 1'` works. The container name defaults to `course-pg` and can be overridden with `COURSE_PG_CONTAINER`.
+It runs `psql -U postgres -d bazaar` inside the container. The first argument is the database name unless it starts with `-`, and everything else is passed to psql: `./project/bin/psql.sh bazaar -c 'SELECT 1'` and `./project/bin/psql.sh -c 'SELECT 1'` both work. Docker gets `-it` (attach a terminal) only when the script's standard input is a terminal, and just `-i` otherwise, so input can be piped in. The container name defaults to `course-pg` and can be overridden with `COURSE_PG_CONTAINER`.
 
 Why doesn't it ask for a password? Inside the container, psql connects through the Unix socket, and the image's authentication rules (in a file called `pg_hba.conf`, covered in module 15) trust local socket connections. Connections from outside the container, including from your laptop, must use a password:
 
@@ -361,15 +363,15 @@ host all all all scram-sha-256
 
 The last line applies to everything arriving over the network, and requires a password checked with the SCRAM-SHA-256 method.
 
-> **Tip: running script files.** `psql.sh` attaches a terminal only when you're typing interactively, so you can pipe a file into it:
->
-> ```bash
-> ./project/bin/psql.sh bazaar -v ON_ERROR_STOP=1 < workspace/01/setup.sql
-> ```
->
-> Your `workspace/` folder is also mounted read-only inside the container at `/course/workspace`, so from an interactive session you can run `\i /course/workspace/01/setup.sql`.
->
-> Module 01 explains `-v ON_ERROR_STOP=1`. Or use a native psql (next section), which reads files directly.
+**Running script files.** Because `psql.sh` attaches a terminal only when you're typing interactively, you can pipe a file into it:
+
+```bash
+./project/bin/psql.sh bazaar -v ON_ERROR_STOP=1 < workspace/01/setup.sql
+```
+
+Your `workspace/` folder is also mounted read-only inside the container at `/course/workspace`, so from an interactive session you can run `\i /course/workspace/01/setup.sql`.
+
+Module 01 explains `-v ON_ERROR_STOP=1`. Or use a native psql (next section), which reads files directly.
 
 ---
 

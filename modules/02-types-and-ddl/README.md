@@ -1581,7 +1581,7 @@ ERROR:  new row for relation "categories" violates check constraint "categories_
 DETAIL:  Failing row contains (3, 3, Laptops, laptops, 2026-10-14 08:24:57.402005+00).
 ```
 
-Notice that the multi-row `INSERT` could reference row 2 while inserting row 3: the foreign key is checked after each row is inserted, and row 2 already existed by then.
+Notice that the multi-row `INSERT` could reference row 2 while inserting row 3: foreign keys are checked at the end of the statement (11.6), when both rows exist.
 
 ### 12.5 `products`
 

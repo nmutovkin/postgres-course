@@ -184,7 +184,7 @@ psycopg2 was *the* Python driver for 15 years, and you will meet it in older cod
 | Connection pool | a basic, thread-unsafe-in-practice one | `psycopg_pool`: thread-safe, async, health checks, configure/reset hooks, stats |
 | Binary data format | no | per query or per cursor (`binary=True`) |
 
-Should you still learn psycopg2? Only to maintain old code. Two migration traps are worth knowing: psycopg 3 does not close a connection at the end of `with conn:` the same way (it *does* close), and server-side binding rejects a few things client-side binding allowed, such as parameters in `SET` or `IN %s` (section 4.2).
+Should you still learn psycopg2? Only to maintain old code. Two migration traps are worth knowing: in psycopg 3, `with conn:` commits or rolls back **and closes** the connection (psycopg2 left it open), and server-side binding rejects a few things client-side binding allowed, such as parameters in `SET` or `IN %s` (section 4.2).
 
 ### 1.4 Installing: binary, C, or pure Python
 
@@ -779,7 +779,7 @@ What to notice:
   `timestamp` (without time zone) becomes a *naive* `datetime`. Mixing naive and aware datetimes in Python raises `TypeError` on comparison, which is one more reason Bazaar uses `timestamptz` everywhere.
 - **`jsonb`/`json` become Python objects** (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`) through `json.loads`. Numbers inside JSON become `int` or `float`, not `Decimal`.
 - **Arrays become lists**, including multidimensional ones (lists of lists), and `NULL` elements become `None`.
-- **Enums become `str`** unless you register them (7.4).
+- **Enums become `str`** unless you register them (7.3).
 - **Ranges become `psycopg.types.range.Range`** objects with `lower`, `upper`, `bounds` (`'[)'`), `isempty`, and `in` support (`some_datetime in r`).
 - **`uuid`, `inet`/`cidr`, `bytea`, `interval`** map to `uuid.UUID`, the `ipaddress` classes, `bytes`, and `timedelta`. One caveat: an `interval` with months (`'1 month'`) has no exact `timedelta` equivalent. psycopg converts a month to 30 days, so keep calendar arithmetic in SQL.
 
@@ -1088,7 +1088,7 @@ COPY, binary format                              0.32 s    311,706 rows/s
 
 What the numbers say, from slowest to fastest:
 
-1. **One transaction per row** pays for a WAL flush (`fsync`) at every commit: about 6.6 ms per row here, so 100,000 rows would take over a minute. Never load data in autocommit mode.
+1. **One transaction per row** pays for a WAL flush (`fsync`) at every commit: about 0.66 ms per row here, so 100,000 rows would take over a minute. Never load data in autocommit mode.
 2. **One transaction, one `execute()` per row** removes the flushes but still pays a full network round trip per row, plus Python and server overhead per statement: about 200 µs a row. The round trip time (181 µs to `localhost` through Docker's port forwarding) sets the floor; across a real network (0.5–1 ms to a database in another availability zone), this line gets 3–5 times slower, while the COPY lines barely change.
 3. **Pipeline mode** sends statements without waiting for each answer (section 11): 3.4 times faster.
 4. **`executemany()`** uses the pipeline too, and saves Python overhead by preparing the statement once: 8 times faster than the loop.
@@ -1279,7 +1279,8 @@ Section 2.4 measured 15 ms per new connection against half a millisecond for a p
 ```python
 from psycopg_pool import ConnectionPool
 
-pool = ConnectionPool(DSN, min_size=2, max_size=10, open=True)   # at application start
+pool = ConnectionPool(DSN, min_size=2, max_size=10, open=False)  # at application start
+pool.open(wait=True)                      # fail fast if the database is unreachable
 
 def handle_request(product_id: int):
     with pool.connection() as conn:       # borrow (or wait for) a connection

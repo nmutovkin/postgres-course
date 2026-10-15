@@ -42,9 +42,9 @@ bootstrap:
     retry_timeout: 10             # how long DCS / Postgres operations are retried
     maximum_lag_on_failover: 1048576   # 1 MiB: a replica further behind than this is not promoted
     primary_start_timeout: 300    # wait this long for a crashed primary to recover in place before failing over
-    synchronous_mode: false       # exercise 9 turns this on
+    synchronous_mode: false       # exercise 7 turns this on
     synchronous_mode_strict: false
-    failsafe_mode: false          # exercise 8 discusses it
+    failsafe_mode: false          # exercise 10 discusses it
     postgresql:
       use_pg_rewind: true         # rejoin a diverged old primary without a full re-clone
       use_slots: true             # Patroni creates a physical slot per member on the leader

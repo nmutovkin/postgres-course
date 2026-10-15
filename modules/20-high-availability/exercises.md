@@ -1,4 +1,4 @@
-# Module 20 Exercises: High Availability
+# Module 20: Exercises
 
 <!-- nav:start -->
 > [Theory](README.md) · **Exercises** · [Project](project.md) · [Solutions](solutions/README.md)  

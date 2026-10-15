@@ -24,7 +24,7 @@ docker exec -i course-pg psql -X -U postgres -d bazaar < modules/01-psql/solutio
 ./project/bin/psql.sh
 ```
 
-The `bazaar` database is empty at this point: the Bazaar tables arrive in module 02. So this module's examples use the system catalogs and a small scratch table, `launch_checklist`, which the second command creates. Section 6 shows and explains what that script contains. A few examples show Bazaar tables to illustrate `\d` on something realistic. Those come from `./project/bin/reset.sh 03`, and you'll build them yourself in module 02. If you run them, run `./project/bin/reset.sh 01` afterwards.
+The `bazaar` database is empty at this point: the Bazaar tables arrive in module 02. So this module's examples use the system catalogs and a small scratch table, `launch_checklist`, which the second command creates. Section 6 shows and explains what that script contains. A few examples show Bazaar tables to illustrate `\d` on something realistic. Those come from `./project/bin/reset.sh 03`, and you'll build them yourself in module 02. If you run them, run `./project/bin/reset.sh 01` afterwards and re-run `scratch_setup.sql` (the second command above), because the reset removes `launch_checklist` too.
 
 You should be comfortable connecting as described in [Module 00](../00-setup/). Examples use the container's psql via `./project/bin/psql.sh` unless they say otherwise.
 
@@ -859,7 +859,7 @@ Without a schema part, a pattern only matches objects that are **visible** throu
 
 Two rows for `pg_size_pretty`: functions can be **overloaded**, with the same name and different argument types. A function is identified by its name *and* argument types, so `\sf pg_size_pretty(numeric)` picks one.
 
-> **Pitfall:** `\d *` with a broad pattern is cheap, but `\d` on a pattern that matches hundreds of tables prints hundreds of full descriptions. Use `\dt pattern` to list first, then `\d name`.
+> **Pitfall:** listing with a broad pattern (`\dt *`) is cheap, but `\d` on a broad pattern prints the full description of every table it matches, hundreds of them in a big database. Use `\dt pattern` to list first, then `\d name`.
 
 > **Pitfall:** `\d` with a pattern that matches more than one kind of thing describes all of them. `\d bazaar.o*` on the module 02 schema describes the table `orders`, the sequence `orders_id_seq`, the index `orders_pkey` and the table `order_items`, along with its primary-key index.
 
@@ -1493,7 +1493,7 @@ psql keeps a command history, by default in `~/.psql_history` (one file for all 
 
 ### 13.2 `~/.psqlrc`
 
-At start-up, psql runs the commands in `~/.psqlrc` (and in `~/.psqlrc-17` if it exists, for version-specific settings). It's where you make the interactive settings from this module permanent. Here's a well-commented starting point. It's also the reference solution for this module's project (`solutions/psqlrc`):
+At start-up, psql runs the commands in `~/.psqlrc`. For version-specific settings, a `~/.psqlrc-17` file (or one for an exact minor version, such as `~/.psqlrc-17.6`) is read *instead of* `~/.psqlrc` when it exists. It's where you make the interactive settings from this module permanent. Here's a well-commented starting point. It's also the reference solution for this module's project (`solutions/psqlrc`):
 
 ```sql
 -- Don't print "Null display is ..." etc. while this file runs.

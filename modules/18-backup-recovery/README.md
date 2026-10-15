@@ -5,7 +5,7 @@
 > [← 17 Configuration, Maintenance and Monitoring](../17-operations/README.md) · [Course home](../../README.md) · [19 Replication →](../19-replication/README.md)
 <!-- nav:end -->
 
-It is 14:07 on a Tuesday. A support engineer, trying to clean up a few test orders in production, runs `DELETE FROM orders WHERE created_at > '2025-01-01'` in the wrong psql tab. The statement finishes in 300 ms. Thousands of real orders, their items and their payments are gone, the checkout keeps taking new orders on top of the hole, and every replica you built for high availability has faithfully deleted them too. What happens next depends entirely on decisions made months earlier: what you back up, how often, where you keep it, and whether anybody has ever practised a restore. This module is about making those decisions well, and about the PostgreSQL machinery (dumps, base backups, WAL archiving and point-in-time recovery) that lets you answer "bring Bazaar back to 14:06:59" with a calm "give me twenty minutes".
+It is 14:07 on a Tuesday. A support engineer, trying to clean up a few test orders in production, runs `DELETE FROM orders WHERE created_at > '2025-01-01'` in the wrong psql tab. The statement finishes in 300 ms. Thousands of real orders and their items are gone, the checkout keeps taking new orders on top of the hole, and every replica you built for high availability has faithfully deleted them too. What happens next depends entirely on decisions made months earlier: what you back up, how often, where you keep it, and whether anybody has ever practised a restore. This module is about making those decisions well, and about the PostgreSQL machinery (dumps, base backups, WAL archiving and point-in-time recovery) that lets you answer "bring Bazaar back to 14:06:59" with a calm "give me twenty minutes".
 
 <!-- toc:start -->
 **Contents**
@@ -88,10 +88,10 @@ It is 14:07 on a Tuesday. A support engineer, trying to clean up a few test orde
 
 The module uses two servers.
 
-**1. The course database (`course-pg`) with the large dataset**, for the logical-backup sections (2 and 3), where realistic sizes and timings matter. If it is not already at the Module 16 state (it is, if you followed Modules 16 and 17), reset it; this takes a few minutes:
+**1. The course database (`course-pg`) with the large dataset**, for the logical-backup sections (2 and 3), where realistic sizes and timings matter. If it is not already at the Module 18 state (the same data as the Module 16 and 17 states, so it is if you followed those modules), reset it; this takes a few minutes:
 
 ```bash
-./project/bin/reset.sh 16
+./project/bin/reset.sh 18
 ```
 
 **2. The module's lab server (`m18-primary`)**, for everything physical: WAL archiving is switched on and pgBackRest is installed. It uses the small dataset, which keeps base backups and the WAL archive small (the large dataset would put several gigabytes of WAL into the archive just by loading it). From the repository root:
@@ -121,7 +121,7 @@ The lab contains:
 | `lab/scripts/nightly-backup.sh` | Nightly base backup with verification and retention (section 10 and the milestone). |
 | `lab/scripts/pitr-drill.sh` | An automated point-in-time-recovery drill that verifies row counts (section 10 and the milestone). |
 | `lab/scripts/check-backup-freshness.sh` | A monitoring check for backup and archive freshness. |
-| `lab/scripts/bazaar-activity.sql` | A burst of 200 checkouts plus payments and shipments, to generate realistic WAL. |
+| `lab/scripts/bazaar-activity.sql` | A burst of 200 checkouts, some of which are then marked paid and shipped, to generate realistic WAL. |
 
 Module 16 explained the write-ahead log, LSNs, segments, checkpoints and crash recovery from the inside. This module puts that knowledge to work: **every physical backup technique is "copy the files, then replay WAL", which is crash recovery on purpose.** If any WAL term below feels hazy, reread Module 16's WAL sections first.
 
@@ -232,7 +232,7 @@ Two consequences matter in production. The `ALTER TABLE` waits for the whole dum
 | **directory** | `-Fd` | A directory: one file per table plus a table of contents | Yes (gzip) | `pg_restore` | **Yes** (`-j`) | **Yes** | **Yes** |
 | **tar** | `-Ft` | A tar archive of the directory format | No | `pg_restore` | No | No | Yes |
 
-All four contain the same information; they differ in packaging. Measured on the course database with the large Bazaar dataset (1.5 GB database, of which roughly half is indexes), writing inside the container:
+All four contain the same information; they differ in packaging. Measured on the course database with the large Bazaar dataset (the `bazaar` database is 1.5 GB at the Module 18 state, roughly half of it indexes; later modules' data takes it to about 1.9 GB), writing inside the container:
 
 ```bash
 docker exec -u postgres course-pg bash -c 'mkdir -p /tmp/dumps && cd /tmp/dumps &&
@@ -338,7 +338,7 @@ pg_restore -d bazaar_r1 bazaar.dump                       52.5 s
 pg_restore -d bazaar_r4 -j 4 bazaar-j4.dir                30.8 s
 ```
 
-Drop the two copies afterwards (`dropdb bazaar_r1; dropdb bazaar_r4`): each is a full 1.5 GB database.
+Drop the two copies afterwards (`dropdb bazaar_r1; dropdb bazaar_r4`): each is a full copy of the 1.5 GB `bazaar` database.
 
 Restoring takes longer than dumping, because the server must rebuild every index and validate every foreign key. Parallel restore (`-j`, custom or directory format) runs table loads, index builds and constraint validation concurrently. The usual starting point for `-j` is the number of CPU cores of the server.
 
@@ -659,7 +659,7 @@ pg_verifybackup: error: WAL parsing failed for timeline 1
 
 ### 4.5 Formats and compression, measured
 
-On the large dataset (1.66 GB cluster):
+For comparison, the same measurements on `course-pg` with the large dataset, not on the lab server (the whole cluster, all databases plus shared catalogs, is 1.66 GB at the Module 18 state, a little more than the 1.5 GB `bazaar` database):
 
 ```text
 pg_basebackup -D /backups/bb-plain -Fp -X stream -c fast                       4.0 s    1.7 GB
@@ -671,7 +671,7 @@ The uncompressed copy runs at disk speed. Gzip, single-threaded on the client, i
 
 ### 4.6 Tablespaces
 
-Tables in other tablespaces (Module 16) live outside the data directory, at the path given in `CREATE TABLESPACE`; the data directory only holds a symlink to them in `pg_tblspc/`. A plain-format backup recreates tablespaces **at their original absolute paths**, which collides with the live server when you back up to the same machine:
+Tables in other tablespaces live outside the data directory, at the path given in `CREATE TABLESPACE`; the data directory only holds a symlink to them in `pg_tblspc/` (the directory you saw in Module 16's tour of the data directory). A plain-format backup recreates tablespaces **at their original absolute paths**, which collides with the live server when you back up to the same machine:
 
 ```sql
 CREATE TABLESPACE cold LOCATION '/var/lib/postgresql/ts_cold';

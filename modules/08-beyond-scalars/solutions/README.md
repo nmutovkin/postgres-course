@@ -126,7 +126,7 @@ ORDER BY cardinality(s.shared_tags) DESC, p.id;
 (5 rows)
 ```
 
-The `p.tags && r.tags` condition is redundant (an empty intersection would sort last anyway). But it's the part a GIN index on `tags` can serve, so on a large table it narrows the candidates before the more expensive intersection runs.
+The `p.tags && r.tags` condition is not redundant: without it, every other active product would be returned too, with an empty `shared_tags` at the end of the list. It's also the part a GIN index on `tags` can serve, so on a large table it narrows the candidates before the more expensive intersection runs.
 
 **Alternative:** unnest product 10's tags once, join to `products` with `t.tag = ANY (p.tags)`, and `GROUP BY p.id` with `array_agg(t.tag)` and `count(*)`. That's equivalent, and arguably more "relational". The `intarray` extension has an `&` intersection operator, but only for `int[]`.
 
@@ -303,7 +303,7 @@ ORDER BY pixels DESC, p.id;
 
 Points worth noticing:
 
-- `DEFAULT 60 ON EMPTY` applies when the path finds nothing. Product 7 has no `refresh_hz` key at all. (`ON ERROR` would be for a value that exists but can't be converted.)
+- `DEFAULT 60 ON EMPTY` applies when the path finds nothing. Product 9 has no `refresh_hz` key at all. (`ON ERROR` would be for a value that exists but can't be converted.)
 - `'$.ports.size()'`: in lax mode, a missing `ports` produces an empty sequence, `.size()` of nothing is nothing, and the `DEFAULT 0 ON EMPTY` kicks in.
 - `EXISTS PATH` with a filter answers "is there an element equal to USB-C?" without unnesting the array.
 - The resolution string is split *after* extraction. If you control the document format, store `{"width": 3840, "height": 2160}` instead. A string you have to parse is a small schema smell.

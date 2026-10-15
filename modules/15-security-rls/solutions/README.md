@@ -36,7 +36,9 @@ All solutions were run on PostgreSQL 17 against the small dataset with the refer
 
 <!-- toc:end -->
 
-## Exercise 1 — a role report ([ex01_role_report.sql](ex01_role_report.sql))
+## Exercise 1 ★: A role report from the catalogs
+
+Script: [ex01_role_report.sql](ex01_role_report.sql).
 
 Reasoning: everything about a role lives in `pg_roles` (one row per role, with boolean attribute columns and `rolconnlimit`) except *memberships*, which are in `pg_auth_members` — and since PG 16 that table carries the three per-grant options (`admin_option`, `inherit_option`, `set_option`). Build the attribute list by turning each true flag into a label and dropping the NULLs; correlate the memberships with a scalar subquery so the result stays one row per role.
 
@@ -80,7 +82,9 @@ Alternative: psql's `\du` and `\drg` show most of this interactively, but a SQL 
 
 ---
 
-## Exercise 2 — a privilege matrix ([ex02_privilege_matrix.sql](ex02_privilege_matrix.sql))
+## Exercise 2 ★: What can each login role do?
+
+Script: [ex02_privilege_matrix.sql](ex02_privilege_matrix.sql).
 
 Reasoning: `has_table_privilege(role, oid, priv)` is the right primitive — it follows membership and `PUBLIC`, so it reports *effective* privileges, which is what you actually care about. Cross-join the relations with the three roles, compute a compact flag string per (relation, role) with a `LATERAL`, and pivot the three roles into columns with `max(CASE ...)`. The one subtlety is distinguishing a table-level `SELECT`/`UPDATE` from a column-only one: `has_any_column_privilege(..., 'UPDATE')` is true when *some* column is granted even though `has_table_privilege(..., 'UPDATE')` is false.
 
@@ -105,7 +109,7 @@ The self-check holds: RLS is on for `products`/`inventory`/`orders`/`order_items
 
 ---
 
-## Exercise 3 — the append-only audit log
+## Exercise 3 ★: The append-only audit log
 
 Reasoning: the audit trigger `audit_trigger()` is `SECURITY DEFINER` owned by `bazaar_owner`, so it writes `audit_log` with the owner's rights no matter who the caller is. That means `bazaar_app` does **not** need any write privilege on `audit_log` for auditing to work — the broad `INSERT/UPDATE/DELETE` it got from the `ALL TABLES` grant is pure downside (it lets the app tamper with history). Remove the writes, keep `SELECT`:
 
@@ -129,7 +133,7 @@ The business change is still recorded (by the trigger, as the owner), but the ap
 
 ---
 
-## Exercise 4 — a read-only role, two ways
+## Exercise 4 ★★: A read-only reporting role, two ways
 
 Reasoning: `pg_read_all_data` is *dynamic* — it grants "SELECT on everything that exists, now and in the future", evaluated at access time. `bazaar_readonly` holds *concrete* grants plus default privileges keyed on `bazaar_owner`. The consequences differ in two ways the self-check pins down.
 
@@ -159,7 +163,9 @@ Both read `payments` (140 rows). Verdict: `pg_read_all_data` is the quick, blunt
 
 ---
 
-## Exercise 5 — hide users.email ([ex05_hide_email.sql](ex05_hide_email.sql))
+## Exercise 5 ★★: Hide users.email from the read-only bundle
+
+Script: [ex05_hide_email.sql](ex05_hide_email.sql).
 
 Reasoning: the trap is that a *column* `REVOKE` does nothing while a *table-level* `SELECT` grant exists (the table grant already covers every column). So you remove the table grant and grant back the columns you want. The masked view must read `email` to compute the domain, so it has to run as its owner (`bazaar_owner`) — an ordinary view, **not** `security_invoker`.
 
@@ -191,7 +197,9 @@ SELECT email_domain, count(*) FROM users_masked GROUP BY 1 ORDER BY 2 DESC;
 
 ---
 
-## Exercise 6 — no modifying archived products ([ex06_archived_products.sql](ex06_archived_products.sql))
+## Exercise 6 ★★: Sellers cannot modify archived products
+
+Script: [ex06_archived_products.sql](ex06_archived_products.sql).
 
 Reasoning: you want to *subtract* an additional condition from the seller's existing `UPDATE` ability without touching the permissive `products_seller` policy. That is exactly what a `RESTRICTIVE` policy does (it is `AND`ed in). The split between `USING` and `WITH CHECK` is the whole exercise: `USING (status <> 'archived')` controls *which existing rows* may be updated (not archived ones); `WITH CHECK (true)` allows the *result* row to be anything — which is what permits a seller to *archive* an active product.
 
@@ -206,7 +214,9 @@ Verify (seller 1): updating archived product 5 affects 0 rows; archiving active 
 
 ---
 
-## Exercise 7 — fix mis-owned objects ([ex07_fix_ownership.sql](ex07_fix_ownership.sql))
+## Exercise 7 ★★: Find and fix mis-owned objects
+
+Script: [ex07_fix_ownership.sql](ex07_fix_ownership.sql).
 
 Reasoning: objects created while connected as `postgres` are owned by `postgres` and got no grants (default privileges are keyed on the *creating* role, §5.4). The report side is a `UNION ALL` over `pg_class` (relations) and `pg_proc` (routines) filtered by `relowner`/`proowner <> 'bazaar_owner'::regrole`. The fix side generates `ALTER ... OWNER TO` and `GRANT ...` statements with `format()` and runs them with `\gexec`; order `ALTER` before `GRANT` so the owner is correct when the grants are applied. Skip identity/serial sequences (they follow their table) by excluding `pg_depend` rows with `deptype IN ('a','i')`.
 
@@ -221,7 +231,9 @@ The report then returns zero rows. The real lesson is prevention: `SET ROLE baza
 
 ---
 
-## Exercise 8 — a support role ([ex08_support_role.sql](ex08_support_role.sql))
+## Exercise 8 ★★★: Design a "support" role
+
+Script: [ex08_support_role.sql](ex08_support_role.sql).
 
 Reasoning: this combines every tool in the module. Reads are plain grants plus `FOR SELECT ... USING (true)` policies (needed because `orders`/`order_items` have RLS on, which would otherwise show support zero rows). Users are column-restricted to `id`/`full_name` so support can't read `email`. The *only* write path is a `SECURITY DEFINER` function that: validates a reason, locks the order `FOR UPDATE`, enforces an explicit transition table (support may cancel `pending`/`paid`, refund `delivered`; nothing else), performs the `UPDATE` as the owner, and records the reason in `audit_log` attributed to `session_user`. Direct `UPDATE orders` is never granted.
 
@@ -248,7 +260,9 @@ The audit row for the successful call has `changed_by = bazaar_support`. This is
 
 ---
 
-## Exercise 9 — reviews per seller ([ex09_reviews_rls.sql](ex09_reviews_rls.sql))
+## Exercise 9 ★★: Reviews, per seller
+
+Script: [ex09_reviews_rls.sql](ex09_reviews_rls.sql).
 
 Reasoning: identical shape to the reference `order_items` policy. Enable RLS (which locks everyone out), re-admit the app and read-only roles with a `USING (true)` policy, and give sellers a `FOR SELECT` policy whose `USING` reaches `reviews.product_id` into `products` — where the seller's own products policy already filters to their rows, so no explicit `seller_id` is needed.
 
@@ -263,7 +277,7 @@ Verify: seller 1 sees 17 reviews (avg rating `3.53`); seller 5 (products but no 
 
 ---
 
-## Exercise 10 — measure RLS overhead (large data)
+## Exercise 10 ★★★: Measure RLS overhead (large data)
 
 Reasoning: an RLS `USING` predicate is `AND`ed into every query, so its cost is the cost of that predicate — which is dominated by whether it is *indexable*. On `reset.sh 16`:
 
@@ -284,7 +298,7 @@ Now `SELECT count(*) FROM order_items` as a seller is an `Index Only Scan`: ~22 
 
 ---
 
-## Exercise 11 — sslmode in the lab
+## Exercise 11 ★★: sslmode in the lab
 
 Reasoning: `sslmode` controls two independent things — whether TLS is used, and whether the server is *verified*. The lab's `pg_hba.conf` rejects unencrypted connections, so `disable` always fails before auth. `require` encrypts but verifies nothing; `verify-ca` adds "chains to my CA" (so it needs `sslrootcert`); `verify-full` adds "the hostname matches the certificate".
 
@@ -297,7 +311,9 @@ Without `sslrootcert=/lab/certs/ca.crt`, `verify-ca`/`verify-full` fail with "ro
 
 ---
 
-## Exercise 12 — harden pg_hba.conf, migrate off md5 ([ex12/pg_hba.conf](ex12/pg_hba.conf))
+## Exercise 12 ★★★: Harden pg_hba.conf and migrate off md5
+
+Script: [ex12/pg_hba.conf](ex12/pg_hba.conf).
 
 Reasoning: `pg_hba.conf` is first-match-wins, so a `reject` for `postgres` over the network must come *before* any line that would otherwise match `postgres`. Group membership is matched with `+lab_users`; a network restriction uses `samenet`. The md5→scram migration order is the crux: flip the method to `scram-sha-256` *and* ensure every role has a SCRAM verifier. If you reload the hba change while `legacy` still has an md5-format password, it cannot log in:
 
@@ -318,7 +334,9 @@ After the edit, `pg_hba_file_rules` shows no `md5` line and no `error`; `postgre
 
 ---
 
-## Exercise 13 — exploit and fix a search_path hole ([ex13_search_path.sql](ex13_search_path.sql))
+## Exercise 13 ★★★: Exploit, then fix, a search_path hole
+
+Script: [ex13_search_path.sql](ex13_search_path.sql).
 
 Reasoning: the vulnerable `shop_revenue()` is `SECURITY DEFINER` (runs as `bazaar_owner`), names `lower()` unqualified, and pins no `search_path`, so the name is resolved against the *caller's* path. The attacker (from their personal schema) defines `analyst_scratch.lower(text)` that performs a privileged `UPDATE` and then returns `pg_catalog.lower($1)` so the function still behaves normally. The non-obvious requirement: the function runs with the *owner's* privileges, so the owner must be able to resolve the trap — `GRANT USAGE ON SCHEMA analyst_scratch TO PUBLIC`, which the attacker can do because they own the schema. Then `SET search_path = analyst_scratch, pg_catalog, bazaar` and call the function.
 
@@ -343,7 +361,7 @@ An unqualified *operator* (`=`) is hijackable the same way when the planner reso
 
 ---
 
-## Exercise 14 — close the sequence side channel
+## Exercise 14 ★★: Close the sequence side channel
 
 Reasoning: RLS hides *rows*, not shared objects like sequences. A seller can call `nextval('orders_id_seq')` and learn the marketplace's global next order id — a volume leak across tenants. `1501` grants the seller `USAGE ON ALL SEQUENCES` (a leftover of a broader grant); revoke it:
 
@@ -362,7 +380,9 @@ The interesting part is that identity inserts still work: an `INSERT` into a `GE
 
 ---
 
-## Exercise 15 — the FK existence leak ([ex15_fk_leak.sql](ex15_fk_leak.sql))
+## Exercise 15 ★★★: Prove the FK existence leak and seal it
+
+Script: [ex15_fk_leak.sql](ex15_fk_leak.sql).
 
 Reasoning: foreign-key integrity checks are never subject to RLS — they must see all rows to do their job — so a child insert whose FK points at a *parent you cannot see* succeeds, while one pointing at a *non-existent* parent fails. That difference is an existence oracle. The naive `order_notes` policy (checking only `seller_id = current_seller_id()`) leaks:
 

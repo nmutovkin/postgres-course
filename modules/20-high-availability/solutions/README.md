@@ -1,4 +1,4 @@
-# Module 20 Solutions: High Availability
+# Module 20: Solutions
 
 <!-- nav:start -->
 > [Theory](../README.md) · [Exercises](../exercises.md) · [Project](../project.md) · **Solutions**  
@@ -57,7 +57,7 @@ Database system identifier:           7696419998835892256
 
 1. `initialize` holds the **database system identifier**: the random 64-bit number `initdb` writes into `pg_control`. Every physical copy of the cluster (each replica is a `pg_basebackup` of the original) has the same identifier, which is why it appears on all three nodes and in the header of `patronictl list`. Patroni checks it before letting a node join: a data directory from *another* cluster has a different identifier and is refused, which prevents accidentally streaming WAL into an unrelated database.
 2. `history` had 33 entries, and the current timeline is 34. Each promotion creates a new timeline and appends one entry recording the switch LSN, the time, and the new leader. Starting from timeline 1, after *k* promotions you are on timeline *k*+1. (`pg_controldata` on a replica may show a smaller `Latest checkpoint's TimeLineID`: that is the timeline of its last restartpoint, not where it is replaying now. Patroni's `TL` column is the live value.)
-3. The `leader` key. `pg_is_in_recovery() = false` tells you that a node *is running as a primary*, not that it is *entitled* to be one. During a partition (Section 11.3), the isolated old primary keeps answering `false` for ten or more seconds after it has lost its lease and while a replacement is being elected. During that window two nodes could say `false`. Only the leader key, guarded by etcd's consensus, is authoritative. That is also why HAProxy checks `/primary` (which requires the leader key) and not a SQL query.
+3. The `leader` key. `pg_is_in_recovery() = false` tells you that a node *is running as a primary*, not that it is *entitled* to be one. During a partition (Section 11.3), the isolated old primary keeps answering `false` for about ten seconds after it was cut off from the DCS, until Patroni gives up renewing the lease and demotes it. In that window it still says `false` although it can no longer prove it holds the lease; the timings (Section 5.4) only guarantee that it demotes before the lease expires and a replacement is promoted. Only the leader key, guarded by etcd's consensus, is authoritative. That is also why HAProxy checks `/primary` (which requires the leader key) and not a SQL query.
 
 ---
 
