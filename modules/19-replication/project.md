@@ -1,4 +1,4 @@
-# Module 19 milestone: the Bazaar analytics replica
+# Module 19: Project milestone — the Bazaar analytics replica
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

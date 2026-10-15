@@ -1015,7 +1015,7 @@ LIMIT 3;
 
 `ts_headline` doesn't use the `tsvector`. It re-parses the *original document* with the full pipeline, every time, which makes it by far the most expensive function in this module. The rule: **compute the snippets for the 20 rows on the page, never for all the matches.**
 
-PostgreSQL 17 helps you in the simplest case. With the headline in the select list and `ORDER BY rank LIMIT 20`, the planner evaluates the select list *after* the sort and limit (that is the `Result` node above the `Sort` below):
+PostgreSQL helps you in the simplest case (it has done so since version 9.6). With the headline in the select list and `ORDER BY rank LIMIT 20`, the planner evaluates the select list *after* the sort and limit (that is the `Result` node above the `Sort` below):
 
 ```sql
 EXPLAIN (ANALYZE, COSTS OFF)
@@ -1140,7 +1140,14 @@ Ranking reads `search_vector` straight from the heap, which is why the `gift` qu
 CREATE INDEX ... ON products USING gin (to_tsvector('english', title || ' ' || coalesce(description, '')));
 ```
 
-No extra column, a smaller table, and the index is maintained automatically. The catch: the `tsvector` exists only *inside the index*, and GIN can't hand it back. Two consequences, measured on a copy of the products table (`lab.docs`) with such an index (8.8 MB):
+No extra column, a smaller table, and the index is maintained automatically. The catch: the `tsvector` exists only *inside the index*, and GIN can't hand it back. Two consequences, measured on a copy of the products table (`lab.docs`) with such an index (8.8 MB). To follow along, build the copy first (Module 11's `lab` schema doesn't survive a reset):
+
+```sql
+CREATE SCHEMA IF NOT EXISTS lab;
+CREATE TABLE lab.docs AS SELECT id, title, description FROM products;
+CREATE INDEX docs_fts_idx ON lab.docs
+    USING gin (to_tsvector('english', title || ' ' || coalesce(description, '')));
+```
 
 - **Queries must repeat the exact expression**, or the index isn't used. Writing `title || ' ' || description` (without the `coalesce`) is a *different* expression:
 
@@ -1177,6 +1184,8 @@ CREATE TRIGGER docs_tsv_update
     BEFORE INSERT OR UPDATE OF title, description ON lab.docs
     FOR EACH ROW
     EXECUTE FUNCTION tsvector_update_trigger(tsv, 'pg_catalog.english', title, description);
+
+UPDATE lab.docs SET title = title;   -- back-fill tsv for the existing rows, through the trigger
 ```
 
 (`tsvector_update_trigger_column` takes the configuration from a `regconfig` column instead.) The built-in one can't assign weights, so in practice you write your own PL/pgSQL trigger function. A trigger is the right choice when:
@@ -1215,9 +1224,13 @@ GiST lost on every count here. Bazaar's documents are short and its vocabulary i
 
 Inserting one product adds about 18 lexemes, so a GIN index must update about 18 posting lists in different parts of the index: random I/O for every insert. To soften this, GIN indexes have **`fastupdate`** (on by default): new entries are appended to an unsorted **pending list**, and merged into the main structure in bulk when the list exceeds `gin_pending_list_limit` (4 MB by default), when (auto)vacuum or analyze runs on the table, or when you call `gin_clean_pending_list()`.
 
-The `pgstattuple` extension shows the pending list. On the copy table, after inserting 50,000 rows:
+The `pgstattuple` extension shows the pending list. On the copy table, with a GIN index on `tsv`, after inserting 50,000 rows:
 
 ```sql
+CREATE INDEX docs_tsv_idx ON lab.docs USING gin (tsv);
+INSERT INTO lab.docs (id, title, description)
+SELECT id, title, description FROM products LIMIT 50000;
+
 CREATE EXTENSION IF NOT EXISTS pgstattuple;
 SELECT * FROM pgstatginindex('lab.docs_tsv_idx');
 ```

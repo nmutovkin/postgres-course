@@ -1,4 +1,4 @@
-# Module 12 milestone: a performance review of Bazaar
+# Module 12: Project milestone — a performance review of Bazaar
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

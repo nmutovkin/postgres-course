@@ -1,4 +1,4 @@
-# Module 08 project: Bazaar schema v3
+# Module 08: Project milestone — Bazaar schema v3
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

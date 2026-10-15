@@ -1,4 +1,4 @@
-# Module 21 milestone: Bazaar on Citus
+# Module 21: Project milestone — Bazaar on Citus
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

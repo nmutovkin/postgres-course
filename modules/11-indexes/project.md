@@ -1,4 +1,4 @@
-# Module 11 milestone: indexes for the Bazaar workload
+# Module 11: Project milestone — indexes for the Bazaar workload
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

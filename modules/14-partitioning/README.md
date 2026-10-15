@@ -580,7 +580,7 @@ FROM s;
 (1 row)
 ```
 
-464 ms as written; 812 ms with `WHERE date_trunc('month', occurred_at) = '2025-11-01'`, which reads all twelve months to find the same rows. The grouping by session costs the same in both, so the difference is "only" 1.75×; for the plain count of November's orders it was 82 ms against 463 ms.
+464 ms as written; 812 ms with `WHERE date_trunc('month', occurred_at) = '2025-11-01'`, which reads all twelve months to find the same rows. The grouping by session costs the same in both, so the difference is "only" 1.75×; for the plain counts in the table above it was 30 ms against 367 ms.
 
 ### 5.4 Settings
 
@@ -669,7 +669,7 @@ With the setting off, the plan is one big hash join whose hash table of 500,000 
 
 **`enable_partitionwise_aggregate`** (also off by default) does the same for `GROUP BY`. If the grouping columns include the partition key, each partition is aggregated completely on its own. Otherwise PostgreSQL aggregates each partition partially and combines the results (`Partial HashAggregate` per partition under a `Finalize HashAggregate`), which helps mainly when the partial aggregates are much smaller than the input. For a monthly report that groups `events` by `session_id`, it reduced the time from 867 ms to 725 ms, mostly because the per-partition hash tables spilled less to disk.
 
-Both settings are good candidates for `SET LOCAL` in a reporting session or `ALTER ROLE analyst SET ...`, rather than for the whole server.
+Both settings are good candidates for `SET LOCAL` in a reporting session or `ALTER ROLE bazaar_analyst SET ...` (that role arrives with Module 15's `1501`), rather than for the whole server.
 
 ---
 
@@ -938,7 +938,7 @@ The cost of this strategy is one big legacy partition. It doesn't prune well (an
 - Every unpruned partition costs planning and locking; with 1,000 partitions an unpruned lookup took 24 ms against 0.1 ms.
 - Partitionwise joins and aggregates split work per partition for identically partitioned tables; they are off by default because of planning cost.
 - Updating the key moves the row (delete + insert), and concurrent updaters get a serialization error.
-- Maintenance: create partitions months ahead with a lock timeout; attach with a pre-validated `CHECK` to avoid the validation scan; retention by `DETACH` + `DROP` costs milliseconds and kilobytes of WAL where `DELETE` + `VACUUM` costs seconds and tens of megabytes; analyze the parent yourself.
+- Maintenance: create partitions months ahead with a lock timeout; attach with a pre-validated `CHECK` to avoid the validation scan; retention by `DETACH` + `DROP` took 2 ms and 0.2 MB of WAL where `DELETE` + `VACUUM` took 0.6 s and 89 MB; analyze the parent yourself.
 - An existing table is migrated by attaching it as the first partition (no copy, a millisecond-scale switch), by copying, or by dual-writing and backfilling.
 - Partitioning is not sharding; inheritance-based partitioning is legacy.
 

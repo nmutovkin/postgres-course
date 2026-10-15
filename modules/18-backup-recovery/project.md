@@ -1,4 +1,4 @@
-# Module 18 milestone: Bazaar can be restored, and you can prove it
+# Module 18: Project milestone — Bazaar can be restored, and you can prove it
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

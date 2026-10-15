@@ -1,4 +1,4 @@
-# Module 17 project: the ops toolkit
+# Module 17: Project milestone — the ops toolkit
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

@@ -1,4 +1,4 @@
-# Module 10 milestone: a checkout that survives Black Friday
+# Module 10: Project milestone — a checkout that survives Black Friday
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

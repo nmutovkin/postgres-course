@@ -1,4 +1,4 @@
-# Module 15 project: lock down Bazaar
+# Module 15: Project milestone — lock down Bazaar
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

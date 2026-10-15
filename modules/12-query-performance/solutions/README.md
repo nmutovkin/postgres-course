@@ -643,7 +643,7 @@ LOG:  duration: 80.871 ms  plan:
 	                                                        Rows Removed by Filter: 499766
 ```
 
-**The cause**: `o.user_id::text = p_user::text`. Casting the column to text hides it from `orders_user_id_created_at_idx` (Module 11, section 20), so all 500,000 orders are read (74 of the 81 ms) and the estimate falls back to the 0.5% default (1,042 rows instead of 234). Notice also `Workers Planned: 2, Workers Launched: 0`: this plan was captured without the `max_parallel_workers_per_gather = 0` the exercises ask for, so the planner chose a parallel plan. It still ran in the leader alone, because PL/pgSQL executes a `SELECT ... INTO` with a row limit, and PostgreSQL never runs a plan in parallel when it may stop early. With the setting, the plan has no `Gather` and the scan is a plain `Seq Scan`; the cause and the fix are the same.
+**The cause**: `o.user_id::text = p_user::text`. Casting the column to text hides it from `orders_user_id_created_at_idx` (Module 11, section 20), so all 500,000 orders are read (74 of the 81 ms) and the estimate falls back to the 0.5% default selectivity: 2,500 of 500,000 rows, which the parallel plan shows as 1,042 per worker, against 234 actual. Notice also `Workers Planned: 2, Workers Launched: 0`: this plan was captured without the `max_parallel_workers_per_gather = 0` the exercises ask for, so the planner chose a parallel plan. It still ran in the leader alone, because PL/pgSQL executes a `SELECT ... INTO` with a row limit, and PostgreSQL never runs a plan in parallel when it may stop early. With the setting, the plan has no `Gather` and the scan is a plain `Seq Scan`; the cause and the fix are the same.
 
 **Fix**: compare the values in their own type:
 

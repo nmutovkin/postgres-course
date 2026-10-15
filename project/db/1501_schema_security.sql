@@ -166,8 +166,10 @@ ALTER DEFAULT PRIVILEGES FOR ROLE bazaar_owner IN SCHEMA bazaar
 --    earlier on the path) and be granted narrowly.
 -- -----------------------------------------------------------------------------
 
--- Audit rows must be written whoever changes a product/order, but nobody
--- except the owner may write audit_log directly (no faking history).
+-- Audit rows must be written whoever changes a product/order, so the trigger
+-- runs as the owner. Note: section 3's blanket grant still gives bazaar_app
+-- DML on audit_log; module 15's milestone (requirement 6) revokes it so that
+-- only the owner, via this trigger, can write history.
 ALTER FUNCTION audit_trigger() SECURITY DEFINER SET search_path = bazaar, pg_temp;
 
 -- Creating a partition requires owning the parent table; let the app (or a

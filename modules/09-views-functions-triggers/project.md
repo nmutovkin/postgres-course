@@ -1,4 +1,4 @@
-# Module 09 project: logic next to the data
+# Module 09: Project milestone — logic next to the data
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

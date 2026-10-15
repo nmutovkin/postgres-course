@@ -1,4 +1,4 @@
-# Module 14 project: partitioned events, their upkeep, and a live migration
+# Module 14: Project milestone — partitioned events, their upkeep, and a live migration
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

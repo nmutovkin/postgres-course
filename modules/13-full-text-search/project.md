@@ -1,4 +1,4 @@
-# Module 13 project: Bazaar product search
+# Module 13: Project milestone — Bazaar product search
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

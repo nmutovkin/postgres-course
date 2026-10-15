@@ -1,4 +1,4 @@
-# Module 16 project: a storage report, and HOT inventory updates
+# Module 16: Project milestone — a storage report, and HOT inventory updates
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  

@@ -456,7 +456,7 @@ ORDER BY fts_hits, t.searches DESC;
 (18 rows)
 ```
 
-It runs in about 2 seconds, almost all of it the `GROUP BY` over the events. The report's priorities: `sci-fi novel` is a dead end for 31,843 searches a year (exercise 7 fixes it); the two typos are rescued by the fallback, but each one costs a slower query, so an alias or a "did you mean" (exercise 10) would serve them better; `cast iron skillet` finds only 42 products, worth a look by a merchandiser. In production you would run this from `pg_stat_statements` or the application's search log every week, and order by searches × (results = 0).
+It runs in about 2 seconds, almost all of it the `GROUP BY` over the events. The report's priorities: `sci-fi novel` is a dead end for 31,843 searches a year (exercise 7 fixes it); the two typos are rescued by the fallback, but each one costs a slower query, so an alias or a "did you mean" (exercise 10) would serve them better; `cast iron skillet` finds only 42 products, worth a look by a merchandiser. In production you would run it every week from a `search_log` table (term, result count, time) that the search function or the application writes on each search, and order by searches × (results = 0). `pg_stat_statements` can't do this job: it normalizes the constants, so the search terms are gone.
 
 ---
 

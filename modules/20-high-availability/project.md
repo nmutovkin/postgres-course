@@ -1,4 +1,4 @@
-# Module 20 Milestone: Bazaar survives a failover
+# Module 20: Project milestone — Bazaar survives a failover
 
 <!-- nav:start -->
 > [Theory](README.md) · [Exercises](exercises.md) · **Project** · [Solutions](solutions/README.md)  
