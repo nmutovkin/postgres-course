@@ -1313,6 +1313,8 @@ CONSTRAINT products_seller_id_sku_key UNIQUE (seller_id, sku)  -- SKUs are uniqu
 
 The second is a typical **multi-column** rule. Two sellers may both use the SKU `TEE-001`, but one seller may not use it twice. Each column alone isn't unique, only the pair.
 
+**Naming.** As with `CHECK`, the name is optional, and the two lines above show both styles. The first is a column constraint with no name, so PostgreSQL calls it `users_email_key`: `<table>_<columns>_key`, with every column of the constraint in the name. The second is a table constraint, which a multi-column `UNIQUE` has to be, with an explicit name. `products_seller_id_sku_key` happens to be exactly the name PostgreSQL would have generated, but writing it out keeps it visible in the schema file. A `UNIQUE` name is also the name of its index, so it must be unique within the schema, not only within the table.
+
 Under the hood, PostgreSQL enforces `UNIQUE` with a **unique B-tree index**, created automatically and named after the constraint. That makes the check fast, and it makes it race-free: two concurrent inserts of the same email can't both succeed. The index also speeds up lookups by that column (module 11).
 
 **`NULL`s are distinct by default.** Since `NULL` means unknown, two `NULL`s aren't considered equal, so a `UNIQUE` column can hold any number of them:
@@ -1360,6 +1362,8 @@ id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY      -- column form
 PRIMARY KEY (order_id, product_id)                     -- table form, composite key
 ```
 
+**Naming.** Neither line gives a name, and that's the usual style: the primary key is called `<table>_pkey` (`users_pkey`, `order_items_pkey`), and so is its index. You *can* name it like any other constraint (`id int CONSTRAINT lines_id_is_key PRIMARY KEY` or `CONSTRAINT ... PRIMARY KEY (a, b)`), and then the index takes that name too, but there's rarely a reason to: a table has only one primary key, and `_pkey` says what it is. Bazaar keeps the default names. As with `UNIQUE`, a composite key must use the table form.
+
 Why declare a primary key rather than just `UNIQUE NOT NULL`? It's the *default target* of foreign keys (`REFERENCES users` means `REFERENCES users (id)`). Tools rely on it: ORMs, logical replication (module 19), and admin GUIs that let you edit rows. And it tells every reader "this is how you point at one row". **Every Bazaar table has a primary key.**
 
 Most Bazaar tables use a surrogate `id`. Two use natural keys, because the natural key *is* the identity:
@@ -1381,6 +1385,16 @@ seller_id bigint NOT NULL REFERENCES sellers (id)
 ERROR:  insert or update on table "sellers" violates foreign key constraint "sellers_user_id_fkey"
 DETAIL:  Key (user_id)=(99) is not present in table "users".
 ```
+
+**Two forms, and naming.** `seller_id bigint NOT NULL REFERENCES sellers (id)`, at the start of this section, is the **column form**: just `REFERENCES` after the column's type, without the words `FOREIGN KEY`. If you leave out the column list (`REFERENCES sellers`), it points at the parent's primary key. The **table form** spells it out, and it's the only way to write a foreign key over several columns:
+
+```sql
+FOREIGN KEY (seller_id) REFERENCES sellers (id)                          -- one column, table form
+CONSTRAINT order_items_order_fkey FOREIGN KEY (order_id) REFERENCES orders (id)  -- named
+FOREIGN KEY (shop_id, region) REFERENCES shops (id, region)              -- multi-column: table form only
+```
+
+Without a name, PostgreSQL generates `<table>_<columns>_fkey`: `products_seller_id_fkey`, `sellers_user_id_fkey` (the name in the error above), or `lines_shop_id_region_fkey` for a two-column key. Like `UNIQUE` and primary key names, the generated ones are clear enough, because they say which column points where, so Bazaar keeps them. Name a foreign key yourself when the generated name would be ambiguous, for example when a table has two foreign keys to the same parent table (say a `transfers` table with `from_user_id` and `to_user_id`, both pointing at `users`).
 
 The rules:
 
