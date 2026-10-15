@@ -979,7 +979,49 @@ CREATE TABLE coupons (
 );
 ```
 
-Underneath it still uses a sequence (`coupons_id_seq`). The differences are in the rules. With **`GENERATED ALWAYS`**, the database refuses values you supply:
+**Identity and primary key are two different things**, combined on one line:
+
+- `GENERATED ALWAYS AS IDENTITY` is about **where values come from**. It's a kind of default: when an `INSERT` doesn't supply an id, the column takes the next number from a sequence. It promises nothing about uniqueness.
+- `PRIMARY KEY` is a **constraint** (section 11.4). It promises that values are unique and not `NULL`, and builds an index to enforce it. It doesn't generate anything.
+
+Each works without the other. An identity column without a primary key accepts duplicates the moment a value is supplied by hand:
+
+```sql
+CREATE TABLE tickets (
+    id    bigint GENERATED ALWAYS AS IDENTITY,   -- no PRIMARY KEY
+    note  text
+);
+INSERT INTO tickets (note) VALUES ('first');                                -- gets id 1
+INSERT INTO tickets (id, note) OVERRIDING SYSTEM VALUE VALUES (1, 'copy');  -- explicit 1 again
+SELECT * FROM tickets;
+```
+
+```text
+ id | note  
+----+-------
+  1 | first
+  1 | copy
+(2 rows)
+```
+
+(`OVERRIDING SYSTEM VALUE` is explained below.) A primary key without identity, on the other hand, is common for natural keys, and then you must always supply the value:
+
+```sql
+CREATE TABLE codes (
+    code  text PRIMARY KEY,
+    name  text
+);
+INSERT INTO codes (name) VALUES ('no code given');
+```
+
+```text
+ERROR:  null value in column "code" of relation "codes" violates not-null constraint
+DETAIL:  Failing row contains (null, no code given).
+```
+
+A surrogate key needs both: identity to produce the numbers, and the primary key to guarantee they stay unique whatever happens. Clean up with `DROP TABLE tickets, codes;`.
+
+Underneath, an identity column still uses a sequence (`coupons_id_seq`). The differences from `serial` are in the rules. With **`GENERATED ALWAYS`**, the database refuses values you supply:
 
 ```sql
 INSERT INTO coupons (code) VALUES ('WELCOME10');              -- gets id 1
