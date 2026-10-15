@@ -1175,12 +1175,71 @@ The `DETAIL` line prints the whole row, including values the database filled in 
 
 ### 11.2 `CHECK`
 
-A `CHECK` constraint is a boolean expression that every row must satisfy:
+A `CHECK` constraint is a boolean expression that every row must satisfy. In Bazaar's `products` table (built in full in §12.5), the two `CHECK`s sit at the end of the column list, as table constraints with names:
 
 ```sql
-CONSTRAINT products_price_nonnegative CHECK (price >= 0),
-CONSTRAINT products_status_check CHECK (status IN ('draft', 'active', 'archived'))
+CREATE TABLE products (
+    ...
+    price   numeric(12,2) NOT NULL,
+    status  text NOT NULL DEFAULT 'draft',
+    ...
+    CONSTRAINT products_price_nonnegative CHECK (price >= 0),
+    CONSTRAINT products_status_check CHECK (status IN ('draft', 'active', 'archived'))
+);
 ```
+
+(`...` marks columns left out here.) `CONSTRAINT products_price_nonnegative` is the name; `CHECK (price >= 0)` is the rule.
+
+**What the name is for.** A constraint is a database object of its own, and its name is how you and your programs refer to it. To see it at work, build a small scratch table:
+
+```sql
+CREATE TABLE price_demo (
+    id     int PRIMARY KEY,
+    price  numeric(12,2) NOT NULL,
+    CONSTRAINT price_demo_price_nonnegative CHECK (price >= 0)
+);
+INSERT INTO price_demo VALUES (1, -5);
+```
+
+```text
+ERROR:  new row for relation "price_demo" violates check constraint "price_demo_price_nonnegative"
+DETAIL:  Failing row contains (1, -5.00).
+```
+
+1. **Error messages name it.** A name that states the rule (`..._price_nonnegative`) tells whoever reads the error or the log what went wrong, where `price_demo_price_check` only says which column.
+2. **Programs can read it.** The name also travels as a separate field of the error, not just as text in the message. With `\set VERBOSITY verbose`, psql shows those fields:
+
+   ```text
+   ERROR:  23514: new row for relation "price_demo" violates check constraint "price_demo_price_nonnegative"
+   DETAIL:  Failing row contains (1, -5.00).
+   SCHEMA NAME:  bazaar
+   TABLE NAME:  price_demo
+   CONSTRAINT NAME:  price_demo_price_nonnegative
+   ```
+
+   `23514` is the SQLSTATE code for any `CHECK` violation. An application tells *which* rule failed by the constraint name, so it can turn `products_price_nonnegative` into "The price can't be negative" next to the price field. Module 22 does exactly that from Python.
+3. **`\d` lists it**, under `Check constraints:`, so the rules of a table are readable at a glance:
+
+   ```text
+   Check constraints:
+       "price_demo_price_nonnegative" CHECK (price >= 0::numeric)
+   ```
+
+4. **You change it by name.** When a rule changes, you drop the constraint by name and add the new version (more in §13.2). Adding it back checks every existing row first:
+
+   ```sql
+   ALTER TABLE price_demo DROP CONSTRAINT price_demo_price_nonnegative;
+   INSERT INTO price_demo VALUES (1, -5);      -- now accepted
+   ALTER TABLE price_demo ADD CONSTRAINT price_demo_price_nonnegative CHECK (price >= 0);
+   ```
+
+   ```text
+   ERROR:  check constraint "price_demo_price_nonnegative" of relation "price_demo" is violated by some row
+   ```
+
+   You'd have to fix the bad row before the rule can come back. Clean up with `DROP TABLE price_demo;`.
+
+A good name is `<table>_<what the rule says>`. Constraint names must be unique within a table, and PostgreSQL also uses the names of `UNIQUE` and `PRIMARY KEY` constraints for the indexes behind them, so those must be unique within the schema.
 
 A table-level `CHECK` can compare columns of the same row. Bazaar's inventory has one:
 
